@@ -37,10 +37,9 @@ def peptide_rt_plot(protein_id, conn, fname=None):
     colors = {peptide: color for color, (peptide, rank) in zip(pallet, sorted(ranks.items(), key=lambda x: x[1]))}
         
     # fig, ax = plt.subplots(1, 1)
-    fig = plt.figure()
-    fig.set_size_inches(6, 3)
+    fig = plt.figure(figsize = (8, 4))
 
-    ax = fig.add_axes([0.1, 0.15, 0.58, 0.8])
+    ax = fig.add_axes([0.1, 0.15, 0.58, 0.75])
 
     line_width = 0.4
     for i, replicate in enumerate(df['acquiredRank'].drop_duplicates()):
@@ -67,6 +66,7 @@ def peptide_rt_plot(protein_id, conn, fname=None):
     plt.xlim([0 - 0.5 - x_padding, n_reps - 0.5 + x_padding])
     plt.ylim([min_rt - y_padding, max_rt + y_padding])
     # plt.xticks(sorted(df['acquiredRank'].drop_duplicates()))
+    plt.title(protein_id)
 
     if fname:
         plt.savefig(fname)
