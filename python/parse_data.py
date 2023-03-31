@@ -27,38 +27,50 @@ CREATE TABLE replicates (
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
     proteinName VARCHAR(50),
+    proteinAccession VARCHAR(25),
     peptide VARCHAR(50),
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,
+    averageMassErrorPPM REAL,
     totalAreaFragment REAL,
     totalAreaMs1 REAL,
+    normalizedArea REAL,
     rt REAL,
     minStartTime REAL,
     maxEndTime REAL,
-    averageMassErrorPPM REAL,
+    maxFwhm REAL,
+    libraryDotProduct REAL,
+    isotopeDotProduct REAL,
     PRIMARY KEY (replicateId, proteinName, modifiedSequence, precursorCharge),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
 )'''
 ]
 
 PRECURSOR_QUALITY_COLNAMES = {'ReplicateName': 'replicateName',
+                              'ProteinAccession': 'proteinAccession',
                               'ProteinName': 'proteinName',
                               'ModifiedSequence': 'modifiedSequence',
                               'Peptide': 'peptide',
                               'ModifiedSequence': 'modifiedSequence',
                               'PrecursorCharge': 'precursorCharge',
                               'PrecursorMz': 'precursorMz',
+                              'AverageMassErrorPPM': 'averageMassErrorPPM',
                               'TotalAreaFragment': 'totalAreaFragment',
                               'TotalAreaMs1': 'totalAreaMs1',
+                              'NormalizedArea': 'normalizedArea',
                               'BestRetentionTime': 'rt',
                               'MinStartTime': 'minStartTime',
                               'MaxEndTime': 'maxEndTime',
-                              'AverageMassErrorPPM': 'averageMassErrorPPM'}
+                              'MaxFwhm': 'maxFwhm',
+                              'LibraryDotProduct': 'libraryDotProduct',
+                              'IsotopeDotProduct': 'isotopeDotProduct'}
 
-PRECURSOR_QUALITY_REQUIRED_COLUMNS = ['replicateId', 'proteinName', 'peptide', 'modifiedSequence',
-                                      'precursorCharge', 'precursorMz', 'totalAreaFragment', 'totalAreaMs1',
-                                      'rt', 'minStartTime', 'maxEndTime', 'averageMassErrorPPM']
+PRECURSOR_QUALITY_REQUIRED_COLUMNS = ['replicateId', 'proteinAccession', 'proteinName',
+                                      'peptide', 'modifiedSequence', 'precursorCharge', 'precursorMz',
+                                      'averageMassErrorPPM', 'totalAreaFragment', 'totalAreaMs1', 'normalizedArea',
+                                      'rt', 'minStartTime', 'maxEndTime', 'maxFwhm',
+                                      'libraryDotProduct', 'isotopeDotProduct']
 
 REPLICATE_QUALITY_REQUIRED_COLUMNS = {'Replicate': 'replicate',
                                       'AcquiredTime': 'acquiredTime',
