@@ -29,8 +29,7 @@ from std_peptide_rt_plot import peptide_rt_plot
 from bar_chart import bar_chart
 from histogram import histogram, box_plot
 
-# conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/data.db3')
-conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
+conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/csf_data.db3')
 ```
 
 ## Replicate TIC areas
@@ -56,7 +55,7 @@ bar_chart(tic, 'TIC area')
 
 # fig-cap: "A line plot on a polar axis"
 
-std_proteins = ['iRT']
+std_proteins = ['PRTC', 'sp|P00924|ENO1_YEAST']
 
 for std in std_proteins:
     peptide_rt_plot(std, conn)
