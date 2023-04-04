@@ -58,64 +58,64 @@ def box_plot(data, ylab, xlab='Acquired rank', fname=None, hline=None, limits=No
     plt.close()
 
 
-# read precursors from db
-query = '''
-SELECT 
-    r.acquiredRank,
-    p.modifiedSequence,
-    p.precursorCharge,
-    p.totalAreaFragment,
-    p.totalAreaMs1,
-    p.rt,
-    p.maxFwhm,
-    p.averageMassErrorPPM as massError,
-    p.libraryDotProduct,
-    p.isotopeDotProduct
-FROM precursors p
-LEFT JOIN replicates r
-    ON p.replicateId = r.replicateId;
-'''
-
-# conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/data.db3')
-conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
-df = pd.read_sql(query, conn)
-df = df.drop_duplicates()
-
-# peptide charge histogram
-
-# mass accuracy boxplot
-# ylab='Mass error (ppm)'
-# fname='mass_error.png'
-ext = 'png'
-# ext = 'pdf'
-
-# replicate RT cor histogram
-agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
-histogram(agg, 'Replicate RT SD (min)',
-          limits = (agg.quantile(0.05) * -3, agg.quantile(0.95) * 3),
-          fname = f'replicate_rt_cor.{ext}')
-
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-         columns="acquiredRank", values='massError', aggfunc=sum)
-box_plot(data, 'Mass error (ppm)', fname=f'mass_error.{ext}', hline=0)
-
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-         columns="acquiredRank", values='maxFwhm', aggfunc=sum)
-box_plot(data, 'Peak FWHM', fname=f'peak_fwhm.{ext}')
-
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-         columns="acquiredRank", values='libraryDotProduct', aggfunc=sum)
-box_plot(data, 'Library dot product', fname=f'library_dotp.{ext}')
-
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-         columns="acquiredRank", values='isotopeDotProduct', aggfunc=sum)
-box_plot(data, 'Isotope dot product', fname=f'isotope_dotp.{ext}')
-
-df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
-df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-         columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
-box_plot(data, 'Transition / precursor ratio', fname=f'ms2_ms1_ratio.{ext}',
-         limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3))
+# # read precursors from db
+# query = '''
+# SELECT 
+#     r.acquiredRank,
+#     p.modifiedSequence,
+#     p.precursorCharge,
+#     p.totalAreaFragment,
+#     p.totalAreaMs1,
+#     p.rt,
+#     p.maxFwhm,
+#     p.averageMassErrorPPM as massError,
+#     p.libraryDotProduct,
+#     p.isotopeDotProduct
+# FROM precursors p
+# LEFT JOIN replicates r
+#     ON p.replicateId = r.replicateId;
+# '''
+# 
+# # conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/data.db3')
+# conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
+# df = pd.read_sql(query, conn)
+# df = df.drop_duplicates()
+# 
+# # peptide charge histogram
+# 
+# # mass accuracy boxplot
+# # ylab='Mass error (ppm)'
+# # fname='mass_error.png'
+# ext = 'png'
+# # ext = 'pdf'
+# 
+# # replicate RT cor histogram
+# agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
+# histogram(agg, 'Replicate RT SD (min)',
+#           limits = (agg.quantile(0.05) * -3, agg.quantile(0.95) * 3),
+#           fname = f'fig/replicate_rt_cor.{ext}')
+# 
+# data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+#          columns="acquiredRank", values='massError', aggfunc=sum)
+# box_plot(data, 'Mass error (ppm)', fname=f'fig/mass_error.{ext}', hline=0)
+# 
+# data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+#          columns="acquiredRank", values='maxFwhm', aggfunc=sum)
+# box_plot(data, 'Peak FWHM', fname=f'fig/peak_fwhm.{ext}')
+# 
+# data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+#          columns="acquiredRank", values='libraryDotProduct', aggfunc=sum)
+# box_plot(data, 'Library dot product', fname=f'fig/library_dotp.{ext}')
+# 
+# data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+#          columns="acquiredRank", values='isotopeDotProduct', aggfunc=sum)
+# box_plot(data, 'Isotope dot product', fname=f'fig/isotope_dotp.{ext}')
+# 
+# df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
+# df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
+# data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+#          columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
+# box_plot(data, 'Transition / precursor ratio', fname=f'fig/ms2_ms1_ratio.{ext}',
+#          limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3))
 
 

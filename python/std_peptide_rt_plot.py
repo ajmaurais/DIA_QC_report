@@ -6,6 +6,7 @@ from matplotlib.patches import Rectangle, Patch
 from matplotlib.ticker import MaxNLocator
 from numpy import mean
 
+
 def peptide_rt_plot(protein_id, conn, fname=None):
     query = '''
     SELECT
@@ -28,17 +29,13 @@ def peptide_rt_plot(protein_id, conn, fname=None):
     df['peptideLabel'] = df[["modifiedSequence", "precursorCharge"]].apply(lambda x: f'{x[0]}{"+" * x[1]}', axis = 1)
     ranks = {row['peptideLabel']: row['meanRT'] for _, row in df[['meanRT', 'peptideLabel']].drop_duplicates().iterrows()}
 
-    # df['midpoint'] = df[['minStartTime', 'maxEndTime']].apply(mean, axis = 1)
-    # df['width'] = df['maxEndTime'] - df['minStartTime']
-
     # generate color scale
     cmap = plt.get_cmap('viridis')
     pallet = cmap([i/len(ranks) for i in range(len(ranks))])
     colors = {peptide: color for color, (peptide, rank) in zip(pallet, sorted(ranks.items(), key=lambda x: x[1]))}
-        
+    
     # fig, ax = plt.subplots(1, 1)
-    fig = plt.figure(figsize = (8, 4))
-
+    fig = plt.figure(figsize = (8, 4), dpi=1000)
     ax = fig.add_axes([0.1, 0.15, 0.58, 0.75])
 
     line_width = 0.4
@@ -51,7 +48,7 @@ def peptide_rt_plot(protein_id, conn, fname=None):
     ax.legend(handles = [Patch(color=color, label=label) for label, color in colors.items()],
               bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
 
-    ax.set_xlabel('Acquired rank')
+    ax.set_xlabel('Acquisition order')
     ax.set_ylabel('RT (min)')
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
@@ -65,7 +62,6 @@ def peptide_rt_plot(protein_id, conn, fname=None):
 
     plt.xlim([0 - 0.5 - x_padding, n_reps - 0.5 + x_padding])
     plt.ylim([min_rt - y_padding, max_rt + y_padding])
-    # plt.xticks(sorted(df['acquiredRank'].drop_duplicates()))
     plt.title(protein_id)
 
     if fname:
@@ -74,9 +70,10 @@ def peptide_rt_plot(protein_id, conn, fname=None):
         plt.show()
     plt.close()
 
-std_proteins = ['iRT']
-# conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/data.db3')
-conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
-
-peptide_rt_plot(std_proteins[0], conn, 'rt_plot.pdf')
+# std_proteins = ['iRT']
+# # conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/data.db3')
+# conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
+# 
+# peptide_rt_plot(std_proteins[0], conn, 'fig/rt_plot.pdf')
+# conn.close()
 
