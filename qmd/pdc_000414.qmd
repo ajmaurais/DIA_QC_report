@@ -1,0 +1,209 @@
+---
+title: "Quarto Basics"
+toc: true
+format:
+  html:
+    code-fold: true
+    grid:
+        body-width: 1000px
+        sidebar-width: 0px
+        margin-width: 300px
+    self-contained: true
+jupyter: python3
+---
+
+# Peptide independent metrics
+
+```{python}
+#| label: setup
+#| echo: false
+
+import sys
+import re
+import sqlite3
+import numpy as np
+import pandas as pd
+
+sys.path.append('/home/ajm/code/DIA_QC_report/python')
+from std_peptide_rt_plot import peptide_rt_plot
+from bar_chart import bar_chart
+from histogram import histogram, box_plot
+
+# conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/data.db3')
+conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
+```
+
+## Replicate TIC areas
+```{python}
+#| label: tic_areas
+#| fig-cap: "Replicate TICs"
+#| echo: false
+#| fig-align: "left"
+
+# replicate tic bar chart
+tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates', conn)
+bar_chart(tic, 'TIC area')
+```
+
+# Peptide dependent metrics
+
+## Standard retention times across replicates
+
+```{python}
+#| label: std_rt
+#| echo: false
+#| fig-align: "left"
+
+# fig-cap: "A line plot on a polar axis"
+
+std_proteins = ['iRT']
+
+for std in std_proteins:
+    peptide_rt_plot(std, conn)
+```
+
+## Number of missed cleavages
+
+```{python}
+#| label: missed_cleavages
+#| echo: false
+#| fig-align: "left"
+
+query = '''
+SELECT 
+    r.acquiredRank,
+    p.peptide,
+    p.modifiedSequence,
+    p.precursorCharge
+FROM precursors p
+LEFT JOIN replicates r
+    ON p.replicateId = r.replicateId
+WHERE p.totalAreaFragment > 0;
+'''
+
+df = pd.read_sql(query, conn)
+df = df.drop_duplicates()
+
+# precursor bar chart colored by missed cleavages
+trypsin_re = re.compile('([RK])(?=[^P])')
+df['nMissed'] = df['peptide'].apply(lambda x: len(trypsin_re.findall(x)))
+agg = df.groupby(["acquiredRank", "nMissed"])["nMissed"].agg(["count"]).reset_index()
+agg = agg.pivot_table(index='acquiredRank', columns='nMissed', values='count')
+bar_chart(agg, 'Number of precursors', legend_title='Missed cleavages')
+```
+
+## Precursor charge distribution
+
+```{python}
+#| label: precursor_charges
+#| echo: false
+#| fig-align: "left"
+
+# precursor bar chart colored by precursorCharge
+agg = df.groupby(["acquiredRank", "precursorCharge"])["precursorCharge"].agg(["count"]).reset_index()
+agg = agg.pivot_table(index='acquiredRank', columns='precursorCharge', values='count')
+bar_chart(agg, 'Number of precursors', legend_title='Precursor charge')
+```
+
+## Replicate RT standard deviation
+
+```{python}
+#| label: replicate_rt_sd
+#| echo: false
+#| fig-align: "left"
+
+# read precursors from db
+query = '''
+SELECT 
+    r.acquiredRank,
+    p.modifiedSequence,
+    p.precursorCharge,
+    p.totalAreaFragment,
+    p.totalAreaMs1,
+    p.rt,
+    p.maxFwhm,
+    p.averageMassErrorPPM as massError,
+    p.libraryDotProduct,
+    p.isotopeDotProduct
+FROM precursors p
+LEFT JOIN replicates r
+    ON p.replicateId = r.replicateId;
+'''
+df = pd.read_sql(query, conn)
+df = df.drop_duplicates()
+
+# replicate RT cor histogram
+agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
+histogram(agg, 'Replicate RT SD (min)',
+          limits = (agg.quantile(0.05) * -3, agg.quantile(0.95) * 3))
+```
+
+
+## Mass error distribution
+
+```{python}
+#| label: mass_error
+#| echo: false
+#| fig-align: "left"
+
+data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+         columns="acquiredRank", values='massError', aggfunc=sum)
+box_plot(data, 'Mass error (ppm)', hline=0)
+```
+
+## Peak width distribution
+
+```{python}
+#| label: peak_fwhm
+#| echo: false
+#| fig-align: "left"
+
+data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+         columns="acquiredRank", values='maxFwhm', aggfunc=sum)
+box_plot(data, 'Peak FWHM')
+```
+
+
+## Library dot product distribution
+
+```{python}
+#| label: lib_dotp
+#| echo: false
+#| fig-align: "left"
+
+data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+         columns="acquiredRank", values='libraryDotProduct', aggfunc=sum)
+box_plot(data, 'Library dot product')
+```
+
+
+## MS1 isotopic window dot product distribution
+
+```{python}
+#| label: isotope_dotp
+#| echo: false
+#| warning: false
+#| fig-align: "left"
+
+data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+         columns="acquiredRank", values='isotopeDotProduct', aggfunc=sum)
+box_plot(data, 'Isotope dot product')
+```
+
+## Transition to precursor rato distribution
+
+```{python}
+#| label: ms1_ms2_ratio
+#| echo: false
+#| warning: false
+#| fig-align: "left"
+
+df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
+df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
+data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+         columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
+box_plot(data, 'Transition / precursor ratio',
+         limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3))
+```
+
+
