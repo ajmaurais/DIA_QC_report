@@ -6,12 +6,12 @@ import numpy as np
 import re
 
 
-def bar_chart(dat, ylab, xlab='Acquisition order', legend_title=None, fname=None):
+def bar_chart(dat, ylab, xlab='Acquisition order', legend_title=None, fname=None, dpi=250):
 
     data = {c: dat[c].to_numpy() for c in dat.columns}
     labels = dat.index.to_numpy()
     
-    fig = plt.figure(figsize = (6, 3), dpi = 1000)
+    fig = plt.figure(figsize = (6, 3), dpi=dpi)
     
     ax = fig.add_axes([0.1, 0.15, 0.86, 0.65])
     

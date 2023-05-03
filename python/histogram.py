@@ -6,8 +6,8 @@ from matplotlib.ticker import MaxNLocator
 import numpy as np
 
 
-def histogram(dat, xlab, ylab='Count', limits=None, fname=None):
-    fig, ax = plt.subplots(1, 1, figsize = (6, 4), dpi = 1000)
+def histogram(dat, xlab, ylab='Count', limits=None, fname=None, dpi=250):
+    fig, ax = plt.subplots(1, 1, figsize = (6, 4), dpi=dpi)
     ax.hist(dat, bins = 100)
     ax.set_xlabel(xlab)
     ax.set_ylabel(ylab)
@@ -22,10 +22,10 @@ def histogram(dat, xlab, ylab='Count', limits=None, fname=None):
     plt.close()
 
 
-def box_plot(data, ylab, xlab='Acquired rank', fname=None, hline=None, limits=None):
+def box_plot(data, ylab, xlab='Acquired rank', fname=None, hline=None, limits=None, dpi=250):
 
     # init plot
-    fig, ax = plt.subplots(1, 1, figsize = (10, 4), dpi = 1000)
+    fig, ax = plt.subplots(1, 1, figsize = (10, 4), dpi=dpi)
 
     # plot outliers as scatter
     for i, c in enumerate(data.columns):

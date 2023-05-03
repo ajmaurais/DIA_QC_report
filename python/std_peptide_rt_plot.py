@@ -1,13 +1,11 @@
 
-import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Patch
 from matplotlib.ticker import MaxNLocator
-from numpy import mean
 
 
-def peptide_rt_plot(protein_id, conn, fname=None):
+def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
     query = '''
     SELECT
         r.acquiredRank,
@@ -34,8 +32,7 @@ def peptide_rt_plot(protein_id, conn, fname=None):
     pallet = cmap([i/len(ranks) for i in range(len(ranks))])
     colors = {peptide: color for color, (peptide, rank) in zip(pallet, sorted(ranks.items(), key=lambda x: x[1]))}
     
-    # fig, ax = plt.subplots(1, 1)
-    fig = plt.figure(figsize = (8, 4), dpi=1000)
+    fig = plt.figure(figsize = (8, 4), dpi=dpi)
     ax = fig.add_axes([0.1, 0.15, 0.58, 0.75])
 
     line_width = 0.4
