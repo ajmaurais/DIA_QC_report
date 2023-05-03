@@ -1,11 +1,13 @@
 
 import argparse
 import sqlite3
+import json
 from typing import TypeVar
 import pandas as pd
 import os
 import logging
 from datetime import datetime
+from csv import DictReader as CsvDictReader
 
 PandasDataFrame = TypeVar('pandas.core.frame.DataFrame')
 
@@ -44,7 +46,15 @@ CREATE TABLE precursors (
     isotopeDotProduct REAL,
     PRIMARY KEY (replicateId, proteinName, modifiedSequence, precursorCharge),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
-)'''
+)''',
+'''
+CREATE TABLE metadata (
+    replicateId INTEGER NOT NULL,
+    annotationKey TEXT NOT NULL,
+    annotationValue TEXT,
+    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
+)
+'''
 ]
 
 PRECURSOR_QUALITY_COLNAMES = {'ReplicateName': 'replicateName',
@@ -85,9 +95,33 @@ def _initialize(fname):
     return conn
 
 
+def read_metadata(fname, metadata_format=None):
+    if metadata_format:
+        _format = metadata_format
+    else:
+        _format = os.path.splitext(fname)[1][1:]
+
+    if _format == 'tsv':
+        with open(fname, 'r') as inF:
+            data = list(CsvDictReader(inF, delimiter='\t'))
+    elif _format == 'json':
+        with open(fname, 'r') as inF:
+            data = json.load(inF)
+    else:
+        raise RuntimeError(f'Unknown metadata file format: {_format}')
+
+    df = pd.DataFrame(data)
+    df['file_name'] = df["file_name"].apply(lambda x: os.path.splitext(x)[0])
+    df = pd.melt(df, id_vars=['file_name'], var_name='annotationKey', value_name='annotationValue',
+                 value_vars=[x for x in list(df.columns) if x != "file_name"])
+
+    return df
+
+
 def write_db(fname: str,
              replicates: PandasDataFrame,
-             precursors: PandasDataFrame):
+             precursors: PandasDataFrame,
+             metadata: PandasDataFrame=None):
 
     if os.path.isfile(fname):
         LOGGER.warning(f'{fname} already exists. Overwriting...')
@@ -96,16 +130,32 @@ def write_db(fname: str,
     conn = _initialize(fname)
     replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
+    if metadata is not None:
+        query='SELECT replicate, replicateId FROM replicates'
+        rep_ids = {fname: rep_id for fname, rep_id in conn.execute(query).fetchall()}
+        metadata['replicateId'] = metadata['file_name'].apply(lambda x: rep_ids[x])
+        metadata = metadata[['replicateId', 'annotationKey', 'annotationValue']]
+        metadata.to_sql('metadata', conn, index=False, if_exists='append')
 
 
 def main():
     parser = argparse.ArgumentParser(description='Generate QC_metrics input database from '
                                                  'precursor_quality and replicate_quality reports.')
+    parser.add_argument('-m', '--metadata', default=None,
+                        help='Annotations corresponding to each file.')
+    parser.add_argument('--metadataFormat', default=None,
+                        help='Specify metadata file format. '
+                             'By default the format is infered from the file extension.')
     parser.add_argument('-o', '--ofname', default='data.db3',
                         help='Output file name. Default is ./data.db3')
     parser.add_argument('replicates', help='Skyline replicate_report')
     parser.add_argument('precursors', help='Skyline precursor_report')
     args = parser.parse_args()
+
+    # read annotatiuons if applicable
+    metadata = None
+    if args.metadata is not None:
+        metadata = read_metadata(args.metadata, args.metadataFormat)
 
     # read replicates
     replicates = pd.read_csv(args.replicates, sep='\t')
@@ -126,7 +176,7 @@ def main():
     precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
     precursors = precursors[PRECURSOR_QUALITY_REQUIRED_COLUMNS].drop_duplicates()
 
-    write_db(args.ofname, replicates, precursors)
+    write_db(args.ofname, replicates, precursors, metadata=metadata)
 
 
 if __name__ == '__main__':
