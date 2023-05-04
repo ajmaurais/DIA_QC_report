@@ -1,14 +1,19 @@
 ---
-title: "DIA QC report"
+title: "Human CSF plate 1A DIA QC report"
 toc: true
 format:
-  html:
-    code-fold: true
-    grid:
-        body-width: 1000px
-        sidebar-width: 0px
-        margin-width: 300px
-    self-contained: true
+    html:
+        code-fold: true
+        grid:
+            body-width: 1000px
+            sidebar-width: 0px
+            margin-width: 300px
+        self-contained: true
+    pdf:
+        fig-pos: 'H'
+        extra_dependencies: ["float"]
+        fig-format: 'png'
+        keep-tex: true
 jupyter: python3
 ---
 
@@ -24,6 +29,8 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
+plot_dpi = 250
+
 sys.path.append('/home/ajm/code/DIA_QC_report/python')
 from std_peptide_rt_plot import peptide_rt_plot
 from bar_chart import bar_chart
@@ -33,15 +40,17 @@ conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/csf_data.db3')
 ```
 
 ## Replicate TIC areas
+
 ```{python}
 #| label: tic_areas
-#| fig-cap: "Replicate TICs"
 #| echo: false
 #| fig-align: "left"
 
+# fig-cap: "Replicate TICs"
+
 # replicate tic bar chart
 tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates', conn)
-bar_chart(tic, 'TIC area')
+bar_chart(tic, 'TIC area', dpi=plot_dpi)
 ```
 
 # Peptide dependent metrics
@@ -58,7 +67,7 @@ bar_chart(tic, 'TIC area')
 std_proteins = ['PRTC', 'sp|P00924|ENO1_YEAST']
 
 for std in std_proteins:
-    peptide_rt_plot(std, conn)
+    peptide_rt_plot(std, conn, dpi=plot_dpi)
 ```
 
 ## Number of missed cleavages
@@ -88,7 +97,7 @@ trypsin_re = re.compile('([RK])(?=[^P])')
 df['nMissed'] = df['peptide'].apply(lambda x: len(trypsin_re.findall(x)))
 agg = df.groupby(["acquiredRank", "nMissed"])["nMissed"].agg(["count"]).reset_index()
 agg = agg.pivot_table(index='acquiredRank', columns='nMissed', values='count')
-bar_chart(agg, 'Number of precursors', legend_title='Missed cleavages')
+bar_chart(agg, 'Number of precursors', legend_title='Missed cleavages', dpi=plot_dpi)
 ```
 
 ## Precursor charge distribution
@@ -101,7 +110,7 @@ bar_chart(agg, 'Number of precursors', legend_title='Missed cleavages')
 # precursor bar chart colored by precursorCharge
 agg = df.groupby(["acquiredRank", "precursorCharge"])["precursorCharge"].agg(["count"]).reset_index()
 agg = agg.pivot_table(index='acquiredRank', columns='precursorCharge', values='count')
-bar_chart(agg, 'Number of precursors', legend_title='Precursor charge')
+bar_chart(agg, 'Number of precursors', legend_title='Precursor charge', dpi=plot_dpi)
 ```
 
 ## Replicate RT standard deviation
@@ -133,8 +142,8 @@ df = df.drop_duplicates()
 
 # replicate RT cor histogram
 agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
-histogram(agg, 'Replicate RT SD (min)',
-          limits = (agg.quantile(0.05) * -3, agg.quantile(0.95) * 3))
+histogram(agg, 'Replicate RT SD (min)', dpi=plot_dpi,
+          limits=(agg.quantile(0.05) * -3, agg.quantile(0.95) * 3))
 ```
 
 

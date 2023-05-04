@@ -1,14 +1,19 @@
 ---
-title: "DIA QC report"
+title: "PDC study 000414 DIA QC report"
 toc: true
 format:
-  html:
-    code-fold: true
-    grid:
-        body-width: 1000px
-        sidebar-width: 0px
-        margin-width: 300px
-    self-contained: true
+    html:
+        code-fold: true
+        grid:
+            body-width: 1000px
+            sidebar-width: 0px
+            margin-width: 300px
+        self-contained: true
+    pdf:
+        fig-pos: 'H'
+        extra_dependencies: ["float"]
+        fig-format: 'png'
+        keep-tex: true
 jupyter: python3
 ---
 
@@ -34,11 +39,13 @@ conn = sqlite3.connect('/home/ajm/code/DIA_QC_report/testData/full_data.db3')
 ```
 
 ## Replicate TIC areas
+
 ```{python}
 #| label: tic_areas
-#| fig-cap: "Replicate TICs"
 #| echo: false
 #| fig-align: "left"
+
+# fig-cap: "Replicate TICs"
 
 # replicate tic bar chart
 tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates', conn)
