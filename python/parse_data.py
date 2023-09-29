@@ -3,7 +3,6 @@ import sys
 import argparse
 import sqlite3
 import json
-from typing import TypeVar
 import os
 import logging
 from datetime import datetime
@@ -73,8 +72,8 @@ CREATE TABLE metadata (
 '''
 CREATE TABLE proteins (
     proteinId INTEGER PRIMARY KEY,
-    accession VARCHAR(25) UNIQUE,
-    name VARCHAR(50),
+    accession VARCHAR(25),
+    name VARCHAR(50) UNIQUE,
     description VARCHAR(200)
 )
 ''',
@@ -209,9 +208,10 @@ def write_db(fname, replicates, precursors, protein_quants=None, metadata=None):
 
 
     else:
-        proteins = precursors[['protein', 'accession']].drop_duplicates().reset_index(drop=True)
+        proteins = precursors[['proteinName', 'proteinAccession']].drop_duplicates().reset_index(drop=True)
+        proteins = proteins.rename(columns={'proteinName': 'name', 'proteinAccession': 'accession'})
         proteins['description'] = None
-        proteinIndex = {r: i for i, r in zip(proteins['accession'].index, replicates['accession'])}
+        proteinIndex = {r: i for i, r in zip(proteins['accession'].index, proteins['accession'])}
 
     precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
     precursors['proteinId'] = precursors['proteinAccession'].apply(lambda x: proteinIndex[x])
