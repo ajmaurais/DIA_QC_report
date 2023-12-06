@@ -6,8 +6,9 @@ from matplotlib.ticker import MaxNLocator
 
 
 def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
+
     query = '''
-    SELECT
+        SELECT
         r.acquiredRank,
         p.modifiedSequence,
         p.precursorCharge,
@@ -17,7 +18,9 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
     FROM precursors p
     LEFT JOIN replicates r
         ON p.replicateId = r.replicateId
-    WHERE p.proteinName = "%s";
+	LEFT JOIN proteins prot
+		ON prot.proteinID == p.proteinId
+    WHERE prot.name = "%s";
     ''' % protein_id
 
     df = pd.read_sql(query, conn)

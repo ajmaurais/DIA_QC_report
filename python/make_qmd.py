@@ -91,6 +91,7 @@ import sys
 import re
 import sqlite3
 from statistics import stdev
+from scipy.stats import zscore
 import numpy as np
 import pandas as pd
 
@@ -224,7 +225,7 @@ df_pc['acquisition_number'] = df['acquiredRank']
 df_pc.loc[df_pc['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'] = min(df_pc[df_pc['totalAreaFragment'] > 0]['totalAreaFragment'])
 
 df_pc['log2TotalAreaFragment'] = np.log10(df_pc['totalAreaFragment'])
-df_pc['zScore'] = df_pc.groupby(["acquisition_number"])['log2TotalAreaFragment'].apply(lambda x: (x - np.mean(x)) / stdev(x)).reset_index()['log2TotalAreaFragment']
+df_pc['zScore'] = df_pc.groupby('acquisition_number')['log2TotalAreaFragment'].transform(lambda x: np.abs(zscore(x)))
 
 df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
                          columns="replicateId", values='zScore')
