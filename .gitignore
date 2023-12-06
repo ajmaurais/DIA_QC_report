@@ -3,6 +3,7 @@ qmd/*.pdf
 qmd/*.html
 fig/*
 testData/*
+plots/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

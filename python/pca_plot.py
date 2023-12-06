@@ -1,7 +1,6 @@
 
 import re
-import warnings
-import sqlite3
+
 from statistics import stdev
 import pandas as pd
 import numpy as np
@@ -25,8 +24,8 @@ def pc_matrix(df):
     return pc, pc_var
 
 
-def pca_plot(df, label_col, pc_var, label_type='discrete',
-             fname=None, dpi=250, x_axis_pc=0, y_axis_pc=1):
+def pca_plot(pc, label_col, pc_var, label_type='discrete',
+             fname=None, dpi=250, x_axis_pc=0, y_axis_pc=1, add_title=True):
 
     cmap = plt.get_cmap('viridis')
     colors = {label: color for color, label in zip(cmap(np.linspace(0, 1, len(pc[label_col].drop_duplicates()))),
@@ -43,7 +42,7 @@ def pca_plot(df, label_col, pc_var, label_type='discrete',
         ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1), title=label_col, alignment='left')
 
     elif label_type == 'continuous':
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4), dpi=dpi)
         points=ax.scatter(pc[x_axis_pc], pc[y_axis_pc], c=pc[label_col], cmap='viridis')
         fig.colorbar(points, label=label_col, use_gridspec=False,
                      ticks=MaxNLocator(integer=True) if pd.api.types.is_integer_dtype(pc[label_col]) else None)
@@ -51,6 +50,9 @@ def pca_plot(df, label_col, pc_var, label_type='discrete',
     # axis labels
     ax.set_xlabel(f'PC {x_axis_pc + 1} {pc_var[x_axis_pc]:.1f}% var')
     ax.set_ylabel(f'PC {y_axis_pc + 1} {pc_var[y_axis_pc]:.1f}% var')
+
+    if add_title:
+        plt.title(f'Colored by {label_col}')
 
     if fname is None:
         plt.show()
@@ -60,8 +62,12 @@ def pca_plot(df, label_col, pc_var, label_type='discrete',
 
 
 def convert_string_cols(df):
+    '''
+    Convert string columns in DataFrame to float or int if all values in column match a
+    regular expression.
+    '''
     float_re = re.compile(r'^[+-]?[0-9]+\.[0-9]?$')
-    int_re = re.compile(r'^[+-]?[0-9]+')
+    int_re = re.compile(r'^[+-]?[0-9]+$')
 
     def rank_types(x):
         if int_re.search(x):
@@ -80,92 +86,4 @@ def convert_string_cols(df):
                 elif type_rank == 2:
                     df[col] = df[col].apply(float)
     return ret
-
-
-QUERY = '''
-SELECT
-    p.replicateId,
-    r.acquiredRank,
-    p.modifiedSequence,
-    p.precursorCharge,
-    p.totalAreaFragment
-FROM precursors p
-LEFT JOIN replicates r
-ON p.replicateId = r.replicateId; '''
-
-# conn = sqlite3.connect("/home/ajm/code/DIA_QC_report/testData/csf_data.db3")
-# conn = sqlite3.connect("/home/ajm/code/DIA_QC_report/testData/full_data.db3")
-conn = sqlite3.connect("/home/ajm/code/DIA_QC_report/testData/data.db3")
-
-df_test = pd.read_sql(QUERY, conn)
-
-# set zero areas to the mininum non-zero value
-df_test.loc[df_test['totalAreaFragment'] == 0, 'totalAreaFragment'] = min(df_test[df_test['totalAreaFragment'] > 0]['totalAreaFragment'])
-
-df_test['log2TotalAreaFragment'] = np.log10(df_test['totalAreaFragment'])
-df_test['zScore'] = df_test.groupby(["acquiredRank"])['log2TotalAreaFragment'].apply(lambda x: (x - np.mean(x)) / stdev(x))
-
-df_wide = df_test.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-                         columns="replicateId", values='zScore')
-
-# actually do pc analysis
-pc, pc_var = pc_matrix(df_wide)
-
-meta_values = {'gender': 'discrete', 'vital_status': 'discrete',
-               'tumor_grade': 'discrete', 'year_of_birth': 'continuous'}
-
-# check if metadata table exists in db
-cur = conn.cursor()
-cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="metadata"')
-table = cur.fetchall()
-
-acquired_ranks = df_test[["replicateId", "acquiredRank"]].drop_duplicates()
-acquired_ranks = pd.DataFrame(acquired_ranks['acquiredRank'], index=acquired_ranks['replicateId'])
-
-# add metadata to 
-if len(table) > 0:
-    METADATA_QUERY = '''
-    SELECT
-        replicateId, annotationKey as columns, annotationValue
-    FROM metadata
-    WHERE annotationKey IN ("%s")''' % '", "'.join(meta_values.keys())
-
-    # get metadata labels for pca plot
-    metadata_df = pd.read_sql(METADATA_QUERY, conn)
-    metadata = metadata_df.pivot(index="replicateId", columns="columns", values="annotationValue")
-    metadata = acquired_ranks.join(metadata)
-    meta_values['acquiredRank'] = 'continuous'
-    metadata = convert_string_cols(metadata)
-
-    # join meatadata to pc matrix
-    pc = pc.join(metadata)
-    for label_name, label_type in meta_values.items():
-        if label_type == 'discrete':
-            if any(pc[label_name].apply(pd.isna)):
-                warnings.warn('Missing label values!', Warning)
-            pc[label_name] = pc[label_name].apply(str)
-        elif label_type == 'continuous':
-            if any(pc[label_name].apply(pd.isna)):
-                raise RuntimeError('Cannot have missing label values in continious scale!')
-        else:
-            raise RuntimeError(f'"{label_type}" is an unknown label_type!')
-
-else:
-    meta_values = {'acquiredRank': 'continuous'}
-    pc = pc.join(acquired_ranks)
-
-conn.close()
-
-
-# labels = metadata
-# label_names = meta_values
-# x_axis_pc = 0
-# y_axis_pc = 1
-# dpi=250
-# df = df_wide
-# fname='fig/pca_test.pdf'
-
-for label_name, label_type in meta_values.items():
-    ofname = f'fig/pc_{label_name}.pdf'
-    pca_plot(pc, label_name, pc_var, label_type=label_type, fname=ofname)
 

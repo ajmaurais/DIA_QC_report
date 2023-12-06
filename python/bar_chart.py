@@ -8,6 +8,10 @@ import re
 
 def bar_chart(dat, ylab, xlab='Acquisition order', legend_title=None, fname=None, dpi=250):
 
+    '''
+    Make bar chart from aggregated bar chart.
+    '''
+
     data = {c: dat[c].to_numpy() for c in dat.columns}
     labels = dat.index.to_numpy()
     

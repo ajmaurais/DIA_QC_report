@@ -12,7 +12,6 @@ import re
 import pandas as pd
 from jsonschema import validate, ValidationError
 
-
 logging.basicConfig(
     level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s'
 )
