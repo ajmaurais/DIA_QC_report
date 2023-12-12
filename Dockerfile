@@ -23,7 +23,7 @@ COPY resources /code/DIA_QC_report/resources
 # add executables
 RUN cd /usr/local/bin && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/parse_data.py "$@"' > parse_data && \
-    echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/make_qmd.py "$@"' > make_qmd && \
+    echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
     echo '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
     chmod 755 make_qmd parse_data entrypoint
 
