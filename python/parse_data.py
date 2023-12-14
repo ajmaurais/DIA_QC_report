@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from csv import DictReader as CsvDictReader
 import re
+from subprocess import run as run_subprocess
 
 import pandas as pd
 from jsonschema import validate, ValidationError
@@ -29,6 +30,8 @@ METADATA_SCHEMA = {
     'minProperties': 1
 }
 
+
+TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
 SCHEMA = [
 '''
@@ -64,12 +67,19 @@ CREATE TABLE precursors (
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
 )''',
 '''
-CREATE TABLE metadata (
+CREATE TABLE sampleMetadata (
     replicateId INTEGER NOT NULL,
     annotationKey TEXT NOT NULL,
     annotationValue TEXT,
     annotationType VARCHAR(6) CHECK( annotationType IN ('INT', 'FLOAT', 'BOOL', 'STRING')) NOT NULL DEFAULT 'STRING',
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
+)
+''',
+'''
+CREATE TABLE metadata (
+    key TEXT NOT NULL,
+    value TEXT,
+    PRIMARY KEY (key)
 )
 ''',
 '''
@@ -179,7 +189,16 @@ def read_metadata(fname, metadata_format=None):
     return df
 
 
-def write_db(fname, replicates, precursors, protein_quants=None, metadata=None,
+def insert_program_metadata(conn, metadata):
+    cur = conn.cursor()
+    for k, v in metadata.items():
+        cur.execute(f'DELETE FROM metadata WHERE key = "{k}";')
+        cur.execute(f'INSERT INTO metadata (key, value) VALUES ("{k}", "{v}")')
+    conn.commit()
+    return conn
+
+
+def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
              projectName=None, overwriteMode='error'):
     '''
     Write reports to QC sqlite database.
@@ -194,7 +213,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, metadata=None,
         Precursors dataframe
     protein_quants: pd.DataFrame
         Long formated protein quants dataframe (optional)
-    metadata: pd.DataFrame
+    sample_metadata: pd.DataFrame
         Metadata dataframe (optional)
     projectName: str
         The project name to use in the replicates table.
@@ -227,7 +246,6 @@ def write_db(fname, replicates, precursors, protein_quants=None, metadata=None,
     else:
         conn = _initialize(fname)
             
-
     if protein_quants is not None:
         proteins = protein_quants[['name', 'accession', 'description']].drop_duplicates().reset_index(drop=True)
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
@@ -247,9 +265,23 @@ def write_db(fname, replicates, precursors, protein_quants=None, metadata=None,
         projectName = f'project_{len(projects.index) + 1}'
     replicates['project'] = projectName
 
+    # log_metadata = {'parse_data git info': get_git_version()}
+    log_metadata = dict()
+    log_metadata[f'Add {projectName}'] = datetime.now().strftime(TIME_FORMAT)
+    log_metadata[f'is_normalized'] = False
+
+
     # deal with existing proteins and replicates
     if append:
         conn = sqlite3.connect(fname)
+
+        cur = conn.cursor()
+        cur.execute(f'SELECT DISTINCT project FROM replicates WHERE project = "{projectName}"')
+        existing_project = cur.fetchall()
+        if len(existing_project) > 0:
+            LOGGER.error(f'{projectName} already exists in db!')
+            conn.close()
+            return False
 
         # deal with existing replicates
         curReplicates = pd.read_sql('SELECT * FROM replicates;', conn)
@@ -271,6 +303,8 @@ def write_db(fname, replicates, precursors, protein_quants=None, metadata=None,
         # make dict for proteinId column which links the protein and proteinQuants and precursor tables
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
 
+    conn = insert_program_metadata(conn, log_metadata)
+
     precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
     precursors['proteinId'] = precursors['proteinName'].apply(lambda x: proteinIndex[x])
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
@@ -287,16 +321,16 @@ def write_db(fname, replicates, precursors, protein_quants=None, metadata=None,
     if protein_quants is not None:
         protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
 
-    if metadata is not None:
-        missing_metadata = [x for x in metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]
+    if sample_metadata is not None:
+        missing_metadata = [x for x in sample_metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]
         for rep in missing_metadata:
             LOGGER.warning(f'Metadata row: \"{rep}\" does not exist in replicate report!')
 
-        metadata = metadata.loc[metadata['Replicate'].apply(lambda x: x in repIndex),]
+        sample_metadata = sample_metadata.loc[sample_metadata['Replicate'].apply(lambda x: x in repIndex),]
 
-        metadata['replicateId'] = metadata['Replicate'].apply(lambda x: repIndex[x])
-        metadata = metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
-        metadata.to_sql('metadata', conn, index=False, if_exists='append')
+        sample_metadata['replicateId'] = sample_metadata['Replicate'].apply(lambda x: repIndex[x])
+        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
+        sample_metadata.to_sql('sample_metadata', conn, index=False, if_exists='append')
 
     conn.close()
     return True
@@ -338,7 +372,7 @@ def main():
     LOGGER.info('Done reading replicates table...')
 
     # parse acquired times and add acquiredRank
-    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, '%m/%d/%Y %H:%M:%S'))
+    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, TIME_FORMAT))
     ranks = [(rank, i) for rank, i in enumerate(replicates['acquiredTime'].sort_values().index)]
     replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
 
@@ -358,7 +392,7 @@ def main():
     # build database
     LOGGER.info('Writing database...')
     if not write_db(args.ofname, replicates, precursors,
-                    protein_quants=protein_quants, metadata=metadata,
+                    protein_quants=protein_quants, sample_metadata=metadata,
                     projectName=args.projectName, overwriteMode=args.overwriteMode):
         LOGGER.error('Failed to create database!')
         sys.exit(1)

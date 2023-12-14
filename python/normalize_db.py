@@ -67,8 +67,8 @@ ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
 
 # delete existing normalized values
 cur = conn.cursor()
-cur.execute('UPDATE precursors SET normalizedArea = -1')
-cur.execute('UPDATE proteinQuants SET abundance = -1')
+cur.execute(f'UPDATE precursors SET normalizedArea = NULL')
+cur.execute(f'UPDATE proteinQuants SET abundance = NULL')
 conn.commit()
 
 # update precursor rows
@@ -82,11 +82,11 @@ conn.commit()
 protein_query = '''
     INSERT INTO proteinQuants (replicateId, proteinId, abundance)
     VALUES (?, ?, ?)
-    ON CONFLICT(replicateId, proteinId) DO UPDATE SET value = ?
+    ON CONFLICT(replicateId, proteinId) DO UPDATE SET abundance = ?
     '''
 cur = conn.cursor()
 for row in protein_df.itertuples():
-    cur.execute(query, (row.replicateId, row.protein, row.normalizedArea, row.normalizedArea))
+    cur.execute(protein_query, (row.replicateId, row.protein, row.normalizedArea, row.normalizedArea))
 conn.commit()
 
 # update normalization method in metadata
