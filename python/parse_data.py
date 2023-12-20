@@ -8,7 +8,6 @@ import logging
 from datetime import datetime
 from csv import DictReader as CsvDictReader
 import re
-from subprocess import run as run_subprocess
 
 import pandas as pd
 from jsonschema import validate, ValidationError
@@ -18,6 +17,7 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger()
 
+# sample metadata json schema
 METADATA_SCHEMA = {
     'type': 'object',
     'additionalProperties': {
@@ -138,6 +138,7 @@ PROTEIN_QUANTS_REQUIRED_COLUMNS = {'ProteinAccession': 'accession',
                                    'ProteinAbundance': 'abundance'}
 
 def _initialize(fname):
+    ''' Initialize empty database with SCHEMA '''
     conn = sqlite3.connect(fname)
     cur = conn.cursor()
     for command in SCHEMA:
@@ -147,6 +148,7 @@ def _initialize(fname):
 
 
 def pd_type_to_db_type(pdType):
+    ''' Convert pandas data types into string '''
     if re.search('^int[0-9]+$', pdType):
         return 'INT'
     if re.search('^float[0-9]+$', pdType):
@@ -158,6 +160,21 @@ def pd_type_to_db_type(pdType):
 
 
 def read_metadata(fname, metadata_format=None):
+    '''
+    Read sample metadata file and format dataframe to be added to sampleMetadata table.
+
+    Parameters
+    ----------
+    fname: str
+        The path to the metadata file.
+    metadata_format: str
+        One of ('tsv', 'json')
+
+    Returns
+    -------
+    df: pd.DataFrame
+        The sample metadata dataframe.
+    '''
     if metadata_format:
         _format = metadata_format
     else:
@@ -190,6 +207,15 @@ def read_metadata(fname, metadata_format=None):
 
 
 def insert_program_metadata(conn, metadata):
+    '''
+    Insert multiple metadata key, value pairs into the metadata table.
+    If the key already exists it is overwritten.
+
+    conn: sqlite3.Connection:
+        Database connection.
+    metadata: dict
+        A dict with key, value pairs.
+    '''
     cur = conn.cursor()
     for k, v in metadata.items():
         cur.execute(f'DELETE FROM metadata WHERE key = "{k}";')
@@ -337,7 +363,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate QC_metrics input database from '
+    parser = argparse.ArgumentParser(description='Generate QC_metrics input database from Skyline '
                                                  'precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
