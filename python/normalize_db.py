@@ -84,12 +84,13 @@ def main():
     LOGGER.info('Reading precursors from database...')
     df = pd.read_sql('''
         SELECT
-            replicateId,
-            proteinId as protein,
-            modifiedSequence,
-            precursorCharge,
-            totalAreaFragment
-        FROM precursors ''',
+            p.replicateId,
+            ptp.proteinId as protein,
+            p.modifiedSequence,
+            p.precursorCharge,
+            p.totalAreaFragment
+        FROM precursors p
+        LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence; ''',
         conn)
 
     df['ion'] = df['modifiedSequence'] + '_' + df['precursorCharge'].astype(str)
@@ -133,14 +134,14 @@ def main():
     # ion_df.to_cion_dfsv('/home/ajm/code/DIA_QC_report/testData/normalize_db/ion_df.tsv', sep='\t' , index=False)
     
     # median normalize precursor quants
-    precursor_to_protein = df[['protein', 'ion']].drop_duplicates()
+    # precursor_to_protein = df[['protein', 'ion']].drop_duplicates()
     ion_df = median_normalize(df[[REP_COLUMN_NAME, 'ion', 'totalAreaFragment']].drop_duplicates(),
                               [REP_COLUMN_NAME], 'totalAreaFragment')
     ion_df['modifiedSequence'] = ion_df['ion'].apply(lambda x: precursor_ids[x][0])
     ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
 
     # join back in protein IDs
-    ion_df = precursor_to_protein.merge(ion_df, how='left', left_index=False, right_index=False)
+    # ion_df = precursor_to_protein.merge(ion_df, how='left', left_index=False, right_index=False)
 
     # delete existing normalized values
     LOGGER.info('Setting existing normalizedArea values to NULL.')
@@ -154,13 +155,12 @@ def main():
     cur = conn.cursor()
     ion_data = [(row.normalizedArea,
                  getattr(row, REP_COLUMN_NAME),
-                 row.protein,
                  row.modifiedSequence,
                  row.precursorCharge) for row in ion_df.itertuples()]
     cur.executemany('''
                     UPDATE precursors
                         SET normalizedArea = ?
-                    WHERE replicateId = ? AND proteinId = ? AND modifiedSequence = ? AND precursorCharge = ?''',
+                    WHERE replicateId = ? AND modifiedSequence = ? AND precursorCharge = ? ''',
                     ion_data)
     conn.commit()
     LOGGER.info('Done updating precursor normalizedArea values.')

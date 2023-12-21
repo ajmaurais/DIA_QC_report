@@ -333,7 +333,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         # deal with existing protein to peptide pairs
         curPairs = pd.read_sql('''SELECT
-                                    prot.proteinName, p.modifiedSequence
+                                    prot.name as proteinName, p.modifiedSequence
                                 FROM peptideToProtein p
                                 LEFT JOIN proteins prot ON prot.proteinId = p.proteinId;''',
                                 conn)
