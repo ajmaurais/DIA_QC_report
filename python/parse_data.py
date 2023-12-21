@@ -47,7 +47,6 @@ CREATE TABLE replicates (
 '''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
-    proteinId INTEGER NOT NULL,
     peptide VARCHAR(50),
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
@@ -62,9 +61,8 @@ CREATE TABLE precursors (
     maxFwhm REAL,
     libraryDotProduct REAL,
     isotopeDotProduct REAL,
-    PRIMARY KEY (replicateId, proteinId, modifiedSequence, precursorCharge),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId),
-    FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
+    PRIMARY KEY (replicateId, modifiedSequence, precursorCharge),
+    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
 )''',
 '''
 CREATE TABLE sampleMetadata (
@@ -99,6 +97,14 @@ CREATE TABLE proteinQuants (
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
 )
+''',
+'''
+CREATE TABLE peptideToProtein (
+    proteinId INTEGER NOT NULL,
+    modifiedSequence VARCHAR(200) NOT NULL,
+    PRIMARY KEY (modifiedSequence, proteinId),
+    FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
+)
 '''
 ]
 
@@ -121,11 +127,10 @@ PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'LibraryDotProduct': 'libraryDotProduct',
                                       'IsotopeDotProduct': 'isotopeDotProduct'}
 
-PRECURSOR_QUALITY_COLUMNS = ['replicateId', 'proteinId',
-                             'peptide', 'modifiedSequence', 'precursorCharge', 'precursorMz',
-                             'averageMassErrorPPM', 'totalAreaFragment', 'totalAreaMs1', 'normalizedArea',
-                             'rt', 'minStartTime', 'maxEndTime', 'maxFwhm',
-                             'libraryDotProduct', 'isotopeDotProduct']
+PRECURSOR_QUALITY_COLUMNS = ['replicateId', 'peptide', 'modifiedSequence', 'precursorCharge',
+                             'precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
+                             'totalAreaMs1', 'normalizedArea', 'rt', 'minStartTime',
+                             'maxEndTime', 'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
 
 REPLICATE_QUALITY_REQUIRED_COLUMNS = {'Replicate': 'replicate',
                                       'AcquiredTime': 'acquiredTime',
@@ -142,7 +147,11 @@ def _initialize(fname):
     conn = sqlite3.connect(fname)
     cur = conn.cursor()
     for command in SCHEMA:
-        cur.execute(command)
+        try:
+            cur.execute(command)
+        except sqlite3.OperationalError as e:
+            raise RuntimeError(f'Error running command: {command}')
+
     conn.commit()
     return conn
 
@@ -252,7 +261,8 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     sucess: bool
         True if all operations were sucessful, false otherwise.
     '''
-
+    
+    # Initialize database if applicable and get database connection
     conn = None
     append = False
     if os.path.isfile(fname):
@@ -280,7 +290,6 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         if set(proteins['name'].to_list()) != set(precursors['proteinName'].to_list()):
             LOGGER.error('Protein and precursor ProteinAccessions differ!')
             return False
-
     else:
         proteins = precursors[['proteinName', 'proteinAccession']].drop_duplicates().reset_index(drop=True)
         proteins = proteins.rename(columns={'proteinName': 'name', 'proteinAccession': 'accession'})
@@ -297,7 +306,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     log_metadata[f'is_normalized'] = False
 
 
-    # deal with existing proteins and replicates
+    # deal with existing replicates, proteins, and protein to precursor pairs 
     if append:
         conn = sqlite3.connect(fname)
 
@@ -322,6 +331,16 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         proteinIndex = {r: i for i, r in zip(curProteins['proteinId'], curProteins['name'])}
         proteinIndex = {**proteinIndex, **{r: i for i, r in zip(proteins['name'].index, proteins['name'])}}
 
+        # deal with existing protein to peptide pairs
+        curPairs = pd.read_sql('''SELECT
+                                    prot.proteinName, p.modifiedSequence
+                                FROM peptideToProtein p
+                                LEFT JOIN proteins prot ON prot.proteinId = p.proteinId;''',
+                                conn)
+        newPairs = pd.merge(curPairs, precursors[['proteinName', 'modifiedSequence']].drop_duplicates(),
+                            how='right', indicator='exists')
+        newPairs = newPairs[newPairs['exists'] == 'right_only']
+
     else:
         # make dict for replicateId column which links the replicate and precursor tables
         repIndex = {r: i for i, r in zip(replicates['replicate'].index, replicates['replicate'])}
@@ -329,17 +348,24 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         # make dict for proteinId column which links the protein and proteinQuants and precursor tables
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
 
+        newPairs = precursors[['proteinName', 'modifiedSequence']].drop_duplicates()
+
     conn = insert_program_metadata(conn, log_metadata)
 
     precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
     precursors['proteinId'] = precursors['proteinName'].apply(lambda x: proteinIndex[x])
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
 
+    # add proteinId column and make peptideToProtein df
+    newPairs['proteinId'] = newPairs['proteinName'].apply(lambda x: proteinIndex[x])
+    peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
+
     if protein_quants is not None:
         protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
         protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
         protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
 
+    peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
     proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
     replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
