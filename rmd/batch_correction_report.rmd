@@ -1,0 +1,31 @@
+
+---
+title: DIA batch correction report
+output:
+    html_document:
+        toc: true
+        toc_float: true
+---
+
+```{r setup, message=FALSE, warning=FALSE, echo = FALSE}
+
+library(rDIAUtils)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(DBI)
+
+conn <- dbConnect(RSQLite::SQLite(), 'testData/normalize_db/data.db3')
+dat.precursor <- dbGetQuery(conn, 'SELECT
+                                      r.replicate,
+                                      p.modifiedSequence,
+                                      p.precursorCharge,
+                                      p.totalAreaFragment,
+                                      p.normalizedArea
+                                   FROM precursors p
+                                   LEFT JOIN replicates r on r.replicateId == p.replicateId')
+dbDisconnect(conn)
+dat$replicate <- make.names(dat$replicate)
+```
+
+
