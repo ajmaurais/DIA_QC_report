@@ -382,7 +382,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         sample_metadata['replicateId'] = sample_metadata['Replicate'].apply(lambda x: repIndex[x])
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
-        sample_metadata.to_sql('sample_metadata', conn, index=False, if_exists='append')
+        sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
     conn.close()
     return True
