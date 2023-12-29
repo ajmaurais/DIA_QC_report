@@ -18,7 +18,6 @@ RUN cd /code/quarto && \
 RUN pip install pandas matplotlib jupyter scikit-learn
 
 COPY python/*.py /code/DIA_QC_report/python
-COPY resources /code/DIA_QC_report/resources
 
 # add executables
 RUN cd /usr/local/bin && \
