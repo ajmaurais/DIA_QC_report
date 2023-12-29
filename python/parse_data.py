@@ -226,9 +226,11 @@ def insert_program_metadata(conn, metadata):
         A dict with key, value pairs.
     '''
     cur = conn.cursor()
-    for k, v in metadata.items():
-        cur.execute(f'DELETE FROM metadata WHERE key = "{k}";')
-        cur.execute(f'INSERT INTO metadata (key, value) VALUES ("{k}", "{v}")')
+    for key, value in metadata.items():
+        cur.execute(f'''
+            INSERT INTO metadata
+                (key, value) VALUES ("{key}", "{value}")
+            ON CONFLICT(key) DO UPDATE SET value = "{value}" ''')
     conn.commit()
     return conn
 
