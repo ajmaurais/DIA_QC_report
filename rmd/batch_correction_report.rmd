@@ -1,13 +1,13 @@
 
 ---
 title: DIA batch correction report
-output:
+input:
     html_document:
         toc: true
         toc_float: true
 ---
 
-```{r setup, message=FALSE, warning=FALSE, echo = FALSE}
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
 
 library(rDIAUtils)
 library(ggplot2)
@@ -15,17 +15,186 @@ library(dplyr)
 library(tidyr)
 library(DBI)
 
-conn <- dbConnect(RSQLite::SQLite(), 'testData/normalize_db/data.db3')
-dat.precursor <- dbGetQuery(conn, 'SELECT
-                                      r.replicate,
-                                      p.modifiedSequence,
-                                      p.precursorCharge,
-                                      p.totalAreaFragment,
-                                      p.normalizedArea
-                                   FROM precursors p
-                                   LEFT JOIN replicates r on r.replicateId == p.replicateId')
-dbDisconnect(conn)
-dat$replicate <- make.names(dat$replicate)
+conn <- DBI::dbConnect(RSQLite::SQLite(), '/Users/Aaron/code/DIA_QC_report/testData/normalize_db/full/data.db3')
+dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
+                                      replicateId,
+                                      modifiedSequence,
+                                      precursorCharge,
+                                      totalAreaFragment,
+                                      normalizedArea
+                                   FROM precursors p;')
+dat.protein <- DBI::dbGetQuery(conn, 'SELECT
+                                    q.replicateId,
+                                    p.name as proteinName,
+                                    q.abundance 
+                                FROM proteinQuants q
+                                LEFT JOIN proteins p ON p.proteinId = q.proteinId;')
+dat.rep <- DBI::dbGetQuery(conn, 'SELECT
+                                r.replicate,
+                                r.replicateId,
+                                r.acquiredRank,
+                                b.annotationValue as batch
+                             FROM replicates r
+                             LEFT JOIN (SELECT * FROM sampleMetadata WHERE annotationKey == "batch") b
+                             ON b.replicateId == r.replicateId;')
+DBI::dbDisconnect(conn)
+
+# fix special characters in replicate names so they can be R headers
+dat.rep$replicate <- make.names(dat.rep$replicate)
+dat.precursor <- dplyr::left_join(dat.precursor,
+                                  dplyr::select(dat.rep, replicate, replicateId),
+                                  by='replicateId')
+dat.protein <- dplyr::left_join(dat.protein,
+                                dplyr::select(dat.rep, replicate, replicateId),
+                                by='replicateId')
+
+# combine sequence and precursorCharge cols
+dat.precursor$precursor <- with(dat.precursor, paste(modifiedSequence, precursorCharge, sep='_'))
+
+# log2 transform abundances
+dat.precursor$totalAreaFragment <- log2(rDIAUtils::zeroToMin(dat.precursor$totalAreaFragment))
+dat.precursor$normalizedArea <- log2(rDIAUtils::zeroToMin(dat.precursor$normalizedArea))
+dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))
+
 ```
 
+
+```{r precursor_batch_correction, message=FALSE, warning=FALSE, echo=FALSE}
+
+# batch correction
+dat.precursor.bc <- dat.precursor %>% 
+    dplyr::left_join(dplyr::select(dat.rep, replicateId, batch),
+                     by='replicateId') %>%
+    rDIAUtils::batchCorrection('normalizedArea', batch1='batch',
+                               bc.method='combat', rowsName='precursor')
+
+# Join batch corrected areas to initial df
+dat.precursor <- dplyr::left_join(dat.precursor,
+                                  dplyr::select(dat.precursor.bc, replicate, precursor,
+                                                normalizedArea.bc=normalizedArea),
+                                  by=c('replicate', 'precursor'))
+
+# pivot longer
+precursor.methods <- c('totalAreaFragment', 'normalizedArea', 'normalizedArea.bc')
+dat.precursor.l <- dat.precursor %>%
+    tidyr::pivot_longer(dplyr::all_of(precursor.methods),
+                        names_to='method', values_to='value') %>%
+    dplyr::select(replicate, precursor, method, value)
+
+```
+
+```{r protein_batch_correction, message=FALSE, warning=FALSE, echo=FALSE}
+
+# batch correction
+dat.protein.bc <- dat.protein %>% 
+    dplyr::left_join(dplyr::select(dat.rep, replicateId, batch),
+                     by='replicateId') %>%
+    rDIAUtils::batchCorrection('abundance', batch1='batch',
+                               bc.method='combat', rowsName='proteinName')
+
+# Join batch corrected areas to initial df
+dat.protein <- dplyr::left_join(dat.protein,
+                                  dplyr::select(dat.protein.bc, replicate, proteinName,
+                                                abundance.bc=abundance),
+                                  by=c('replicate', 'proteinName'))
+
+# pivot longer
+protein.methods <- c('abundance', 'abundance.bc')
+dat.protein.l <- dat.protein %>%
+    tidyr::pivot_longer(dplyr::all_of(protein.methods),
+                        names_to='method', values_to='value') %>%
+    dplyr::select(replicate, proteinName, method, value)
+
+```
+
+# Precursor normalization
+
+```{r area_dist_plot, message=FALSE, warning=FALSE, echo=FALSE, fig.height=10, fig.width=8}
+
+dat.p <- dat.precursor.l %>%
+    dplyr::left_join(dplyr::select(dat.rep, replicate, acquiredRank, batch))
+dat.p$method <- factor(dat.p$method, levels=precursor.methods,
+                       labels=c('Log2(Area)', 'Log2(Median Normalized)', 'Log2(Batch Corrected)'))
+
+p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank, color=batch)) +
+    facet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'bottom') +
+    geom_boxplot(outlier.size = 0.5) +
+    scale_color_discrete(name='Batch') +
+    coord_flip() +
+    ylab(NULL) +
+    xlab('Acquisition number') +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+          strip.placement = "outside",
+          strip.background = element_blank(),
+          legend.position = 'top')
+
+p.norm
+
+```
+
+# Control CV distribution
+
+```{r replicate_cv_plot, message=FALSE, warning=FALSE, echo=FALSE, fig.height=4, fig.width=4}
+
+# calculate CV for each precursor
+dat.cv <- dat.precursor.l %>%
+    dplyr::mutate(value=2^value) %>% # Convert back to linear space for CV calculation
+    dplyr::group_by(precursor, method) %>%
+    dplyr::summarize(cv = (sd(value) / mean(value)) * 100) %>%
+    dplyr::ungroup()
+
+# Convert method to factor
+dat.cv$method <- factor(dat.cv$method, levels=precursor.methods,
+                       labels=c('Unnormalized', 'Median Normalized', 'Batch Corrected'))
+
+# CV distribution plot
+p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
+    geom_density(alpha=0.2) +
+    ylab('Density') +
+    xlab('Acquisition number') +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+          legend.title=element_blank(),
+          legend.direction='vertical',
+          legend.position = 'top')
+
+p.cv
+
+```
+
+# Precursor batch correction PCA
+
+```{r precursor_pca, message=FALSE, warning=FALSE, echo=FALSE, fig.width=11, fig.height=6}
+
+# precursor PCAs
+pcs.precursor <- list()
+for(method in precursor.methods) {
+    pcs.precursor[[method]] <- rDIAUtils::pcAnalysis(dat.precursor.l[dat.precursor.l$method == method,],
+                                                     'value', rowsName='precursor', columnsName='replicate')
+}
+
+dat <- dplyr::left_join(pcs.precursor[[1]][['pc']], dat.rep, by='replicate')
+
+rDIAUtils::arrangePlots(pcs.precursor, row.cols=precursor.methods, c('acquiredRank', 'batch'), dat.rep)
+```
+
+# Protein batch correction PCA
+
+```{r protein_pca, message=FALSE, warning=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+
+# protein PCAs
+pcs.protein <- list()
+for(method in protein.methods) {
+    pcs.protein[[method]] <- rDIAUtils::pcAnalysis(dat.protein.l[dat.protein.l$method == method,],
+                                                   'value', rowsName='proteinName', columnsName='replicate')
+}
+
+rDIAUtils::arrangePlots(pcs.protein, row.cols=protein.methods, c('acquiredRank', 'batch'), dat.rep)
+```
+
+
+
+```{r write_tables, message=FALSE, warning=FALSE, echo=FALSE}
+```
 

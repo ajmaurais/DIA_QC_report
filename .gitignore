@@ -1,6 +1,7 @@
 # additional things I added
 qmd/*.pdf
 qmd/*.html
+rmd/*.html
 fig/*
 testData/*
 plots/*
