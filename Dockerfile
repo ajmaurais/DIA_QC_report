@@ -25,7 +25,7 @@ RUN cd /usr/local/bin && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/normalize_db.py "$@"' > normalize_db && \
     echo '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
-    chmod 755 make_qmd parse_data entrypoint
+    chmod 755 generate_qc_qmd normalize_db parse_data entrypoint
 
 WORKDIR /data
 
