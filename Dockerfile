@@ -3,8 +3,17 @@ from python:3.9-slim
 MAINTAINER "Aaron Maurais -- MacCoss Lab"
 
 RUN apt-get update && \
-    apt-get -y install procps wget fontconfig && \
+    apt-get -y install procps wget fontconfig libssl-dev libxml2-dev libcurl4-gnutls-dev r-base && \
     mkdir -p /code/DIA_QC_report/python /code/quarto
+
+# install rDIAUtils dependencies
+RUN Rscript -e "install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager'))" && \
+    Rscript -e "BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE)"
+
+# install rDIAUtils R package
+COPY rDIAUtils /code/rDIAUtils
+RUN cd /code/rDIAUtils && \
+    Rscript -e "install.packages('.', type='source', repo=NULL)"
 
 # install quarto
 RUN cd /code/quarto && \
@@ -15,11 +24,12 @@ RUN cd /code/quarto && \
     quarto install tinytex
 
 # install python dependencies
-RUN pip install pandas matplotlib jupyter scikit-learn
+COPY directlfq /code/directlfq
+RUN pip install pandas matplotlib jupyter scikit-learn && \
+    cd /code/directlfq && pip install .
 
+# add python executables
 COPY python/*.py /code/DIA_QC_report/python
-
-# add executables
 RUN cd /usr/local/bin && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/parse_data.py "$@"' > parse_data && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
