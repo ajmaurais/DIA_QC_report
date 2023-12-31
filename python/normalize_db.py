@@ -11,7 +11,7 @@ from multiprocessing import cpu_count
 import numpy as np
 import pandas as pd
 import directlfq.utils as lfqutils
-import directlfq.normalization as lfqnorm
+import directlfq.normalization.NormalizationManagerSamplesOnSelectedProteins as dlfq_norm
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 logging.basicConfig(
@@ -111,7 +111,7 @@ def main():
     input_df = input_df.reset_index()
     input_df = lfqutils.index_and_log_transform_input_df(input_df)
     input_df = lfqutils.remove_allnan_rows_input_df(input_df)
-    input_df = lfqnorm.NormalizationManagerSamplesOnSelectedProteins(input_df, num_samples_quadratic=10).complete_dataframe
+    input_df = dlfq_norm(input_df, num_samples_quadratic=10).complete_dataframe
 
     # input_df.to_csv('/home/ajm/code/DIA_QC_report/testData/normalize_db/input_df.tsv', sep='\t', index=True)
      
