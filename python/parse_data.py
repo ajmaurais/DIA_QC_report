@@ -221,6 +221,8 @@ def insert_program_metadata(conn, metadata):
     Insert multiple metadata key, value pairs into the metadata table.
     If the key already exists it is overwritten.
 
+    Parameters
+    ----------
     conn: sqlite3.Connection:
         Database connection.
     metadata: dict
@@ -238,7 +240,12 @@ def insert_program_metadata(conn, metadata):
 
 def update_acquired_ranks(conn):
     '''
-    Populate acquiredRank column in replicates table
+    Populate acquiredRank column in replicates table.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection:
+        Database connection.
     '''
 
     replicates = pd.read_sql('SELECT replicateId, acquiredTime FROM replicates;', conn)
@@ -429,8 +436,8 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate QC_metrics input database from Skyline '
-                                                 'precursor_quality and replicate_quality reports.')
+    parser = argparse.ArgumentParser(description='Generate QC_metrics an batch correction database from '
+                                                 'Skyline precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'tsv'),
@@ -450,7 +457,7 @@ def main():
     parser.add_argument('precursors', help='Skyline precursor_report')
     args = parser.parse_args()
 
-    # read annotatiuons if applicable
+    # read annotations if applicable
     metadata = None
     if args.metadata is not None:
         try:
