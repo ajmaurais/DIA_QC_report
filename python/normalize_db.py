@@ -11,11 +11,11 @@ from multiprocessing import cpu_count
 import numpy as np
 import pandas as pd
 import directlfq.utils as lfqutils
-import directlfq.normalization.NormalizationManagerSamplesOnSelectedProteins as dlfq_norm
+from directlfq.normalization import NormalizationManagerSamplesOnSelectedProteins as dlfq_norm
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s'
+    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
 )
 LOGGER = logging.getLogger()
 
@@ -146,8 +146,8 @@ def main():
     # delete existing normalized values
     LOGGER.info('Setting existing normalizedArea values to NULL.')
     cur = conn.cursor()
-    cur.execute(f'UPDATE precursors SET normalizedArea = NULL')
-    cur.execute(f'UPDATE proteinQuants SET abundance = NULL')
+    cur.execute('UPDATE precursors SET normalizedArea = NULL')
+    cur.execute('UPDATE proteinQuants SET normalizedAbundance = NULL')
     conn.commit()
 
     # update precursor rows
@@ -167,11 +167,11 @@ def main():
 
     # insert or update proteinQuant rows
     protein_query = '''
-        INSERT INTO proteinQuants (replicateId, proteinId, abundance)
+        INSERT INTO proteinQuants (replicateId, proteinId, normalizedAbundance)
         VALUES (?, ?, ?)
-        ON CONFLICT(replicateId, proteinId) DO UPDATE SET abundance = ?
+        ON CONFLICT(replicateId, proteinId) DO UPDATE SET normalizedAbundance = ?
         '''
-    LOGGER.info('Updating protein abundance values...')
+    LOGGER.info('Updating protein normalizedAbundance values...')
     cur = conn.cursor()
     for row in protein_df.itertuples():
         cur.execute(protein_query, (row.replicateId, row.protein, row.normalizedArea, row.normalizedArea))

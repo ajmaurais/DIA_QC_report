@@ -13,7 +13,7 @@ import pandas as pd
 from jsonschema import validate, ValidationError
 
 logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s'
+    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
 )
 LOGGER = logging.getLogger()
 
@@ -93,6 +93,7 @@ CREATE TABLE proteinQuants (
     replicateId INTEGER NOT NULL,
     proteinId INTEGER NOT NULL,
     abundance REAL,
+    normalizedAbundance REAL,
     PRIMARY KEY (replicateId, proteinId),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
@@ -352,8 +353,17 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         newPairs = precursors[['proteinName', 'modifiedSequence']].drop_duplicates()
 
-    conn = insert_program_metadata(conn, log_metadata)
+    if protein_quants is None:
+        protein_quants = precursors.groupby(['replicateName', 'proteinName'])['totalAreaFragment'].sum().reset_index()
+        protein_quants = protein_quants.rename(columns={'proteinName': 'name',
+                                                        'totalAreaFragment': 'abundance'})
 
+    # add replicateId and proteinId columns to precursors and drop duplicate sequences
+    protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
+    protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
+    protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
+
+    # add replicateId and proteinId columns to precursors and drop duplicate sequences
     precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
     precursors['proteinId'] = precursors['proteinName'].apply(lambda x: proteinIndex[x])
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
@@ -362,18 +372,11 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     newPairs['proteinId'] = newPairs['proteinName'].apply(lambda x: proteinIndex[x])
     peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
 
-    if protein_quants is not None:
-        protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
-        protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
-        protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
-
     peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
     proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
+    protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
     replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
-
-    if protein_quants is not None:
-        protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
 
     if sample_metadata is not None:
         missing_metadata = [x for x in sample_metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]
@@ -385,6 +388,8 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         sample_metadata['replicateId'] = sample_metadata['Replicate'].apply(lambda x: repIndex[x])
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
+
+    conn = insert_program_metadata(conn, log_metadata)
 
     conn.close()
     return True
@@ -399,7 +404,9 @@ def main():
                         help='Specify metadata file format. '
                              'By default the format is infered from the file extension.')
     parser.add_argument('--proteins', default=None,
-                        help='Long formated protein abundance report.')
+                        help='Long formated protein abundance report. '
+                              'If no protein report is given, proteins are quantified in the database '
+                              'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',
                         help='Output file name. Default is ./data.db3')
     parser.add_argument('--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
