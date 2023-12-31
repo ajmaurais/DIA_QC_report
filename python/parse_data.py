@@ -264,6 +264,10 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     sucess: bool
         True if all operations were sucessful, false otherwise.
     '''
+
+    # Metadata to add to db
+    current_command = ' '.join(sys.argv)
+    log_metadata = {'command_log': current_command}
     
     # Initialize database if applicable and get database connection
     conn = None
@@ -276,15 +280,21 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
             LOGGER.warning(f'{fname} already exists. Overwriting...')
             os.remove(fname)
             conn = _initialize(fname)
+
         elif overwriteMode == 'append':
             conn = sqlite3.connect(fname)
             append = True
+
+            # get commands previously run on database
+            cur = conn.cursor()
+            cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
+            log_metadata['command_log'] = f'{cur.fetchall()[0][0]}\n{log_metadata["command_log"]}'
         else:
             LOGGER.error(f'"{overwriteMode}" is an unknown overwriteMode!')
             return False
     else:
         conn = _initialize(fname)
-            
+
     if protein_quants is not None:
         proteins = protein_quants[['name', 'accession', 'description']].drop_duplicates().reset_index(drop=True)
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
@@ -303,18 +313,16 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         projectName = f'project_{len(projects.index) + 1}'
     replicates['project'] = projectName
 
-    # log_metadata = {'parse_data git info': get_git_version()}
-    log_metadata = dict()
-    log_metadata[f'Add {projectName}'] = datetime.now().strftime(TIME_FORMAT)
+    log_metadata[f'Add {projectName} time'] = datetime.now().strftime(TIME_FORMAT)
+    log_metadata[f'Add {projectName} command'] = current_command
     log_metadata[f'is_normalized'] = False
-
 
     # deal with existing replicates, proteins, and protein to precursor pairs 
     if append:
         conn = sqlite3.connect(fname)
 
         cur = conn.cursor()
-        cur.execute(f'SELECT DISTINCT project FROM replicates WHERE project = "{projectName}"')
+        cur.execute('SELECT DISTINCT project FROM replicates WHERE project = ?', (projectName,))
         existing_project = cur.fetchall()
         if len(existing_project) > 0:
             LOGGER.error(f'{projectName} already exists in db!')

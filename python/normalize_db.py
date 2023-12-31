@@ -176,14 +176,27 @@ def main():
     for row in protein_df.itertuples():
         cur.execute(protein_query, (row.replicateId, row.protein, row.normalizedArea, row.normalizedArea))
     conn.commit()
-    LOGGER.info('Done updating protein abundance values.')
+    LOGGER.info('Done updating protein normalizedAbundance values.')
+
+    # get previously run commands on db
+    cur = conn.cursor()
+    cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
+    previous_commands = cur.fetchall()
+    if len(previous_commands) == 0:
+        LOGGER.warning('Missing command_log metadata entry!')
+        previous_commands = 'MISSING_COMMAND_LOG\n'
+    else:
+        previous_commands = previous_commands[0][0] + '\n'
+    current_command = ' '.join(sys.argv)
 
     # update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    conn = update_meta_value(conn, 'normalization_time', datetime.now().strftime(TIME_FORMAT))
+    conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(TIME_FORMAT))
     conn = update_meta_value(conn, 'precursor_normalization_method', 'median')
     conn = update_meta_value(conn, 'protein_normalization_method', 'DirectLFQ')
     conn = update_meta_value(conn, 'is_normalized', True)
+    conn = update_meta_value(conn, 'Normalization command', current_command)
+    conn = update_meta_value(conn, 'command_log', previous_commands + current_command)
      
     conn.close()
 
