@@ -280,7 +280,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     precursors: pd.DataFrame
         Precursors dataframe
     protein_quants: pd.DataFrame
-        Long formated protein quants dataframe (optional)
+        Long formatted protein quants dataframe (optional)
     sample_metadata: pd.DataFrame
         Metadata dataframe (optional)
     projectName: str
@@ -291,8 +291,8 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
     Returns
     -------
-    sucess: bool
-        True if all operations were sucessful, false otherwise.
+    success: bool
+        True if all operations were successful, false otherwise.
     '''
 
     # Metadata to add to db
@@ -442,9 +442,9 @@ def main():
                         help='Annotations corresponding to each file.')
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'tsv'),
                         help='Specify metadata file format. '
-                             'By default the format is infered from the file extension.')
+                             'By default the format is inferred from the file extension.')
     parser.add_argument('--proteins', default=None,
-                        help='Long formated protein abundance report. '
+                        help='Long formatted protein abundance report. '
                               'If no protein report is given, proteins are quantified in the database '
                               'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',

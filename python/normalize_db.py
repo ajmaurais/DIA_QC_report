@@ -47,12 +47,12 @@ def update_meta_value(conn, key, value):
 
 def median_normalize(df, key_cols, value_col):
     '''
-    Median normalize peak areas in long formated datafraeme.
+    Median normalize peak areas in long formatted datafraeme.
 
     Parameters
     ----------
     df: pd.DataFrame
-        Long formated data frame
+        Long formatted data frame
     key_cols: list
         The names of column(s) which uniquely identify each replicate.
     value_col: str
@@ -97,7 +97,7 @@ def main():
     precursor_ids = df[['ion', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
     precursor_ids = {x.ion: (x.modifiedSequence, x.precursorCharge) for x in precursor_ids.itertuples()}
 
-    # set zero areas to the mininum non-zero value
+    # set zero areas to the minimum non-zero value
     selection = df['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'
     df.loc[selection] = min(df[df['totalAreaFragment'] > 0]['totalAreaFragment'])
 
