@@ -236,6 +236,29 @@ def insert_program_metadata(conn, metadata):
     return conn
 
 
+def update_acquired_ranks(conn):
+    '''
+    Populate acquiredRank column in replicates table
+    '''
+
+    replicates = pd.read_sql('SELECT replicateId, acquiredTime FROM replicates;', conn)
+
+    # parse acquired times and add acquiredRank
+    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, TIME_FORMAT))
+    ranks = [(rank, i) for rank, i in enumerate(replicates['acquiredTime'].sort_values().index)]
+    replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
+
+    acquired_ranks = [(row.acquiredRank, row.replicateId) for row in replicates.itertuples()]
+    cur = conn.cursor()
+    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?',
+                    acquired_ranks)
+    conn.commit()
+
+    insert_program_metadata(conn, {'replicates.acquiredRank updated': True})
+
+    return conn
+
+
 def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
              projectName=None, overwriteMode='error'):
     '''
@@ -268,7 +291,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     # Metadata to add to db
     current_command = ' '.join(sys.argv)
     log_metadata = {'command_log': current_command}
-    
+
     # Initialize database if applicable and get database connection
     conn = None
     append = False
@@ -315,9 +338,10 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
     log_metadata[f'Add {projectName} time'] = datetime.now().strftime(TIME_FORMAT)
     log_metadata[f'Add {projectName} command'] = current_command
+    log_metadata['replicates.acquiredRank updated'] = False
     log_metadata[f'is_normalized'] = False
 
-    # deal with existing replicates, proteins, and protein to precursor pairs 
+    # deal with existing replicates, proteins, and protein to precursor pairs
     if append:
         conn = sqlite3.connect(fname)
 
@@ -398,6 +422,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
     conn = insert_program_metadata(conn, log_metadata)
+    conn = update_acquired_ranks(conn)
 
     conn.close()
     return True
@@ -438,12 +463,8 @@ def main():
     replicates = pd.read_csv(args.replicates, sep='\t')
     replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.keys()]
     replicates = replicates.rename(columns=REPLICATE_QUALITY_REQUIRED_COLUMNS)
+    replicates['acquiredRank'] = -1 # this will be updated later
     LOGGER.info('Done reading replicates table...')
-
-    # parse acquired times and add acquiredRank
-    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, TIME_FORMAT))
-    ranks = [(rank, i) for rank, i in enumerate(replicates['acquiredTime'].sort_values().index)]
-    replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
 
     # read precursor quality report
     precursors = pd.read_csv(args.precursors, sep='\t')
