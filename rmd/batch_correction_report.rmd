@@ -23,6 +23,10 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       totalAreaFragment,
                                       normalizedArea
                                    FROM precursors p;')
+peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
+                                            p.name as proteinName, ptp. modifiedSequence
+                                            FROM  peptideToProtein ptp
+                                        LEFT JOIN proteins p ON ptp.proteinId == p.proteinId;')
 dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.replicateId,
                                     p.name as proteinName,
@@ -202,23 +206,26 @@ rDIAUtils::arrangePlots(pcs.protein, row.cols=protein.methods,
 
 ```{r write_tables, message=TRUE, warning=FALSE, echo=FALSE}
 
+dat.precursor.j <- dplyr::left_join(peptideToProtein, dat.precursor,
+                                    by='modifiedSequence', relationship='many-to-many') 
+
 message('Writing precursors unnormalized to: "precursors_unnormalized_wide.tsv"')
-write.table(rDIAUtils::pivotLonger(dat.precursor, valuesFrom='totalAreaFragment',
-                                   rowsName=c('modifiedSequence', 'precursorCharge'),
+write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='totalAreaFragment',
+                                   rowsName=c('proteinName', 'modifiedSequence', 'precursorCharge'),
                                    columnsName='replicate'),
             file='precursors_unnormalized_wide.tsv',
             sep='\t', row.names=F, quote=F)
 
 message('Writing precursors normalized to: "precursors_normalized_wide.tsv"')
-write.table(rDIAUtils::pivotLonger(dat.precursor, valuesFrom='normalizedArea',
-                                   rowsName=c('modifiedSequence', 'precursorCharge'),
+write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='normalizedArea',
+                                   rowsName=c('proteinName', 'modifiedSequence', 'precursorCharge'),
                                    columnsName='replicate'),
             file='precursors_normalized_wide.tsv',
             sep='\t', row.names=F, quote=F)
 
 message('Writing precursors normalized, batch corrected to: "precursors_batchCorrected_wide.tsv"')
-write.table(rDIAUtils::pivotLonger(dat.precursor, valuesFrom='normalizedArea.bc',
-                                   rowsName=c('modifiedSequence', 'precursorCharge'),
+write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='normalizedArea.bc',
+                                   rowsName=c('proteinName', 'modifiedSequence', 'precursorCharge'),
                                    columnsName='replicate'),
             file='precursors_batchCorrected_wide.tsv',
             sep='\t', row.names=F, quote=F)
