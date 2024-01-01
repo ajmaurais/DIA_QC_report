@@ -24,7 +24,7 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       normalizedArea
                                    FROM precursors p;')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
-                                            p.name as proteinName, ptp. modifiedSequence
+                                            p.name as proteinName, ptp.modifiedSequence
                                             FROM  peptideToProtein ptp
                                         LEFT JOIN proteins p ON ptp.proteinId == p.proteinId;')
 dat.protein <- DBI::dbGetQuery(conn, 'SELECT
@@ -33,7 +33,7 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.abundance 
                                 FROM proteinQuants q
                                 LEFT JOIN proteins p ON p.proteinId = q.proteinId;')
-dat.rep <- DBI::dbGetQuery(conn, 'SELECT
+dat.metadata <- DBI::dbGetQuery(conn, 'SELECT
                                 r.replicate,
                                 r.replicateId,
                                 r.acquiredRank,
@@ -44,12 +44,12 @@ dat.rep <- DBI::dbGetQuery(conn, 'SELECT
 DBI::dbDisconnect(conn)
 
 # fix special characters in replicate names so they can be R headers
-dat.rep$replicate <- make.names(dat.rep$replicate)
+dat.metadata$replicate <- make.names(dat.metadata$replicate)
 dat.precursor <- dplyr::left_join(dat.precursor,
-                                  dplyr::select(dat.rep, replicate, replicateId),
+                                  dplyr::select(dat.metadata, replicate, replicateId),
                                   by='replicateId')
 dat.protein <- dplyr::left_join(dat.protein,
-                                dplyr::select(dat.rep, replicate, replicateId),
+                                dplyr::select(dat.metadata, replicate, replicateId),
                                 by='replicateId')
 
 # combine sequence and precursorCharge cols
@@ -67,7 +67,7 @@ dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))
 
 # batch correction
 dat.precursor.bc <- dat.precursor %>% 
-    dplyr::left_join(dplyr::select(dat.rep, replicateId, batch),
+    dplyr::left_join(dplyr::select(dat.metadata, replicateId, batch),
                      by='replicateId') %>%
     rDIAUtils::batchCorrection('normalizedArea', batch1='batch',
                                bc.method='combat', rowsName='precursor')
@@ -91,7 +91,7 @@ dat.precursor.l <- dat.precursor %>%
 
 # batch correction
 dat.protein.bc <- dat.protein %>% 
-    dplyr::left_join(dplyr::select(dat.rep, replicateId, batch),
+    dplyr::left_join(dplyr::select(dat.metadata, replicateId, batch),
                      by='replicateId') %>%
     rDIAUtils::batchCorrection('abundance', batch1='batch',
                                bc.method='combat', rowsName='proteinName')
@@ -116,7 +116,7 @@ dat.protein.l <- dat.protein %>%
 ```{r area_dist_plot, message=FALSE, warning=FALSE, echo=FALSE, fig.height=10, fig.width=8}
 
 dat.p <- dat.precursor.l %>%
-    dplyr::left_join(dplyr::select(dat.rep, replicate, acquiredRank, batch))
+    dplyr::left_join(dplyr::select(dat.metadata, replicate, acquiredRank, batch))
 dat.p$method <- factor(dat.p$method, levels=precursor.methods,
                        labels=c('Unnormalized', 'Median Normalized', 'Normalized, Batch Corrected'))
 
@@ -176,12 +176,12 @@ for(method in precursor.methods) {
                                                      'value', rowsName='precursor', columnsName='replicate')
 }
 
-dat <- dplyr::left_join(pcs.precursor[[1]][['pc']], dat.rep, by='replicate')
+dat <- dplyr::left_join(pcs.precursor[[1]][['pc']], dat.metadata, by='replicate')
 
 names(precursor.methods) <- c('Area', 'Normalized area', 'Batch corrected')
 rDIAUtils::arrangePlots(pcs.precursor, row.cols=precursor.methods,
                         color.cols=c('Acquisition\nnumber'='acquiredRank', 'Batch'='batch'),
-                        dat.metadata=dat.rep)
+                        dat.metadata=dat.metadata)
 ```
 
 # Protein batch correction PCA
@@ -198,7 +198,7 @@ for(method in protein.methods) {
 names(protein.methods) <- c('DirectLFQ normalized', 'Batch corrected')
 rDIAUtils::arrangePlots(pcs.protein, row.cols=protein.methods,
                         color.cols=c('Acquisition\nnumber'='acquiredRank', 'Batch'='batch'),
-                        dat.metadata=dat.rep)
+                        dat.metadata=dat.metadata)
 ```
 
 

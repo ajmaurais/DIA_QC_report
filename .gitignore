@@ -2,6 +2,7 @@
 qmd/*.pdf
 qmd/*.html
 rmd/*.html
+rmd/*.tsv
 fig/*
 testData/*
 plots/*
