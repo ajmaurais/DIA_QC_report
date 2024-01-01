@@ -221,7 +221,7 @@ def pc_analysis(do_query, dpi):
 df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', 'totalAreaFragment']]
 df_pc['acquisition_number'] = df['acquiredRank']
 
-# set zero areas to the mininum non-zero value
+# set zero areas to the minimum non-zero value
 df_pc.loc[df_pc['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'] = min(df_pc[df_pc['totalAreaFragment'] > 0]['totalAreaFragment'])
 
 df_pc['log2TotalAreaFragment'] = np.log10(df_pc['totalAreaFragment'])
@@ -261,7 +261,7 @@ if metadata_length > 0:
     meta_values['acquisition_number'] = 'continuous'
     metadata = convert_string_cols(metadata)
 
-    # join meatadata to pc matrix
+    # join metadata to pc matrix
     pc = pc.join(metadata)
     for label_name, label_type in meta_values.items():
         if label_type == 'discrete':
@@ -270,7 +270,7 @@ if metadata_length > 0:
             pc[label_name] = pc[label_name].apply(str)
         elif label_type == 'continuous':
             if any(pc[label_name].apply(pd.isna)):
-                raise RuntimeError('Cannot have missing label values in continious scale!')
+                raise RuntimeError('Cannot have missing label values in continuous scale!')
         else:
             raise RuntimeError(f'"{label_type}" is an unknown label_type!')
 

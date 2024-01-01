@@ -13,7 +13,7 @@ import pandas as pd
 from jsonschema import validate, ValidationError
 
 logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s'
+    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
 )
 LOGGER = logging.getLogger()
 
@@ -93,6 +93,7 @@ CREATE TABLE proteinQuants (
     replicateId INTEGER NOT NULL,
     proteinId INTEGER NOT NULL,
     abundance REAL,
+    normalizedAbundance REAL,
     PRIMARY KEY (replicateId, proteinId),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
@@ -220,6 +221,8 @@ def insert_program_metadata(conn, metadata):
     Insert multiple metadata key, value pairs into the metadata table.
     If the key already exists it is overwritten.
 
+    Parameters
+    ----------
     conn: sqlite3.Connection:
         Database connection.
     metadata: dict
@@ -232,6 +235,34 @@ def insert_program_metadata(conn, metadata):
                 (key, value) VALUES ("{key}", "{value}")
             ON CONFLICT(key) DO UPDATE SET value = "{value}" ''')
     conn.commit()
+    return conn
+
+
+def update_acquired_ranks(conn):
+    '''
+    Populate acquiredRank column in replicates table.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection:
+        Database connection.
+    '''
+
+    replicates = pd.read_sql('SELECT replicateId, acquiredTime FROM replicates;', conn)
+
+    # parse acquired times and add acquiredRank
+    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, TIME_FORMAT))
+    ranks = [(rank, i) for rank, i in enumerate(replicates['acquiredTime'].sort_values().index)]
+    replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
+
+    acquired_ranks = [(row.acquiredRank, row.replicateId) for row in replicates.itertuples()]
+    cur = conn.cursor()
+    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?',
+                    acquired_ranks)
+    conn.commit()
+
+    insert_program_metadata(conn, {'replicates.acquiredRank updated': True})
+
     return conn
 
 
@@ -249,7 +280,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     precursors: pd.DataFrame
         Precursors dataframe
     protein_quants: pd.DataFrame
-        Long formated protein quants dataframe (optional)
+        Long formatted protein quants dataframe (optional)
     sample_metadata: pd.DataFrame
         Metadata dataframe (optional)
     projectName: str
@@ -260,10 +291,14 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
     Returns
     -------
-    sucess: bool
-        True if all operations were sucessful, false otherwise.
+    success: bool
+        True if all operations were successful, false otherwise.
     '''
-    
+
+    # Metadata to add to db
+    current_command = ' '.join(sys.argv)
+    log_metadata = {'command_log': current_command}
+
     # Initialize database if applicable and get database connection
     conn = None
     append = False
@@ -275,15 +310,21 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
             LOGGER.warning(f'{fname} already exists. Overwriting...')
             os.remove(fname)
             conn = _initialize(fname)
+
         elif overwriteMode == 'append':
             conn = sqlite3.connect(fname)
             append = True
+
+            # get commands previously run on database
+            cur = conn.cursor()
+            cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
+            log_metadata['command_log'] = f'{cur.fetchall()[0][0]}\n{log_metadata["command_log"]}'
         else:
             LOGGER.error(f'"{overwriteMode}" is an unknown overwriteMode!')
             return False
     else:
         conn = _initialize(fname)
-            
+
     if protein_quants is not None:
         proteins = protein_quants[['name', 'accession', 'description']].drop_duplicates().reset_index(drop=True)
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
@@ -302,18 +343,17 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         projectName = f'project_{len(projects.index) + 1}'
     replicates['project'] = projectName
 
-    # log_metadata = {'parse_data git info': get_git_version()}
-    log_metadata = dict()
-    log_metadata[f'Add {projectName}'] = datetime.now().strftime(TIME_FORMAT)
+    log_metadata[f'Add {projectName} time'] = datetime.now().strftime(TIME_FORMAT)
+    log_metadata[f'Add {projectName} command'] = current_command
+    log_metadata['replicates.acquiredRank updated'] = False
     log_metadata[f'is_normalized'] = False
 
-
-    # deal with existing replicates, proteins, and protein to precursor pairs 
+    # deal with existing replicates, proteins, and protein to precursor pairs
     if append:
         conn = sqlite3.connect(fname)
 
         cur = conn.cursor()
-        cur.execute(f'SELECT DISTINCT project FROM replicates WHERE project = "{projectName}"')
+        cur.execute('SELECT DISTINCT project FROM replicates WHERE project = ?', (projectName,))
         existing_project = cur.fetchall()
         if len(existing_project) > 0:
             LOGGER.error(f'{projectName} already exists in db!')
@@ -352,8 +392,17 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         newPairs = precursors[['proteinName', 'modifiedSequence']].drop_duplicates()
 
-    conn = insert_program_metadata(conn, log_metadata)
+    if protein_quants is None:
+        protein_quants = precursors.groupby(['replicateName', 'proteinName'])['totalAreaFragment'].sum().reset_index()
+        protein_quants = protein_quants.rename(columns={'proteinName': 'name',
+                                                        'totalAreaFragment': 'abundance'})
 
+    # add replicateId and proteinId columns to precursors and drop duplicate sequences
+    protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
+    protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
+    protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
+
+    # add replicateId and proteinId columns to precursors and drop duplicate sequences
     precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
     precursors['proteinId'] = precursors['proteinName'].apply(lambda x: proteinIndex[x])
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
@@ -362,18 +411,11 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     newPairs['proteinId'] = newPairs['proteinName'].apply(lambda x: proteinIndex[x])
     peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
 
-    if protein_quants is not None:
-        protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
-        protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
-        protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
-
     peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
     proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
+    protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
     replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
-
-    if protein_quants is not None:
-        protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
 
     if sample_metadata is not None:
         missing_metadata = [x for x in sample_metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]
@@ -386,20 +428,25 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
+    conn = insert_program_metadata(conn, log_metadata)
+    conn = update_acquired_ranks(conn)
+
     conn.close()
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate QC_metrics input database from Skyline '
-                                                 'precursor_quality and replicate_quality reports.')
+    parser = argparse.ArgumentParser(description='Generate QC_metrics an batch correction database from '
+                                                 'Skyline precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'tsv'),
                         help='Specify metadata file format. '
-                             'By default the format is infered from the file extension.')
+                             'By default the format is inferred from the file extension.')
     parser.add_argument('--proteins', default=None,
-                        help='Long formated protein abundance report.')
+                        help='Long formatted protein abundance report. '
+                              'If no protein report is given, proteins are quantified in the database '
+                              'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',
                         help='Output file name. Default is ./data.db3')
     parser.add_argument('--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
@@ -410,7 +457,7 @@ def main():
     parser.add_argument('precursors', help='Skyline precursor_report')
     args = parser.parse_args()
 
-    # read annotatiuons if applicable
+    # read annotations if applicable
     metadata = None
     if args.metadata is not None:
         try:
@@ -423,12 +470,8 @@ def main():
     replicates = pd.read_csv(args.replicates, sep='\t')
     replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.keys()]
     replicates = replicates.rename(columns=REPLICATE_QUALITY_REQUIRED_COLUMNS)
+    replicates['acquiredRank'] = -1 # this will be updated later
     LOGGER.info('Done reading replicates table...')
-
-    # parse acquired times and add acquiredRank
-    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, TIME_FORMAT))
-    ranks = [(rank, i) for rank, i in enumerate(replicates['acquiredTime'].sort_values().index)]
-    replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
 
     # read precursor quality report
     precursors = pd.read_csv(args.precursors, sep='\t')

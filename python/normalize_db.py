@@ -11,11 +11,11 @@ from multiprocessing import cpu_count
 import numpy as np
 import pandas as pd
 import directlfq.utils as lfqutils
-import directlfq.normalization as lfqnorm
+from directlfq.normalization import NormalizationManagerSamplesOnSelectedProteins as dlfq_norm
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s'
+    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
 )
 LOGGER = logging.getLogger()
 
@@ -47,12 +47,12 @@ def update_meta_value(conn, key, value):
 
 def median_normalize(df, key_cols, value_col):
     '''
-    Median normalize peak areas in long formated datafraeme.
+    Median normalize peak areas in long formatted datafraeme.
 
     Parameters
     ----------
     df: pd.DataFrame
-        Long formated data frame
+        Long formatted data frame
     key_cols: list
         The names of column(s) which uniquely identify each replicate.
     value_col: str
@@ -97,7 +97,7 @@ def main():
     precursor_ids = df[['ion', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
     precursor_ids = {x.ion: (x.modifiedSequence, x.precursorCharge) for x in precursor_ids.itertuples()}
 
-    # set zero areas to the mininum non-zero value
+    # set zero areas to the minimum non-zero value
     selection = df['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'
     df.loc[selection] = min(df[df['totalAreaFragment'] > 0]['totalAreaFragment'])
 
@@ -111,7 +111,7 @@ def main():
     input_df = input_df.reset_index()
     input_df = lfqutils.index_and_log_transform_input_df(input_df)
     input_df = lfqutils.remove_allnan_rows_input_df(input_df)
-    input_df = lfqnorm.NormalizationManagerSamplesOnSelectedProteins(input_df, num_samples_quadratic=10).complete_dataframe
+    input_df = dlfq_norm(input_df, num_samples_quadratic=10).complete_dataframe
 
     # input_df.to_csv('/home/ajm/code/DIA_QC_report/testData/normalize_db/input_df.tsv', sep='\t', index=True)
      
@@ -146,8 +146,8 @@ def main():
     # delete existing normalized values
     LOGGER.info('Setting existing normalizedArea values to NULL.')
     cur = conn.cursor()
-    cur.execute(f'UPDATE precursors SET normalizedArea = NULL')
-    cur.execute(f'UPDATE proteinQuants SET abundance = NULL')
+    cur.execute('UPDATE precursors SET normalizedArea = NULL')
+    cur.execute('UPDATE proteinQuants SET normalizedAbundance = NULL')
     conn.commit()
 
     # update precursor rows
@@ -167,23 +167,36 @@ def main():
 
     # insert or update proteinQuant rows
     protein_query = '''
-        INSERT INTO proteinQuants (replicateId, proteinId, abundance)
+        INSERT INTO proteinQuants (replicateId, proteinId, normalizedAbundance)
         VALUES (?, ?, ?)
-        ON CONFLICT(replicateId, proteinId) DO UPDATE SET abundance = ?
+        ON CONFLICT(replicateId, proteinId) DO UPDATE SET normalizedAbundance = ?
         '''
-    LOGGER.info('Updating protein abundance values...')
+    LOGGER.info('Updating protein normalizedAbundance values...')
     cur = conn.cursor()
     for row in protein_df.itertuples():
         cur.execute(protein_query, (row.replicateId, row.protein, row.normalizedArea, row.normalizedArea))
     conn.commit()
-    LOGGER.info('Done updating protein abundance values.')
+    LOGGER.info('Done updating protein normalizedAbundance values.')
+
+    # get previously run commands on db
+    cur = conn.cursor()
+    cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
+    previous_commands = cur.fetchall()
+    if len(previous_commands) == 0:
+        LOGGER.warning('Missing command_log metadata entry!')
+        previous_commands = 'MISSING_COMMAND_LOG\n'
+    else:
+        previous_commands = previous_commands[0][0] + '\n'
+    current_command = ' '.join(sys.argv)
 
     # update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    conn = update_meta_value(conn, 'normalization_time', datetime.now().strftime(TIME_FORMAT))
+    conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(TIME_FORMAT))
     conn = update_meta_value(conn, 'precursor_normalization_method', 'median')
     conn = update_meta_value(conn, 'protein_normalization_method', 'DirectLFQ')
     conn = update_meta_value(conn, 'is_normalized', True)
+    conn = update_meta_value(conn, 'Normalization command', current_command)
+    conn = update_meta_value(conn, 'command_log', previous_commands + current_command)
      
     conn.close()
 
