@@ -263,7 +263,6 @@ def read_metadata(fname, metadata_format=None):
     for annotationKey, group in df.groupby('annotationKey'):
         thisType = max(group['annotationType'].tolist())
         types[annotationKey] = str(Dtype.BOOL if thisType is Dtype.NULL else thisType)
-        # types[annotationKey] = str(thisType)
 
     df['annotationType'] = df['annotationKey'].apply(lambda x: types[x])
 
