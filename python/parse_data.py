@@ -256,7 +256,7 @@ def read_metadata(fname, metadata_format=None):
     df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
                  value_vars=[x for x in list(df.columns) if x != 'Replicate'])
     
-    # determine annotationKey types
+    # determine annotationValue types
     df['annotationType'] = df['annotationValue'].apply(lambda x: Dtype.infer_type(x))
     df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
     types=dict()
