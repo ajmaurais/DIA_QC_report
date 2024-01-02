@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from csv import DictReader as CsvDictReader
 import re
+from enum import Enum
 
 import pandas as pd
 from jsonschema import validate, ValidationError
@@ -69,7 +70,7 @@ CREATE TABLE sampleMetadata (
     replicateId INTEGER NOT NULL,
     annotationKey TEXT NOT NULL,
     annotationValue TEXT,
-    annotationType VARCHAR(6) CHECK( annotationType IN ('INT', 'FLOAT', 'BOOL', 'STRING')) NOT NULL DEFAULT 'STRING',
+    annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
 )
 ''',
@@ -157,17 +158,52 @@ def _initialize(fname):
     return conn
 
 
-def pd_type_to_db_type(pdType):
-    ''' Convert pandas data types into string '''
-    if re.search('^int[0-9]+$', pdType):
-        return 'INT'
-    if re.search('^float[0-9]+$', pdType):
-        return 'FLOAT'
-    if pdType == 'bool':
-        return 'BOOL'
-    else:
-        return 'STRING'
+class Dtype(Enum):
+    NULL=0
+    BOOL=1
+    INT=2
+    FLOAT=3
+    STRING=4
 
+    def __str__(self):
+        return self.name
+
+    def __lt__(self, rhs):
+        if type(rhs) == type(self):
+            return self.value < rhs.value
+
+        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
+
+
+NA_RE = re.compile('^(NA|NULL|#N/A|NaN)$')
+BOOL_RE = re.compile('^(true|True|TRUE|false|FALSE|False)$')
+INT_RE = re.compile('^[\+-]?\d+$')
+FLOAT_RE = re.compile('^[+\-]?(\d+(.\d*)?|.\d+|\d+(.\d*)?[eE]-?\d+)$')
+
+
+def infer_type(s):
+    '''
+    Infer datatype for string 
+
+    Parameters
+    ----------
+    s: str
+        The string to test.
+
+    Returns
+    -------
+    Dtype object
+    '''
+    if s == '' or NA_RE.search(s):
+        return Dtype.NULL
+    if BOOL_RE.search(s):
+        return Dtype.BOOL
+    if INT_RE.search(s):
+        return Dtype.INT
+    if FLOAT_RE.search(s):
+        return Dtype.FLOAT
+    return Dtype.STRING
+    
 
 def read_metadata(fname, metadata_format=None):
     '''
@@ -208,9 +244,20 @@ def read_metadata(fname, metadata_format=None):
 
     df = pd.DataFrame(data)
     df['Replicate'] = df['Replicate'].apply(lambda x: os.path.splitext(x)[0])
-    types = {k: pd_type_to_db_type(v.name) for k, v in df.dtypes.to_dict().items()}
+    
+    # pivot longer
     df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
                  value_vars=[x for x in list(df.columns) if x != 'Replicate'])
+    
+    # determine annotationKey types
+    df['annotationType'] = df['annotationValue'].apply(lambda x: infer_type(x))
+    df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
+    types=dict()
+    for annotationKey, group in df.groupby('annotationKey'):
+        thisType = max(group['annotationType'].tolist())
+        types[annotationKey] = str(Dtype.BOOL if thisType is Dtype.NULL else thisType)
+        # types[annotationKey] = str(thisType)
+
     df['annotationType'] = df['annotationKey'].apply(lambda x: types[x])
 
     return df
@@ -269,7 +316,7 @@ def update_acquired_ranks(conn):
 def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
              projectName=None, overwriteMode='error'):
     '''
-    Write reports to QC sqlite database.
+    Write reports to precursor sqlite database.
 
     Parameters
     ----------
@@ -325,6 +372,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     else:
         conn = _initialize(fname)
 
+    # create proteins table
     if protein_quants is not None:
         proteins = protein_quants[['name', 'accession', 'description']].drop_duplicates().reset_index(drop=True)
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
@@ -338,15 +386,17 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         proteins = proteins.rename(columns={'proteinName': 'name', 'proteinAccession': 'accession'})
         proteins['description'] = None
 
+    # if projectName is not specified, set it to project_(n + 1)
     if projectName is None:
         projects = pd.read_sql('SELECT DISTINCT project FROM replicates;', conn)
         projectName = f'project_{len(projects.index) + 1}'
     replicates['project'] = projectName
 
+    # populate some metadata values not that we have the projectName
     log_metadata[f'Add {projectName} time'] = datetime.now().strftime(TIME_FORMAT)
     log_metadata[f'Add {projectName} command'] = current_command
     log_metadata['replicates.acquiredRank updated'] = False
-    log_metadata[f'is_normalized'] = False
+    log_metadata[f'is_normalized'] = False # set this to False because we are adding unnormalized data
 
     # deal with existing replicates, proteins, and protein to precursor pairs
     if append:
