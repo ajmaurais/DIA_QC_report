@@ -345,6 +345,42 @@ def update_metadata_dtypes(conn):
     return conn
 
 
+def _add_index_column(col, index, df_name=None, index_name=None):
+    '''
+    Add a column to dataframe from a dict index.
+    Also handle KeyErros when values in key_col do not exist as a key in index.
+
+    Parameters
+    ----------
+    col: pd.Series
+        A Series with key values mapping to index.
+    index: dict
+        A dict mapping key_col to values in index.
+    df_name: str
+        The name of the df to use in any error messages.
+    index_name: str
+        The name of the index to use in any error messages.
+
+    Returns
+    -------
+    pd.Series: The new column to add to df, or None if there was a missing value in index.
+    '''
+
+    # Check that all values in col exist in index
+    table_names = '' if df_name is None or index_name is None else f' for {df_name} in {index_name}'
+    all_good = True
+    for key in col.drop_duplicates().tolist():
+        if key not in index:
+            LOGGER.error(f'Missing required value: {key}{table_names}!')
+            all_good = False
+
+    # Exit now if there are one or more missing values
+    if not all_good:
+        return None
+
+    return col.apply(lambda x: index[x])
+
+
 def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
              projectName=None, overwriteMode='error'):
     '''
@@ -483,18 +519,39 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         protein_quants = protein_quants.rename(columns={'proteinName': 'name',
                                                         'totalAreaFragment': 'abundance'})
 
-    # add replicateId and proteinId columns to precursors and drop duplicate sequences
-    protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
-    protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
+    # add replicateId and proteinId columns to protein_quants
+    if (rep_id_col := _add_index_column(protein_quants['replicateName'], repIndex,
+                                        'protein_quants', 'repIndex')) is None:
+        return False
+    protein_quants['replicateId'] = rep_id_col
+    # protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
+
+    if (prot_id_col := _add_index_column(protein_quants['name'], proteinIndex,
+                                         'protein_quants', 'proteinIndex')) is None:
+        return False
+    protein_quants['proteinId'] = prot_id_col
+    # protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
+
     protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
 
     # add replicateId and proteinId columns to precursors and drop duplicate sequences
-    precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
-    precursors['proteinId'] = precursors['proteinName'].apply(lambda x: proteinIndex[x])
+    if (rep_id_col := _add_index_column(precursors['replicateName'], repIndex,
+                                        'precursors', 'repIndex')) is None:
+        return False
+    precursors['replicateId'] = rep_id_col
+
+    if (prot_id_col := _add_index_column(precursors['proteinName'], proteinIndex,
+                                         'precursors', 'proteinIndex')) is None:
+        return False
+    precursors['proteinId'] = prot_id_col
+
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
 
     # add proteinId column and make peptideToProtein df
-    newPairs['proteinId'] = newPairs['proteinName'].apply(lambda x: proteinIndex[x])
+    if (prot_id_col := _add_index_column(newPairs['proteinName'], proteinIndex,
+                                         'peptideToProtein', 'proteinIndex')) is None:
+        return False
+    newPairs['proteinId'] = prot_id_col
     peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
 
     peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
@@ -510,7 +567,10 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         sample_metadata = sample_metadata.loc[sample_metadata['Replicate'].apply(lambda x: x in repIndex),]
 
-        sample_metadata['replicateId'] = sample_metadata['Replicate'].apply(lambda x: repIndex[x])
+        if (rep_id_col := _add_index_column(sample_metadata['Replicate'], repIndex,
+                                            'sample_metadata', 'repIndex')) is None:
+            return False
+        sample_metadata['replicateId'] = rep_id_col
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
