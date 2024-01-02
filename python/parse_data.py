@@ -48,7 +48,7 @@ CREATE TABLE replicates (
 '''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
-    peptide VARCHAR(50),
+    peptide VARCHAR(60),
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,
@@ -158,6 +158,12 @@ def _initialize(fname):
     return conn
 
 
+NA_RE = re.compile('^(NA|NULL|#N/A|NaN)$')
+BOOL_RE = re.compile('^(true|True|TRUE|false|FALSE|False)$')
+INT_RE = re.compile('^[+\-]?\d+$')
+FLOAT_RE = re.compile('^[+\-]?(\d+(.\d*)?|.\d+|\d+(.\d*)?[eE][+\-]?\d+)$')
+
+
 class Dtype(Enum):
     NULL=0
     BOOL=1
@@ -175,34 +181,35 @@ class Dtype(Enum):
         raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
 
-NA_RE = re.compile('^(NA|NULL|#N/A|NaN)$')
-BOOL_RE = re.compile('^(true|True|TRUE|false|FALSE|False)$')
-INT_RE = re.compile('^[\+-]?\d+$')
-FLOAT_RE = re.compile('^[+\-]?(\d+(.\d*)?|.\d+|\d+(.\d*)?[eE]-?\d+)$')
+    def __ge__(self, rhs):
+        if type(rhs) == type(self):
+            return self.value >= rhs.value
 
+        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
-def infer_type(s):
-    '''
-    Infer datatype for string 
+    @staticmethod
+    def infer_type(s):
+        '''
+        Infer datatype for string.
 
-    Parameters
-    ----------
-    s: str
-        The string to test.
+        Parameters
+        ----------
+        s: str
+            The string to test.
 
-    Returns
-    -------
-    Dtype object
-    '''
-    if s == '' or NA_RE.search(s):
-        return Dtype.NULL
-    if BOOL_RE.search(s):
-        return Dtype.BOOL
-    if INT_RE.search(s):
-        return Dtype.INT
-    if FLOAT_RE.search(s):
-        return Dtype.FLOAT
-    return Dtype.STRING
+        Returns
+        -------
+        Dtype object
+        '''
+        if s == '' or NA_RE.search(s):
+            return Dtype.NULL
+        if BOOL_RE.search(s):
+            return Dtype.BOOL
+        if INT_RE.search(s):
+            return Dtype.INT
+        if FLOAT_RE.search(s):
+            return Dtype.FLOAT
+        return Dtype.STRING
     
 
 def read_metadata(fname, metadata_format=None):
@@ -250,7 +257,7 @@ def read_metadata(fname, metadata_format=None):
                  value_vars=[x for x in list(df.columns) if x != 'Replicate'])
     
     # determine annotationKey types
-    df['annotationType'] = df['annotationValue'].apply(lambda x: infer_type(x))
+    df['annotationType'] = df['annotationValue'].apply(lambda x: Dtype.infer_type(x))
     df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
     types=dict()
     for annotationKey, group in df.groupby('annotationKey'):
@@ -304,11 +311,37 @@ def update_acquired_ranks(conn):
 
     acquired_ranks = [(row.acquiredRank, row.replicateId) for row in replicates.itertuples()]
     cur = conn.cursor()
-    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?',
-                    acquired_ranks)
+    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?', acquired_ranks)
     conn.commit()
 
     insert_program_metadata(conn, {'replicates.acquiredRank updated': True})
+
+    return conn
+
+
+def update_metadata_dtypes(conn):
+    '''
+    Update metadata annotationType column to fix cases where
+    two projects have a different annotationTypes for the same
+    annotationKey. This function will consolidate conflicting
+    types using the order in the Dtype Enum class.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection:
+        Database connection.
+    '''
+
+    # Consolidate differing annotationTypes
+    types = pd.read_sql('SELECT DISTINCT annotationKey, annotationType FROM sampleMetadata;', conn)
+    types['dtype'] = types['annotationType'].apply(lambda x: Dtype[x])
+    types = types.groupby('annotationKey')['dtype'].max().apply(lambda x: str(x)).reset_index()
+    types = [(row.dtype, row.annotationKey) for row in types.itertuples()]
+
+    # Update database
+    cur = conn.cursor()
+    cur.executemany('UPDATE sampleMetadata SET annotationType = ? WHERE annotationKey = ?', types)
+    conn.commit()
 
     return conn
 
@@ -412,14 +445,18 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         # deal with existing replicates
         curReplicates = pd.read_sql('SELECT * FROM replicates;', conn)
-        replicates.index = pd.RangeIndex(start=len(curReplicates.index), stop=len(curReplicates.index) + len(replicates.index), step=1)
+        replicates.index = pd.RangeIndex(start=len(curReplicates.index),
+                                         stop=len(curReplicates.index) + len(replicates.index),
+                                         step=1)
         repIndex = {r: i for i, r in zip(replicates['replicate'].index, replicates['replicate'])}
 
         # deal with existing proteins
         curProteins = pd.read_sql('SELECT * FROM proteins;', conn)
         curProteinNames = set(curProteins['name'].to_list())
         proteins = proteins[proteins['name'].apply(lambda x: x not in curProteinNames)]
-        proteins.index = pd.RangeIndex(start=len(curProteins.index), stop=len(curProteins.index) + len(proteins.index), step=1)
+        proteins.index = pd.RangeIndex(start=len(curProteins.index),
+                                       stop=len(curProteins.index) + len(proteins.index),
+                                       step=1)
         proteinIndex = {r: i for i, r in zip(curProteins['proteinId'], curProteins['name'])}
         proteinIndex = {**proteinIndex, **{r: i for i, r in zip(proteins['name'].index, proteins['name'])}}
 
@@ -480,6 +517,9 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
     conn = insert_program_metadata(conn, log_metadata)
     conn = update_acquired_ranks(conn)
+
+    if append:
+        conn = update_metadata_dtypes(conn)
 
     conn.close()
     return True
