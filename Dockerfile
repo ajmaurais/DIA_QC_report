@@ -4,10 +4,11 @@ MAINTAINER "Aaron Maurais -- MacCoss Lab"
 
 RUN apt-get update && \
     apt-get -y install procps wget fontconfig libssl-dev libxml2-dev libcurl4-gnutls-dev r-base && \
+    rm -rf /var/lib/apt/lists/* && \
     mkdir -p /code/DIA_QC_report/python /code/quarto
 
 # install rDIAUtils dependencies
-RUN Rscript -e "install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager'))" && \
+RUN Rscript -e "install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager', 'rmarkdown'))" && \
     Rscript -e "BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE)"
 
 # install rDIAUtils R package
@@ -26,7 +27,9 @@ RUN cd /code/quarto && \
 # install python dependencies
 COPY directlfq /code/directlfq
 RUN pip install pandas matplotlib jupyter scikit-learn && \
-    cd /code/directlfq && pip install .
+    cd /code/directlfq && pip install . && \
+    pip cache purge && \
+    cd /code && rm -rf /code/directlfq
 
 # add python executables
 COPY python/*.py /code/DIA_QC_report/python

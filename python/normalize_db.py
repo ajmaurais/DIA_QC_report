@@ -36,10 +36,11 @@ def update_meta_value(conn, key, value):
         The metadata value
     '''
     cur = conn.cursor()
-    cur.execute(f'''
+    cur.execute('''
         INSERT INTO metadata
-            (key, value) VALUES ("{key}", "{value}")
-        ON CONFLICT(key) DO UPDATE SET value = "{value}" ''')
+            (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = ? ''',
+                (key, value, value))
     conn.commit()
 
     return conn
@@ -61,10 +62,22 @@ def median_normalize(df, key_cols, value_col):
     '''
     cols = df.columns.tolist()
     cols.append('normalizedArea')
-    df['log2Area'] = np.log2(df[value_col])
-    df['log2NormalizedArea'] = df.groupby(key_cols)['log2Area'].transform(lambda x: x / x.median())
-    df['log2NormalizedArea'] = df['log2NormalizedArea'] * np.mean(df['log2Area'])
+    
+    # log2 transform
+    df['log2Area'] = np.log2(df[value_col].replace(0, np.nan))
+
+    # determine value to shift log2Area for each replicate
+    medians = df.groupby(key_cols)['log2Area'].median()
+    median_shifts = medians - np.mean(medians)
+    median_shifts = median_shifts.reset_index()
+    median_shifts = {row.replicateId: row.log2Area for row in median_shifts.itertuples()}
+
+    # shift log2Areas to normalize medians
+    df['log2NormalizedArea'] = df['log2Area'] - df['replicateId'].apply(lambda x: median_shifts[x])
+
+    # convert back to linear space
     df['normalizedArea'] = np.power(2, df['log2NormalizedArea'])
+    df['normalizedArea'] = df['normalizedArea'].replace(np.nan, 0)
 
     return df[cols]
 
@@ -97,16 +110,12 @@ def main():
     precursor_ids = df[['ion', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
     precursor_ids = {x.ion: (x.modifiedSequence, x.precursorCharge) for x in precursor_ids.itertuples()}
 
-    # set zero areas to the minimum non-zero value
-    selection = df['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'
-    df.loc[selection] = min(df[df['totalAreaFragment'] > 0]['totalAreaFragment'])
-
     REP_COLUMN_NAME = 'replicateId'
 
-    # pivot wider and log2 transform
+    # pivot wider
     input_df = df.pivot(index=['protein', 'ion'], columns=REP_COLUMN_NAME, values='totalAreaFragment')
 
-    # format df for DirectLFQ normalization
+    # format input_df for DirectLFQ normalization
     input_df.columns.name = None
     input_df = input_df.reset_index()
     input_df = lfqutils.index_and_log_transform_input_df(input_df)
@@ -126,27 +135,20 @@ def main():
 
     # pivot protein_df longer
     protein_df = protein_df.melt(id_vars='protein', value_name='normalizedArea', var_name='replicateId')
-    # ion_df = ion_df.reset_index().melt(id_vars=['protein', 'ion'], var_name='replicateId', value_name='normalizedArea')
-    # ion_df['modifiedSequence'] = ion_df['ion'].apply(lambda x: precursor_ids[x][0])
-    # ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
     
     # protein_df.to_csv('/home/ajm/code/DIA_QC_report/testData/normalize_db/protein_df.tsv', sep='\t', index=False)
-    # ion_df.to_cion_dfsv('/home/ajm/code/DIA_QC_report/testData/normalize_db/ion_df.tsv', sep='\t' , index=False)
     
     # median normalize precursor quants
-    # precursor_to_protein = df[['protein', 'ion']].drop_duplicates()
     ion_df = median_normalize(df[[REP_COLUMN_NAME, 'ion', 'totalAreaFragment']].drop_duplicates(),
                               [REP_COLUMN_NAME], 'totalAreaFragment')
     ion_df['modifiedSequence'] = ion_df['ion'].apply(lambda x: precursor_ids[x][0])
     ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
 
-    # join back in protein IDs
-    # ion_df = precursor_to_protein.merge(ion_df, how='left', left_index=False, right_index=False)
-
     # delete existing normalized values
-    LOGGER.info('Setting existing normalizedArea values to NULL.')
     cur = conn.cursor()
+    LOGGER.info('Setting existing precursor normalizedArea values to NULL.')
     cur.execute('UPDATE precursors SET normalizedArea = NULL')
+    LOGGER.info('Setting existing protein normalizedAbundance values to NULL.')
     cur.execute('UPDATE proteinQuants SET normalizedAbundance = NULL')
     conn.commit()
 
@@ -178,7 +180,7 @@ def main():
     conn.commit()
     LOGGER.info('Done updating protein normalizedAbundance values.')
 
-    # get previously run commands on db
+    # get commands previously run on db
     cur = conn.cursor()
     cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
     previous_commands = cur.fetchall()
