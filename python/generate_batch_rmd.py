@@ -3,50 +3,18 @@ import sys
 import os
 import argparse
 import re
-from inspect import stack
+import sqlite3
+import logging
 
-PYTHON_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DEFAULT_OFNAME = 'qc_report.qmd'
+logging.basicConfig(
+    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
+)
+LOGGER = logging.getLogger()
+
+DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
-DEFAULT_TITLE = 'DIA QC report'
-DEFAULT_DPI = 250
-
-PEPTIDE_QUERY = '''
-query = \'\'\'SELECT 
-    r.acquiredRank,
-    p.peptide,
-    p.modifiedSequence,
-    p.precursorCharge
-FROM precursors p
-LEFT JOIN replicates r
-    ON p.replicateId = r.replicateId
-WHERE p.totalAreaFragment > 0;\'\'\'
-
-df = pd.read_sql(query, conn)
-df = df.drop_duplicates()
-'''
-
-PRECURSOR_QUERY = '''
-query = \'\'\'SELECT 
-    p.replicateId,
-    r.acquiredRank,
-    p.modifiedSequence,
-    p.precursorCharge,
-    p.totalAreaFragment,
-    p.totalAreaMs1,
-    p.rt,
-    p.maxFwhm,
-    p.averageMassErrorPPM as massError,
-    p.libraryDotProduct,
-    p.isotopeDotProduct
-FROM precursors p
-LEFT JOIN replicates r
-    ON p.replicateId = r.replicateId;\'\'\'
-
-df = pd.read_sql(query, conn)
-df = df.drop_duplicates()
-'''
+DEFAULT_TITLE = 'DIA Batch Correction Report'
 
 
 def doc_header(command, title=DEFAULT_TITLE):
@@ -54,20 +22,10 @@ def doc_header(command, title=DEFAULT_TITLE):
 <!-- %s -->\n
 ---
 title: "%s"
-toc: true
-format:
-    html:
-        code-fold: true
-        grid:
-            body-width: 1000px
-            sidebar-width: 0px
-            margin-width: 300px
-        self-contained: true
-    pdf:
-        fig-pos: 'H'
-        extra_dependencies: ["float"]
-        fig-format: 'png'
-jupyter: python3
+input:
+    html_document:
+        toc: true
+        toc_float: true
 ---\n\n''' % (command, title)
     return header
 
@@ -76,272 +34,338 @@ def add_header(text, level=1):
     return f'{"#" * level} {text}\n'
 
 
-def python_block_header(label):
-    text = '''```{python}
-#| label: %s
-#| echo: false
-#| warning: false
-#| fig-align: "left"''' % label
-    return text
+def r_block_header(label, echo=False, warning=False, message=False,
+                   fig_width=None, fig_height=None):
+
+    def bool_to_str(boo):
+        return 'TRUE' if boo else 'FALSE'
+
+    text = '```{' + f'r {label}, echo={bool_to_str(message)}, warning={bool_to_str(warning)}, message={bool_to_str(message)}'
+    
+    if fig_width:
+        text += f', fig.with={fig_width}'
+    if fig_height:
+        text += f', fig.with={fig_height}'
+
+    return text + '}'
 
 
-def doc_initialize(db_path, python_dir):
-    text='''\n%s\n
-import sys
-import re
-import sqlite3
-from statistics import stdev
-from scipy.stats import zscore
-import numpy as np
-import pandas as pd
+def test_metadata_variables(db_path, batch1=None, batch2=None,
+                            covariate_vars=None, color_vars=None,
+                            control_key=None, control_values=None):
+    '''
+    Test whether it is possible to build a valid query to generate the dat.metadata
+    dataframe in the rmd report from the user specified parameters.
 
-sys.path.append('%s')
-from std_peptide_rt_plot import peptide_rt_plot
-from bar_chart import bar_chart
-from histogram import histogram, box_plot
-from pca_plot import pc_matrix, pca_plot, convert_string_cols
+    Parameters
+    ----------
+    db_path: str
+        Precursor database path.
+    batch1: str
+        The batch 1 annotationKey in sampleMetadata.
+    batch2: str
+        The batch 2 annotationKey in sampleMetadata.
+    covariate_vars: list
+        A list of sampleMetadata annotationKey(s) to use as covariate_vars.
+    color_vars: list
+        A list of sampleMetadata annotationKey(s) to color PCA plots.
+    control_key: str
+        A sampleMetadata annotationKey corresponding to whether a replicate is a control.
+    control_values: list
+        A list of sampleMetadata annotationValues for each control type.
 
-conn = sqlite3.connect('%s')
-```\n\n''' % (python_block_header(stack()[0][3]), python_dir, db_path)
+    Returns
+    -------
+    all_good: boolean
+        True if a valid query can be constructed, False if not.
+    '''
 
-    return text
+    # initialize db connection
+    conn = sqlite3.connect(db_path)
+
+    # If no batch vars, test if we can use replicates.project
+    if batch1 is None and batch2 is None:
+        LOGGER.info('No batch variables specified. Attempting to use replicates.project as batch variable.')
+        cur = conn.cursor()
+        cur.execute('SELECT DISTINCT project FROM replicates;')
+        n_projects = len([x[0] for x in cur.fetchall()])
+        if n_projects <= 1:
+            LOGGER.error('Only 1 project in replicates! Cannot perform batch correction with only 1 batch!')
+            conn.close()
+            return False
+
+    # get all metadata variable names
+    cur = conn.cursor()
+    cur.execute('SELECT annotationKey FROM sampleMetadata;')
+    metadata_variables = set([x[0] for x in cur.fetchall()])
+
+    def check_meta_key(color_cov, variable):
+        if variable not in metadata_variables:
+            LOGGER.error(f'Missing {color_cov} variable: "{variable}" in sampleMetadata table!')
+            return False
+        return True
 
 
-def doc_finalize():
-    text='''\n%s\n
+    # Test that batch variables exist in metadata tables
+    all_good = True
+    if batch1:
+        all_good = check_meta_key('batch1', batch1)
+    if batch2:
+        all_good = check_meta_key('batch2', batch2) and all_good
+
+    # Test that covariate variables exist in metadata table
+    all_good = (True if covariate_vars is None else all([check_meta_key('Covariate', v) for v in covariate_vars])) and all_good
+
+    # Test that color variables exist in metadata table
+    all_good = (True if color_vars is None else all([check_meta_key('Color', v) for v in color_vars])) and all_good
+
+    # Test that control_key exists in metadata table
+    if control_key is not None:
+        if control_key is not None != control_values is not None:
+            LOGGER.error('Must specify both control_key and control_values')
+            conn.close()
+            return False
+
+        if check_meta_key('Control', control_key):
+            cur = conn.cursor()
+            cur.execute('SELECT annotationValue FROM sampleMetadata WHERE annotationKey == ?', (control_key,))
+
+            db_control_values = set([x[0] for x in cur.fetchall()])
+
+            for value in control_values:
+                if value in db_control_values:
+                    LOGGER.error(f'Missing annotationValue "{value}" for annotationKey '
+                                  '"{control_key}" in sampleMetadata table!')
+                    all_good = False
+
+        else:
+            all_good = False
+
+    # close db connection
     conn.close()
-```\n\n''' % (python_block_header(stack()[0][3]))
+
+    return all_good
+
+
+def doc_initialize(db_path,
+                   batch1=None, batch2=None,
+                   color_vars=None, covariate_vars=None,
+                   control_key=None, control_values=None,
+                   filter_metadata=False):
+    '''
+    Add initial block to load libraries, query batch db, construct metadata df,
+    and setup precursor and protein dataframes.
+    '''
+
+    text=f'''\n
+library(rDIAUtils)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(DBI)
+'''
+
+    if batch1:
+        text += f"\n# variables specified by --batch1\nbatch1 = '{batch1}'"
+    if batch2:
+        text += f"\n\n# variables specified by --batch2\nbatch2 = '{batch2}'"
+
+    if color_vars:
+        text += '''\n\n# variables specified by --addColor
+color.vars <- c('{}')".format("', '".join(color_vars))'''
+
+    if covariate_vars:
+        text += '''\n\n# variables specified by --addCoveriate
+color.vars <- c('{}')'''.format("', '".join(covariate_vars))
+
+    if control_key:
+        text += f"\n\n# control sample key specified by --controlKey\ncontrol.key = '{control_key}'"
+
+    if covariate_vars:
+        text += '''\n\n# control sample values specified by --controlValues
+control.values <- c('{}')'''.format("', '".join(control_values))
+
+    text += f'''\n
+# Load necissary tables from database
+conn <- DBI::dbConnect(RSQLite::SQLite(), '{db_path}')
+dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
+                                      replicateId,
+                                      modifiedSequence,
+                                      precursorCharge,
+                                      totalAreaFragment,
+                                      normalizedArea
+                                   FROM precursors p;')
+peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
+                                            p.name as proteinName, ptp.modifiedSequence
+                                            FROM  peptideToProtein ptp
+                                        LEFT JOIN proteins p ON ptp.proteinId == p.proteinId;')
+dat.protein <- DBI::dbGetQuery(conn, 'SELECT
+                                    q.replicateId,
+                                    p.name as proteinName,
+                                    q.abundance,
+                                    q.normalizedAbundance
+                                FROM proteinQuants q
+                                LEFT JOIN proteins p ON p.proteinId = q.proteinId;')
+dat.rep <- DBI::dbGetQuery(conn, 'SELECT
+                                r.replicate,
+                                r.replicateId,
+                                r.acquiredRank,
+                                r.project
+                             FROM replicates r;')
+dat.meta.l <- DBI::dbGetQuery(conn, 'SELECT * FROM sampleMetadata;')
+DBI::dbDisconnect(conn)\n'''
+
+    if filter_metadata:
+        filter_vars = list()
+        for py_var, r_var in zip([batch1, batch2, color_vars, covariate_vars, control_key],
+                                 ['batch1', 'batch2', 'color.vars', 'covariate.vars', 'control.key']):
+            if py_var is not None:
+                filter_vars.append(r_var)
+
+        text += f'''# filter metadata to only include batch, covariate, and color variables\n'
+dat.meta.l <- dat.meta.l[dat.meta.l$annotationKey %in% c({filter_vars}),]'''
+
+    text += '''
+# generate wide formated dat.meta from long formated dat.meta.l
+dat.meta <- dat.meta.l %>% dplyr::select(replicateId, annotationKey, annotationValue) %>%
+    tidyr::pivot_wider(names_from='annotationKey', values_from=annotationValue)
+
+# convert columns in wide metadata df to the type specified by annotationType
+meta.types <- unique(dplyr::select(dat.meta.l, annotationKey, annotationType))
+meta.types <- setNames(meta.types$annotationType, meta.types$annotationKey)
+converters <- list(BOOL=as.logical, INT=as.integer, FLOAT=as.double, STRING=function(x){1})
+for(column in names(meta.types)) {
+    dat.meta[[column]] <- converters[[meta.types[column]]](dat.meta[[column]])
+}
+
+# fix special characters in replicate names so they can be R headers
+dat.rep$replicate <- make.names(dat.rep$replicate)
+dat.precursor <- dplyr::left_join(dat.precursor,
+                                  dplyr::select(dat.rep, replicate, replicateId),
+                                  by='replicateId')
+dat.protein <- dplyr::left_join(dat.protein,
+                                dplyr::select(dat.rep, replicate, replicateId),
+                                by='replicateId')
+dat.metadata <- dplyr::left_join(dat.rep, dat.meta, by='replicateId')
+
+# combine sequence and precursorCharge cols
+dat.precursor$precursor <- with(dat.precursor, paste(modifiedSequence, precursorCharge, sep='_'))
+
+# log2 transform abundances
+dat.precursor$totalAreaFragment <- log2(rDIAUtils::zeroToMin(dat.precursor$totalAreaFragment))
+dat.precursor$normalizedArea <- log2(rDIAUtils::zeroToMin(dat.precursor$normalizedArea))
+dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))\n```\n\n'''
 
     return text
 
 
 # plots
 
-def replicate_tic_areas(dpi=DEFAULT_DPI):
-    text='''\n%s\n
-# replicate tic bar chart
-tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates', conn)
-bar_chart(tic, 'TIC area', dpi=%s)
-```\n\n''' % (python_block_header(stack()[0][3]), dpi)
-    return text
-
-
-def std_rt_dist(std_proteins, dpi=DEFAULT_DPI):
-    text = '''\n%s\n
-for std in [%s]:
-    peptide_rt_plot(std, conn, dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]),
-              "'{}'".format("', '".join(std_proteins)) if len(std_proteins) > 0 else '',
-              dpi)
-    return text
-
-
-def missed_cleavages(do_query=True, dpi=DEFAULT_DPI):
-    text = '''\n%s\n%s
-# precursor bar chart colored by missed cleavages
-trypsin_re = re.compile('([RK])(?=[^P])')
-df['nMissed'] = df['peptide'].apply(lambda x: len(trypsin_re.findall(x)))
-agg = df.groupby(["acquiredRank", "nMissed"])["nMissed"].agg(["count"]).reset_index()
-agg = agg.pivot_table(index='acquiredRank', columns='nMissed', values='count')
-bar_chart(agg, 'Number of precursors', legend_title='Missed cleavages', dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PEPTIDE_QUERY if do_query else '\n', dpi)
-
-    return text
-
-
-def precursor_charges(do_query=True, dpi=DEFAULT_DPI):
-    text = '''\n%s\n%s
-# precursor bar chart colored by precursorCharge
-agg = df.groupby(["acquiredRank", "precursorCharge"])["precursorCharge"].agg(["count"]).reset_index()
-agg = agg.pivot_table(index='acquiredRank', columns='precursorCharge', values='count')
-bar_chart(agg, 'Number of precursors', legend_title='Precursor charge', dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PEPTIDE_QUERY if do_query else '\n', dpi)
-
-    return text
-
-
-def rep_rt_sd(do_query=True, dpi=DEFAULT_DPI):
-    text = '''\n%s\n%s\n
-# replicate RT cor histogram
-agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
-histogram(agg, 'Replicate RT SD (min)', dpi=%i,
-          limits=(agg.quantile(0.05) * -3, agg.quantile(0.95) * 3))
-```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
-
-    return text
-
-
-def _pivot_box_plot(values, title=None, dpi=DEFAULT_DPI):
-    if title is None:
-        title = ""
-        for i, c in enumerate(values):
-            if i == 0:
-                title += c.upper()
-                continue
-            if c.isupper():
-                title += f" {c.lower()}"
-            else:
-                title += c
+def cv_plot():
+    # width = n_panels * 3 + 2
+    # height = n_panels * 3 + 0.4
     
-    text = '''
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-    columns="acquiredRank", values='%s', aggfunc=sum)
-box_plot(data, '%s', dpi=%i)\n''' % (values, title, dpi)
+    pass
 
-    return text
-
-
-def cammel_to_underscore(s):
-    ret = "".join("_" + c.lower() if c.isupper() else c for c in s).strip("_")
-    ret = re.sub("(.)([A-Z])", r"\1_\2", ret).lower()
-    return ret
-
-
-def pivot_box_plot(values, do_query=True, **kwargs):
-    text = '\n{}\n{}{}```\n\n'.format(python_block_header(cammel_to_underscore(values)),
-                                      PRECURSOR_QUERY if do_query else '',
-                                      _pivot_box_plot(values, **kwargs))
-    return text
-
-def ms1_ms2_ratio(do_query=True, dpi=DEFAULT_DPI):
-    text = '''\n%s\n%s
-df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
-df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
-data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-                 columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
-box_plot(data, 'Transition / precursor ratio',
-         limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3), dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
-
-    return text
-
-
-def pc_analysis(do_query, dpi):
-    text = '''\n%s\n%s
-df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', 'totalAreaFragment']]
-df_pc['acquisition_number'] = df['acquiredRank']
-
-# set zero areas to the mininum non-zero value
-df_pc.loc[df_pc['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'] = min(df_pc[df_pc['totalAreaFragment'] > 0]['totalAreaFragment'])
-
-df_pc['log2TotalAreaFragment'] = np.log10(df_pc['totalAreaFragment'])
-df_pc['zScore'] = df_pc.groupby('acquisition_number')['log2TotalAreaFragment'].transform(lambda x: np.abs(zscore(x)))
-
-df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-                         columns="replicateId", values='zScore')
-
-# actually do pc analysis
-pc, pc_var = pc_matrix(df_wide)
-
-meta_values = {'gender': 'discrete', 'vital_status': 'discrete',
-               'tumor_grade': 'discrete', 'year_of_birth': 'continuous'}
-
-# check if metadata table exists in db
-cur = conn.cursor()
-cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="metadata"')
-table = cur.fetchall()
-
-metadata_length = 0
-if len(table) > 0:
-    cur = conn.cursor()
-    cur.execute('SELECT COUNT(*) FROM metadata')
-    metadata_length = cur.fetchall()[0][0]
-
-acquired_ranks = df_pc[["replicateId", "acquisition_number"]].drop_duplicates()
-acquired_ranks = pd.DataFrame(acquired_ranks['acquisition_number'], index=acquired_ranks['replicateId'])
-
-# add metadata to pc matrix
-if metadata_length > 0:
-    METADATA_QUERY = 'SELECT replicateId, annotationKey as columns, annotationValue FROM metadata WHERE annotationKey IN ("{}")'.format('", "'.join(meta_values.keys()))
-
-    # get metadata labels for pca plot
-    metadata_df = pd.read_sql(METADATA_QUERY, conn)
-    metadata = metadata_df.pivot(index="replicateId", columns="columns", values="annotationValue")
-    metadata = acquired_ranks.join(metadata)
-    meta_values['acquisition_number'] = 'continuous'
-    metadata = convert_string_cols(metadata)
-
-    # join meatadata to pc matrix
-    pc = pc.join(metadata)
-    for label_name, label_type in meta_values.items():
-        if label_type == 'discrete':
-            if any(pc[label_name].apply(pd.isna)):
-                warnings.warn('Missing label values!', Warning)
-            pc[label_name] = pc[label_name].apply(str)
-        elif label_type == 'continuous':
-            if any(pc[label_name].apply(pd.isna)):
-                raise RuntimeError('Cannot have missing label values in continious scale!')
-        else:
-            raise RuntimeError(f'"{label_type}" is an unknown label_type!')
-
-else:
-    meta_values = {'acquisition_number': 'continuous'}
-    pc = pc.join(acquired_ranks)
-
-for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
-    pca_plot(pc, label_name, pc_var, label_type=label_type, dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
-
-    return text
+def pca_plot():
+    # width = n_panels * 3 + 2
+    # height = n_panels * 3 + 0.4
+    pass
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate qmd report.')
-    parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
-                        help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
-    parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
-                        help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
-    # parser.add_argument('-f', '--format', default=f'{DEFAULT_EXT}',
-    #                     help=f'Output file format. Default is "{DEFAULT_EXT}"')
-    parser.add_argument('-a', '--addStdProtein', action='append', default=[],
-                        help='Add standard protein name for retention time plot.')
-    parser.add_argument('--title', default=DEFAULT_TITLE,
-                        help=f'Report title. Default is "{DEFAULT_TITLE}"')
-    parser.add_argument('db', help='Path to precursor quality database.')
+    parser = argparse.ArgumentParser(description='Generate batch correction rmd report.')
+
+    file_settings = parser.add_argument_group('R markdown file settings')
+    file_settings.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
+                               help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
+    file_settings.add_argument('--title', default=DEFAULT_TITLE,
+                               help=f'Report title. Default is "{DEFAULT_TITLE}"')
+    file_settings.add_argument('-f', '--filterMetadata', default=False, 
+                               action='store_true', dest='filter_metadata',
+                               help='Filter metadata table to only include batch, color, and '
+                               'covariate variables.')
+    file_settings.add_argument('-m', '--bcMethod', choices=['limma', 'combat'], default='combat',
+                               help='Batch correction method. Default is "combat".')
+
+    batch_vars = parser.add_argument_group('Batch variables',
+                     'Batch variables are optional. By default the project column in the replicates '
+                     'table is used as the batch variable. The project column corresponds to the '
+                     'Skyline document which each sample was in. There must be at least 2 different '
+                     'values in the project column to it as the batch variable. '
+                     'If batch variables are specified, they must exist in the sampleMetadata table.')
+
+    batch_vars.add_argument('-1', '--batch1', default=None,
+                            help='sampleMetadata variable to use for batch 1.')
+    batch_vars.add_argument('-2', '--batch2', default=None,
+                            help='sampleMetadata variable to use for batch 2. Using 2 batch variables '
+                            'is only available with limma as the batch correction method. '
+                            '--batch1 must be also be specified to use --batch2.')
+
+    color_vars = parser.add_argument_group('Color and covariate variables',
+                    'These options can be specified multiple times to add multiple variables.')
+    color_vars.add_argument('--addCovariate', action='append', dest='covariate_vars',
+                            help='Add a sampleMetadata annotationKey to use as a covariate for '
+                                 'batch correction.')
+    color_vars.add_argument('-c', '--addColor', action='append', dest='color_vars',
+                            help='Add a sampleMetadata annotationKey to use to color PCA plots.')
+
+    control_vars = parser.add_argument_group('Control sample variables',
+                        'Specify a metadata variable to indicate whether a replicate is a control. '
+                        'These key, value pairs will be used to seperate the pannels of the control CV plot. '
+                        'If --controlKey is specified, at least one value must be specified with --addControlValue')
+
+    control_vars.add_argument('--controlKey', default=None, dest='control_key',
+                              help='sampleMetadata annotationKey that has variable indication whether a '
+                                   'replicate is a control.')
+    control_vars.add_argument('--addControlValue', action='append', dest='control_values',
+                              help='Add sampleMetadata annotationValue(s) which indicate whether '
+                                   'a replicate is a control.')
+
+    parser.add_argument('-s', '--skipTests', default=False, action='store_true',
+                        help='Skip tests that batch, color, and covariate variables exist in '
+                             'sampleMetadata table?')
+
+    table_args = parser.add_argument_group('Output tables',
+                     'The tsv files to print are specified by a 2 digit bit mask. '
+                     'The first digit is for the wide formated report, and the second digit is for '
+                     'the long formated report. An integer values is assigned for each stage in '
+                     'the normalization process. 0 for no report, 1 is for unnormalized, 2 is for '
+                     'normalized, and 4 is for batch corrected.')
+
+    # Some of these examples might be good to include in the help, but is is already alot of text.
+    # For example, a mask of 42 would produce a wide batch corrected and long normalized tsv file.
+    # A mask of 30 (1+2=3) would produce both a unnormalized and normalized wide tsv file.
+    # A mask of 70 would produce a (1+2+4=7) would produce a unnormalized, normalized, and batch
+    # corrected wide tsv file.
+
+    table_args.add_argument('-p', '--precursorTables', type=int, default=40,
+                        help='Tables to write for precursors. 40 is the default')
+    table_args.add_argument('-r', '--proteinTables', type=int, default=40,
+                            help='Tables to write for proteins. 40 is the default')
+    table_args.add_argument('--metadataTables', type=int, default=10,
+                            help='Tables to write for metadata. Only 0 or 1 are supported. '
+                                 '0 for false, 1 for true. 10 is the default')
+
+    parser.add_argument('db', help='Path to batch database.')
     args = parser.parse_args()
 
-    # ofname = f'{args.ofname}.{args.format}'
+    # string variable args
+    string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key', 'control_values']
+    string_args = {x: getattr(args, x) for x in string_args}
+
+    # check args
+    if not args.skipTests:
+        if not test_metadata_variables(args.db, **string_args):
+            sys.exit(1)
 
     with open(args.ofname, 'w') as outF:
-        outF.write(doc_header('{} {}'.format(os.path.abspath(__file__),
-                              ' '.join(sys.argv[1:])), title=args.title))
-        outF.write(add_header('Peptide independent metrics', level=1))
-        outF.write(doc_initialize(args.db, PYTHON_DIR))
+        outF.write(doc_header(' '.join(sys.argv), title=args.title))
 
-        outF.write(add_header('Replicate TIC areas', level=2))
-        outF.write(replicate_tic_areas(dpi=args.dpi))
+        outF.write(r_block_header('setup'))
+        outF.write(doc_initialize(args.db, **string_args,
+                                  filter_metadata=args.filter_metadata))
 
-        outF.write(add_header('Peptide dependent metrics\n', level=1))
-        outF.write(add_header('Standard retention times across replicates', level=2))
-        outF.write(std_rt_dist(args.addStdProtein, dpi=args.dpi))
-
-        outF.write(add_header('Number of missed cleavages', level=2))
-        outF.write(missed_cleavages(do_query=True, dpi=args.dpi))
-
-        outF.write(add_header('Precursor charges', level=2))
-        outF.write(precursor_charges(do_query=False, dpi=args.dpi))
-
-        outF.write(add_header('Mass error distribution', level=2))
-        outF.write(pivot_box_plot('massError', title='Mass error (ppm)',
-                                  do_query=True, dpi=args.dpi))
-
-        outF.write(add_header('Peak width distribution', level=2))
-        outF.write(pivot_box_plot('maxFwhm', title='Peak FWHM',
-                                  do_query=False, dpi=args.dpi))
-
-        outF.write(add_header('Library dot product distribution', level=2))
-        outF.write(pivot_box_plot('libraryDotProduct', do_query=False, dpi=args.dpi))
-
-        outF.write(add_header('MS1 isotopic window dot product distribution', level=2))
-        outF.write(pivot_box_plot('isotopeDotProduct', do_query=False, dpi=args.dpi))
-
-        outF.write(add_header('MS1 isotopic window dot product distribution', level=2))
-        outF.write(ms1_ms2_ratio(do_query=False, dpi=args.dpi))
-
-        outF.write(add_header('Batch effects', level=2))
-        outF.write(pc_analysis(do_query=False, dpi=args.dpi))
-
-        outF.write(doc_finalize())
 
 if __name__ == '__main__':
     main()
