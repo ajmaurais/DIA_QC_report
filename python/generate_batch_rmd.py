@@ -41,7 +41,7 @@ def r_block_header(label, echo=False, warning=False, message=False,
         return 'TRUE' if boo else 'FALSE'
 
     text = '```{' + f'r {label}, echo={bool_to_str(message)}, warning={bool_to_str(warning)}, message={bool_to_str(message)}'
-    
+
     if fig_width:
         text += f', fig.with={fig_width}'
     if fig_height:
@@ -147,8 +147,7 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
     return all_good
 
 
-def doc_initialize(db_path,
-                   batch1=None, batch2=None,
+def doc_initialize(db_path, batch1, batch2=None,
                    color_vars=None, covariate_vars=None,
                    control_key=None, control_values=None,
                    filter_metadata=False):
@@ -163,6 +162,10 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(DBI)
+
+# names for columns at different stages in analysis
+precursor.methods <- c('totalAreaFragment', 'normalizedArea', 'normalizedArea.bc')
+protein.methods <- c('abundance', 'normalizedAbundance', 'normalizedAbundance.bc')
 '''
 
     if batch1:
@@ -196,12 +199,12 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       normalizedArea
                                    FROM precursors p;')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
-                                            p.name as proteinName, ptp.modifiedSequence
+                                            p.name as protein, ptp.modifiedSequence
                                             FROM  peptideToProtein ptp
                                         LEFT JOIN proteins p ON ptp.proteinId == p.proteinId;')
 dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.replicateId,
-                                    p.name as proteinName,
+                                    p.name as protein,
                                     q.abundance,
                                     q.normalizedAbundance
                                 FROM proteinQuants q
@@ -256,7 +259,41 @@ dat.precursor$precursor <- with(dat.precursor, paste(modifiedSequence, precursor
 # log2 transform abundances
 dat.precursor$totalAreaFragment <- log2(rDIAUtils::zeroToMin(dat.precursor$totalAreaFragment))
 dat.precursor$normalizedArea <- log2(rDIAUtils::zeroToMin(dat.precursor$normalizedArea))
-dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))\n```\n\n'''
+dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))
+dat.protein$normalizedAbundance <- log2(rDIAUtils::zeroToMin(dat.protein$normalizedAbundance))\n```\n\n\n'''
+
+    return text
+
+
+def batch_correction(p, batch1, batch2=None, covariate_vars=None, bc_method='combat'):
+    '''
+    Add batch correction section for precursor or protein
+    '''
+
+    meta_cols = [s for v, s in zip([batch1, batch2, covariate_vars],
+                                   ['batch1', 'batch2', 'covariate.vars']) if v is not None]
+
+    a = 'Area' if p != 'protein' else 'Abundance'
+
+    text = f'''\n
+# batch correction
+dat.{p}.bc <- dat.{p} %>%
+    dplyr::left_join(dplyr::select(dat.metadata, replicateId, all_of(c({', '.join(meta_cols)}))),
+                     by='replicateId') %>%
+    rDIAUtils::batchCorrection('normalized{a}', batch1=batch1, {'batch2=batch2,' if batch2 else ''}
+                               {'covariate.cols=covariate.vars, ' if covariate_vars else ''}bc.method='{bc_method}', rowsName='{p}')
+
+# Join batch corrected areas to initial df
+dat.{p} <- dat.{p} %>%
+    dplyr::left_join(dplyr::select(dat.{p}.bc, replicate, {p},
+                     normalized{a}.bc=normalized{a}),
+                     by=c('replicate', '{p}'))
+
+# pivot longer
+dat.{p}.l <- dat.{p} %>%
+    tidyr::pivot_longer(dplyr::all_of({p}.methods),
+                        names_to='method', values_to='value') %>%
+    dplyr::select(replicate, {p}, method, value)\n```\n\n\n'''
 
     return text
 
@@ -266,7 +303,7 @@ dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))\n```\
 def cv_plot():
     # width = n_panels * 3 + 2
     # height = n_panels * 3 + 0.4
-    
+
     pass
 
 def pca_plot():
@@ -283,7 +320,7 @@ def main():
                                help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
     file_settings.add_argument('--title', default=DEFAULT_TITLE,
                                help=f'Report title. Default is "{DEFAULT_TITLE}"')
-    file_settings.add_argument('-f', '--filterMetadata', default=False, 
+    file_settings.add_argument('-f', '--filterMetadata', default=False,
                                action='store_true', dest='filter_metadata',
                                help='Filter metadata table to only include batch, color, and '
                                'covariate variables.')
@@ -361,12 +398,31 @@ def main():
         if not test_metadata_variables(args.db, **string_args):
             sys.exit(1)
 
+    # set batch1 to default if it is None
+    if string_args['batch1'] is None:
+        string_args['batch1'] = 'project'
+
     with open(args.ofname, 'w') as outF:
         outF.write(doc_header(' '.join(sys.argv), title=args.title))
 
+        # setup
         outF.write(r_block_header('setup'))
         outF.write(doc_initialize(args.db, **string_args,
                                   filter_metadata=args.filter_metadata))
+
+        # precursor batch correction
+        outF.write(r_block_header('precursor_batch_correction'))
+        outF.write(batch_correction('precursor', string_args['batch1'],
+                                    batch2=args.batch2,
+                                    covariate_vars=args.covariate_vars,
+                                    bc_method=args.bcMethod))
+
+        # protein batch correction
+        outF.write(r_block_header('protein_batch_correction'))
+        outF.write(batch_correction('protein', string_args['batch1'],
+                                    batch2=args.batch2,
+                                    covariate_vars=args.covariate_vars,
+                                    bc_method=args.bcMethod))
 
 
 if __name__ == '__main__':
