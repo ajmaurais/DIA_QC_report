@@ -486,7 +486,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         repIndex = {r: i for i, r in zip(replicates['replicate'].index, replicates['replicate'])}
 
         # deal with existing proteins
-        curProteins = pd.read_sql('SELECT * FROM proteins;', conn)
+        curProteins = pd.read_sql('SELECT proteinId, name FROM proteins;', conn)
         curProteinNames = set(curProteins['name'].to_list())
         proteins = proteins[proteins['name'].apply(lambda x: x not in curProteinNames)]
         proteins.index = pd.RangeIndex(start=len(curProteins.index),
@@ -524,13 +524,11 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
                                         'protein_quants', 'repIndex')) is None:
         return False
     protein_quants['replicateId'] = rep_id_col
-    # protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
 
     if (prot_id_col := _add_index_column(protein_quants['name'], proteinIndex,
                                          'protein_quants', 'proteinIndex')) is None:
         return False
     protein_quants['proteinId'] = prot_id_col
-    # protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
 
     protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
 
