@@ -26,7 +26,7 @@ input:
     html_document:
         toc: true
         toc_float: true
----\n\n''' % (command, title)
+---\n\n\n''' % (command, title)
     return header
 
 
@@ -121,7 +121,7 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
 
     # Test that control_key exists in metadata table
     if control_key is not None:
-        if control_key is not None != control_values is not None:
+        if (control_key is not None) != (control_values is not None):
             LOGGER.error('Must specify both control_key and control_values')
             conn.close()
             return False
@@ -133,7 +133,7 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
             db_control_values = set([x[0] for x in cur.fetchall()])
 
             for value in control_values:
-                if value in db_control_values:
+                if value not in db_control_values:
                     LOGGER.error(f'Missing annotationValue "{value}" for annotationKey '
                                   '"{control_key}" in sampleMetadata table!')
                     all_good = False
@@ -184,7 +184,7 @@ color.vars <- c('{}')'''.format("', '".join(covariate_vars))
     if control_key:
         text += f"\n\n# control sample key specified by --controlKey\ncontrol.key = '{control_key}'"
 
-    if covariate_vars:
+    if control_values:
         text += '''\n\n# control sample values specified by --controlValues
 control.values <- c('{}')'''.format("', '".join(control_values))
 
