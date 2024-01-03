@@ -45,7 +45,7 @@ def r_block_header(label, echo=False, warning=False, message=False,
     if fig_width:
         text += f', fig.with={fig_width}'
     if fig_height:
-        text += f', fig.with={fig_height}'
+        text += f', fig.height={fig_height}'
 
     return text + '}'
 
@@ -149,14 +149,15 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
 
 def doc_initialize(db_path, batch1, batch2=None,
                    color_vars=None, covariate_vars=None,
-                   control_key=None, control_values=None,
-                   filter_metadata=False):
+                   control_key=None, filter_metadata=False):
     '''
     Add initial block to load libraries, query batch db, construct metadata df,
     and setup precursor and protein dataframes.
     '''
 
-    text=f'''\n
+    text = r_block_header('setup')
+
+    text += f'''\n
 library(rDIAUtils)
 library(ggplot2)
 library(dplyr)
@@ -183,10 +184,6 @@ color.vars <- c('{}')'''.format("', '".join(covariate_vars))
 
     if control_key:
         text += f"\n\n# control sample key specified by --controlKey\ncontrol.key = '{control_key}'"
-
-    if control_values:
-        text += '''\n\n# control sample values specified by --controlValues
-control.values <- c('{}')'''.format("', '".join(control_values))
 
     text += f'''\n
 # Load necissary tables from database
@@ -275,7 +272,8 @@ def batch_correction(p, batch1, batch2=None, covariate_vars=None, bc_method='com
 
     a = 'Area' if p != 'protein' else 'Abundance'
 
-    text = f'''\n
+    text = r_block_header(f'{p}_batch_correction')
+    text += f'''\n
 # batch correction
 dat.{p}.bc <- dat.{p} %>%
     dplyr::left_join(dplyr::select(dat.metadata, replicateId, all_of(c({', '.join(meta_cols)}))),
@@ -297,14 +295,86 @@ dat.{p}.l <- dat.{p} %>%
 
     return text
 
-
 # plots
 
-def cv_plot():
-    # width = n_panels * 3 + 2
-    # height = n_panels * 3 + 0.4
 
-    pass
+def precursor_norm_plot():
+    '''
+    Generate precursor normalization box plot.
+    '''
+
+    text = '\n' + r_block_header('area_dist_plot', fig_width=8, fig_height=10)
+    text += '''\n
+dat.p <- dat.precursor.l %>%
+    dplyr::left_join(dplyr::select(dat.metadata, replicate, acquiredRank, all_of(batch1)))
+dat.p$method <- factor(dat.p$method, levels=precursor.methods,
+                       labels=c('Unnormalized', 'Median Normalized', 'Normalized, Batch Corrected'))
+
+p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank, color=get(batch1))) +
+    facet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top') +
+    geom_boxplot(outlier.size = 0.5) +
+    scale_color_discrete(name='Batch') +
+    coord_flip() +
+    ylab('log2(Area)') +
+    xlab('Acquisition number') +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+          legend.position = 'top')
+
+p.norm\n```\n\n\n'''
+    return text
+
+
+def cv_plot(control_values = None):
+
+    fig_height = 1 + 3 * len(control_values) if control_values else 4
+    text = '\n' + r_block_header('cv_dist_plot', fig_width=8, fig_height=fig_height) + '\n'
+
+    # additional text to add if faceting by control samples
+    filter_text = ''
+    group_by_text = ''
+    facet_text = ''
+
+    if control_values:
+        text += '''\n# control sample values specified by --controlValues
+control.values <- c('{}')'''.format("', '".join(control_values))
+        text += '''
+    control.reps <- dat.metadata[dat.metadata[[control.key]] %in% control.values,] %>%
+        dplyr::select(replicate, all_of(control.key))
+    control.reps[[control.key]] <- factor(control.reps[[control.key]])\n'''
+
+        filter_text = "dplyr::filter(replicate %in% control.reps$replicate) %>%\n"
+        group_by_text = ', !!rlang::sym(control.key)'
+        facet_text = "facet_wrap(as.formula(paste('~', control.key)), ncol=1) + \n"
+
+    text += f'''
+# calculate CV for each precursor
+dat.cv <- dat.precursor.l %>%{filter_text}
+    dplyr::left_join(control.reps, by='replicate') %>%
+    dplyr::mutate(value=2^value) %>% # Convert back to linear space for CV calculation
+    dplyr::group_by(precursor, method{group_by_text}) %>%
+    dplyr::summarize(cv = (sd(value) / mean(value)) * 100) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(cv < 100)
+
+# Convert method to factor
+dat.cv$method <- factor(dat.cv$method, levels=precursor.methods,
+                       labels=c('Unnormalized', 'Median Normalized', 'Batch Corrected'))
+
+# CV distribution plot
+p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
+    {facet_text}geom_density(alpha=0.2) +
+    ylab('Density') +
+    xlab('CV (%)') +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+          legend.title=element_blank(),
+          legend.direction='horizontal',
+          legend.position = 'top')
+\np.cv\n```\n\n\n'''
+
+    return text
+
 
 def pca_plot():
     # width = n_panels * 3 + 2
@@ -390,12 +460,13 @@ def main():
     args = parser.parse_args()
 
     # string variable args
-    string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key', 'control_values']
+    string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key']
     string_args = {x: getattr(args, x) for x in string_args}
 
     # check args
     if not args.skipTests:
-        if not test_metadata_variables(args.db, **string_args):
+        if not test_metadata_variables(args.db, **string_args,
+                                       control_values=args.control_values):
             sys.exit(1)
 
     # set batch1 to default if it is None
@@ -406,24 +477,28 @@ def main():
         outF.write(doc_header(' '.join(sys.argv), title=args.title))
 
         # setup
-        outF.write(r_block_header('setup'))
         outF.write(doc_initialize(args.db, **string_args,
                                   filter_metadata=args.filter_metadata))
 
         # precursor batch correction
-        outF.write(r_block_header('precursor_batch_correction'))
         outF.write(batch_correction('precursor', string_args['batch1'],
                                     batch2=args.batch2,
                                     covariate_vars=args.covariate_vars,
                                     bc_method=args.bcMethod))
 
         # protein batch correction
-        outF.write(r_block_header('protein_batch_correction'))
         outF.write(batch_correction('protein', string_args['batch1'],
                                     batch2=args.batch2,
                                     covariate_vars=args.covariate_vars,
                                     bc_method=args.bcMethod))
 
+        # precursor normalization plot
+        # outF.write(add_header('Precursor normalization', level=1))
+        # outF.write(precursor_norm_plot())
+
+        # CV distribution plot
+        outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
+        outF.write(cv_plot(control_values=args.control_values))
 
 if __name__ == '__main__':
     main()

@@ -106,9 +106,7 @@ CREATE TABLE peptideToProtein (
     modifiedSequence VARCHAR(200) NOT NULL,
     PRIMARY KEY (modifiedSequence, proteinId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
-)
-'''
-]
+)''']
 
 PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'ProteinAccession': 'proteinAccession',
@@ -583,7 +581,7 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate QC_metrics an batch correction database from '
+    parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
                                                  'Skyline precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
