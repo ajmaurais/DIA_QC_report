@@ -43,7 +43,7 @@ def r_block_header(label, echo=False, warning=False, message=False,
     text = '```{' + f'r {label}, echo={bool_to_str(message)}, warning={bool_to_str(warning)}, message={bool_to_str(message)}'
 
     if fig_width:
-        text += f', fig.with={fig_width}'
+        text += f', fig.width={fig_width}'
     if fig_height:
         text += f', fig.height={fig_height}'
 
@@ -295,8 +295,6 @@ dat.{p}.l <- dat.{p} %>%
 
     return text
 
-# plots
-
 
 def precursor_norm_plot():
     '''
@@ -328,7 +326,7 @@ p.norm\n```\n\n\n'''
 def cv_plot(control_values = None):
 
     fig_height = 1 + 3 * len(control_values) if control_values else 4
-    text = '\n' + r_block_header('cv_dist_plot', fig_width=8, fig_height=fig_height) + '\n'
+    text = '\n' + r_block_header('cv_dist_plot', fig_width=6.5, fig_height=fig_height) + '\n'
 
     # additional text to add if faceting by control samples
     filter_text = ''
@@ -343,14 +341,14 @@ control.values <- c('{}')'''.format("', '".join(control_values))
         dplyr::select(replicate, all_of(control.key))
     control.reps[[control.key]] <- factor(control.reps[[control.key]])\n'''
 
-        filter_text = "dplyr::filter(replicate %in% control.reps$replicate) %>%\n"
+        filter_text = '''dplyr::filter(replicate %in% control.reps$replicate) %>%
+    dplyr::left_join(control.reps, by='replicate') %>%\n'''
         group_by_text = ', !!rlang::sym(control.key)'
-        facet_text = "facet_wrap(as.formula(paste('~', control.key)), ncol=1) + \n"
+        facet_text = "facet_wrap(as.formula(paste('~', control.key)), ncol=1) + \n\t"
 
     text += f'''
 # calculate CV for each precursor
 dat.cv <- dat.precursor.l %>%{filter_text}
-    dplyr::left_join(control.reps, by='replicate') %>%
     dplyr::mutate(value=2^value) %>% # Convert back to linear space for CV calculation
     dplyr::group_by(precursor, method{group_by_text}) %>%
     dplyr::summarize(cv = (sd(value) / mean(value)) * 100) %>%
@@ -376,10 +374,30 @@ p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
     return text
 
 
-def pca_plot():
-    # width = n_panels * 3 + 2
-    # height = n_panels * 3 + 0.4
-    pass
+def pca_plot(p, color_vars = None):
+
+    n_methods = 3
+
+    fig_width = n_methods * 3 + 2
+    fig_height = ((len(color_vars) if color_vars else 0) + 2) * 3 + 0.2
+
+    text = '\n' + r_block_header(f'{p}_pca', fig_width=fig_width, fig_height=fig_height)
+
+    norm_method = 'Median' if p != 'protein' else 'DirectLFQ'
+    color_vars_text = '' if color_vars is None else ', color.vars'
+
+    text += f'\n\n# {p} PCAs\npcs.{p} <- list()\nfor(method in {p}.methods)'
+    text += '{' + f'''
+    pcs.{p} [[method]] <- rDIAUtils::pcAnalysis(dat.{p}.l[dat.{p}.l$method == method,],
+                                                     'value', rowsName='{p}', columnsName='replicate')'''
+    text += '\n}\n\n'
+    text += f'''names({p}.methods) <- c('Unnormalized', '{norm_method} Normalized', 'Batch corrected')
+rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
+                        color.cols=c('Acquisition\\nnumber'='acquiredRank', 'Batch'=batch1{color_vars_text}),
+                        dat.metadata=dat.metadata)
+```\n\n\n'''
+
+    return text
 
 
 def main():
@@ -474,7 +492,8 @@ def main():
         string_args['batch1'] = 'project'
 
     with open(args.ofname, 'w') as outF:
-        outF.write(doc_header(' '.join(sys.argv), title=args.title))
+        outF.write(doc_header('{} {}'.format(os.path.basename(sys.argv[0]), ' '.join(sys.argv[1:])),
+                              title=args.title))
 
         # setup
         outF.write(doc_initialize(args.db, **string_args,
@@ -493,12 +512,21 @@ def main():
                                     bc_method=args.bcMethod))
 
         # precursor normalization plot
-        # outF.write(add_header('Precursor normalization', level=1))
-        # outF.write(precursor_norm_plot())
+        outF.write(add_header('Precursor normalization', level=1))
+        outF.write(precursor_norm_plot())
 
         # CV distribution plot
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
         outF.write(cv_plot(control_values=args.control_values))
+
+        # precursor PCA plot
+        outF.write(add_header('Precursor batch correction PCA', level=1))
+        outF.write(pca_plot('precursor', color_vars=args.color_vars))
+
+        # protein PCA plot
+        outF.write(add_header('Protein batch correction PCA', level=1))
+        outF.write(pca_plot('protein', color_vars=args.color_vars))
+
 
 if __name__ == '__main__':
     main()
