@@ -172,7 +172,7 @@ library(DBI)
 
     if color_vars:
         text += '''\n\n# variables specified by --addColor
-color.vars <- c('{}')".format("', '".join(color_vars))'''
+color.vars <- c('{}')'''.format("', '".join(color_vars))
 
     if covariate_vars:
         text += '''\n\n# variables specified by --addCoveriate
@@ -222,18 +222,20 @@ DBI::dbDisconnect(conn)\n'''
             if py_var is not None:
                 filter_vars.append(r_var)
 
-        text += f'''# filter metadata to only include batch, covariate, and color variables\n'
-dat.meta.l <- dat.meta.l[dat.meta.l$annotationKey %in% c({filter_vars}),]'''
+        filter_vars = ', '.join(filter_vars)
+
+        text += f'''\n# filter metadata to only include batch, covariate, and color variables
+dat.meta.l <- dat.meta.l[dat.meta.l$annotationKey %in% c({filter_vars}),]\n'''
 
     text += '''
 # generate wide formated dat.meta from long formated dat.meta.l
 dat.meta <- dat.meta.l %>% dplyr::select(replicateId, annotationKey, annotationValue) %>%
-    tidyr::pivot_wider(names_from='annotationKey', values_from=annotationValue)
+    tidyr::pivot_wider(names_from='annotationKey', values_from='annotationValue')
 
 # convert columns in wide metadata df to the type specified by annotationType
 meta.types <- unique(dplyr::select(dat.meta.l, annotationKey, annotationType))
 meta.types <- setNames(meta.types$annotationType, meta.types$annotationKey)
-converters <- list(BOOL=as.logical, INT=as.integer, FLOAT=as.double, STRING=function(x){1})
+converters <- list(BOOL=as.logical, INT=as.integer, FLOAT=as.double, STRING=function(x){x})
 for(column in names(meta.types)) {
     dat.meta[[column]] <- converters[[meta.types[column]]](dat.meta[[column]])
 }
