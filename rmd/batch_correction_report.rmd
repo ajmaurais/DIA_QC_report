@@ -33,14 +33,13 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.abundance 
                                 FROM proteinQuants q
                                 LEFT JOIN proteins p ON p.proteinId = q.proteinId;')
-dat.metadata <- DBI::dbGetQuery(conn, 'SELECT
+dat.rep <- DBI::dbGetQuery(conn, 'SELECT
                                 r.replicate,
                                 r.replicateId,
                                 r.acquiredRank,
                                 b.annotationValue as batch
-                             FROM replicates r
-                             LEFT JOIN (SELECT * FROM sampleMetadata WHERE annotationKey == "batch") b
-                             ON b.replicateId == r.replicateId;')
+                             FROM replicates r;')
+dat.meta <- DBI::dbGetQuery(conn, 'SELECT * FROM metadata')
 DBI::dbDisconnect(conn)
 
 # fix special characters in replicate names so they can be R headers

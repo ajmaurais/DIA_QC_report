@@ -40,12 +40,12 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       normalizedArea
                                    FROM precursors p;')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
-                                            p.name as proteinName, ptp.modifiedSequence
+                                            p.name as protein, ptp.modifiedSequence
                                             FROM  peptideToProtein ptp
                                         LEFT JOIN proteins p ON ptp.proteinId == p.proteinId;')
 dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.replicateId,
-                                    p.name as proteinName,
+                                    p.name as protein,
                                     q.abundance,
                                     q.normalizedAbundance
                                 FROM proteinQuants q
@@ -127,20 +127,20 @@ dat.protein.bc <- dat.protein %>%
     dplyr::left_join(dplyr::select(dat.metadata, replicateId, all_of(batch1)),
                      by='replicateId') %>%
     rDIAUtils::batchCorrection('normalizedAbundance', batch1=batch1,
-                               bc.method='combat', rowsName='proteinName')
+                               bc.method='combat', rowsName='protein')
 
 # Join batch corrected areas to initial df
 dat.protein <- dplyr::left_join(dat.protein,
-                                  dplyr::select(dat.protein.bc, replicate, proteinName,
+                                  dplyr::select(dat.protein.bc, replicate, protein,
                                                 normalizedAbundance.bc=normalizedAbundance),
-                                  by=c('replicate', 'proteinName'))
+                                  by=c('replicate', 'protein'))
 
 # pivot longer
 protein.methods <- c('abundance', 'normalizedAbundance', 'normalizedAbundance.bc')
 dat.protein.l <- dat.protein %>%
     tidyr::pivot_longer(dplyr::all_of(protein.methods),
                         names_to='method', values_to='value') %>%
-    dplyr::select(replicate, proteinName, method, value)
+    dplyr::select(replicate, protein, method, value)
 
 ```
 
@@ -218,8 +218,6 @@ for(method in precursor.methods) {
                                                      'value', rowsName='precursor', columnsName='replicate')
 }
 
-dat <- dplyr::left_join(pcs.precursor[[1]][['pc']], dat.metadata, by='replicate')
-
 names(precursor.methods) <- c('Area', 'Normalized area', 'Batch corrected')
 rDIAUtils::arrangePlots(pcs.precursor, row.cols=precursor.methods[c(1, 2)],
                         color.cols=c('Acquisition\nnumber'='acquiredRank', 'Batch'=batch1),
@@ -234,7 +232,7 @@ rDIAUtils::arrangePlots(pcs.precursor, row.cols=precursor.methods[c(1, 2)],
 pcs.protein <- list()
 for(method in protein.methods) {
     pcs.protein[[method]] <- rDIAUtils::pcAnalysis(dat.protein.l[dat.protein.l$method == method,],
-                                                   'value', rowsName='proteinName', columnsName='replicate')
+                                                   'value', rowsName='protein', columnsName='replicate')
 }
 
 names(protein.methods) <- c('Unnormalized', 'DirectLFQ normalized', 'Normalized, Batch corrected')
@@ -248,41 +246,41 @@ rDIAUtils::arrangePlots(pcs.protein, row.cols=protein.methods,
 
 ```{r write_tables, message=TRUE, warning=FALSE, echo=FALSE}
 
-# dat.precursor.j <- dplyr::left_join(peptideToProtein, dat.precursor,
-#                                     by='modifiedSequence', relationship='many-to-many') 
-# 
-# message('Writing precursors unnormalized to: "precursors_unnormalized_wide.tsv"')
-# write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='totalAreaFragment',
-#                                    rowsName=c('proteinName', 'modifiedSequence', 'precursorCharge'),
-#                                    columnsName='replicate'),
-#             file='precursors_unnormalized_wide.tsv',
-#             sep='\t', row.names=F, quote=F)
-# 
-# message('Writing precursors normalized to: "precursors_normalized_wide.tsv"')
-# write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='normalizedArea',
-#                                    rowsName=c('proteinName', 'modifiedSequence', 'precursorCharge'),
-#                                    columnsName='replicate'),
-#             file='precursors_normalized_wide.tsv',
-#             sep='\t', row.names=F, quote=F)
-# 
-# message('Writing precursors normalized, batch corrected to: "precursors_batchCorrected_wide.tsv"')
-# write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='normalizedArea.bc',
-#                                    rowsName=c('proteinName', 'modifiedSequence', 'precursorCharge'),
-#                                    columnsName='replicate'),
-#             file='precursors_batchCorrected_wide.tsv',
-#             sep='\t', row.names=F, quote=F)
-# 
-# message('Writing proteins normalized to: "proteins_normalized_wide.tsv"')
-# write.table(rDIAUtils::pivotLonger(dat.protein, valuesFrom='normalizedAbundance',
-#                                    rowsName='proteinName', columnsName='replicate'),
-#             file='proteins_normalized_wide.tsv',
-#             sep='\t', row.names=F, quote=F)
-# 
-# message('Writing proteins normalized, batch corrected to: "proteins_batchCorrected_wide.tsv"')
-# write.table(rDIAUtils::pivotLonger(dat.protein, valuesFrom='normalizedAbundance.bc',
-#                                    rowsName='proteinName', columnsName='replicate'),
-#             file='proteins_batchCorrected_wide.tsv',
-#             sep='\t', row.names=F, quote=F)
+dat.precursor.j <- dplyr::left_join(peptideToProtein, dat.precursor,
+                                    by='modifiedSequence', relationship='many-to-many') 
+
+message('Writing precursors unnormalized to: "precursors_unnormalized_wide.tsv"')
+write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='totalAreaFragment',
+                                   rowsName=c('protein', 'modifiedSequence', 'precursorCharge'),
+                                   columnsName='replicate'),
+            file='precursors_unnormalized_wide.tsv',
+            sep='\t', row.names=F, quote=F)
+
+message('Writing precursors normalized to: "precursors_normalized_wide.tsv"')
+write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='normalizedArea',
+                                   rowsName=c('protein', 'modifiedSequence', 'precursorCharge'),
+                                   columnsName='replicate'),
+            file='precursors_normalized_wide.tsv',
+            sep='\t', row.names=F, quote=F)
+
+message('Writing precursors normalized, batch corrected to: "precursors_batchCorrected_wide.tsv"')
+write.table(rDIAUtils::pivotLonger(dat.precursor.j, valuesFrom='normalizedArea.bc',
+                                   rowsName=c('protein', 'modifiedSequence', 'precursorCharge'),
+                                   columnsName='replicate'),
+            file='precursors_batchCorrected_wide.tsv',
+            sep='\t', row.names=F, quote=F)
+
+message('Writing proteins normalized to: "proteins_normalized_wide.tsv"')
+write.table(rDIAUtils::pivotLonger(dat.protein, valuesFrom='normalizedAbundance',
+                                   rowsName='protein', columnsName='replicate'),
+            file='proteins_normalized_wide.tsv',
+            sep='\t', row.names=F, quote=F)
+
+message('Writing proteins normalized, batch corrected to: "proteins_batchCorrected_wide.tsv"')
+write.table(rDIAUtils::pivotLonger(dat.protein, valuesFrom='normalizedAbundance.bc',
+                                   rowsName='protein', columnsName='replicate'),
+            file='proteins_batchCorrected_wide.tsv',
+            sep='\t', row.names=F, quote=F)
 
 ```
 
