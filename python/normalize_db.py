@@ -84,10 +84,10 @@ def median_normalize(df, key_cols, value_col):
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on precursor DB.')
+    parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
     # parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
     #                     help='Normalization method to use.')
-    parser.add_argument('db')
+    parser.add_argument('db', help='Path to sqlite batch database.')
 
     args = parser.parse_args()
 
@@ -136,7 +136,6 @@ def main():
     # pivot protein_df longer
     protein_df = protein_df.melt(id_vars='protein', value_name='normalizedArea', var_name='replicateId')
     
-    # protein_df.to_csv('/home/ajm/code/DIA_QC_report/testData/normalize_db/protein_df.tsv', sep='\t', index=False)
     
     # median normalize precursor quants
     ion_df = median_normalize(df[[REP_COLUMN_NAME, 'ion', 'totalAreaFragment']].drop_duplicates(),
@@ -191,7 +190,7 @@ def main():
         previous_commands = previous_commands[0][0] + '\n'
     current_command = ' '.join(sys.argv)
 
-    # update normalization method in metadata
+    # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
     conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(TIME_FORMAT))
     conn = update_meta_value(conn, 'precursor_normalization_method', 'median')

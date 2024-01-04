@@ -48,7 +48,7 @@ CREATE TABLE replicates (
 '''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
-    peptide VARCHAR(50),
+    peptide VARCHAR(60),
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,
@@ -106,9 +106,7 @@ CREATE TABLE peptideToProtein (
     modifiedSequence VARCHAR(200) NOT NULL,
     PRIMARY KEY (modifiedSequence, proteinId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
-)
-'''
-]
+)''']
 
 PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'ProteinAccession': 'proteinAccession',
@@ -158,6 +156,12 @@ def _initialize(fname):
     return conn
 
 
+NA_RE = re.compile('^(NA|NULL|#N/A|NaN)$')
+BOOL_RE = re.compile('^(true|True|TRUE|false|FALSE|False)$')
+INT_RE = re.compile('^[+\-]?\d+$')
+FLOAT_RE = re.compile('^[+\-]?(\d+(.\d*)?|.\d+|\d+(.\d*)?[eE][+\-]?\d+)$')
+
+
 class Dtype(Enum):
     NULL=0
     BOOL=1
@@ -175,34 +179,35 @@ class Dtype(Enum):
         raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
 
-NA_RE = re.compile('^(NA|NULL|#N/A|NaN)$')
-BOOL_RE = re.compile('^(true|True|TRUE|false|FALSE|False)$')
-INT_RE = re.compile('^[\+-]?\d+$')
-FLOAT_RE = re.compile('^[+\-]?(\d+(.\d*)?|.\d+|\d+(.\d*)?[eE]-?\d+)$')
+    def __ge__(self, rhs):
+        if type(rhs) == type(self):
+            return self.value >= rhs.value
 
+        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
-def infer_type(s):
-    '''
-    Infer datatype for string 
+    @staticmethod
+    def infer_type(s):
+        '''
+        Infer datatype for string.
 
-    Parameters
-    ----------
-    s: str
-        The string to test.
+        Parameters
+        ----------
+        s: str
+            The string to test.
 
-    Returns
-    -------
-    Dtype object
-    '''
-    if s == '' or NA_RE.search(s):
-        return Dtype.NULL
-    if BOOL_RE.search(s):
-        return Dtype.BOOL
-    if INT_RE.search(s):
-        return Dtype.INT
-    if FLOAT_RE.search(s):
-        return Dtype.FLOAT
-    return Dtype.STRING
+        Returns
+        -------
+        Dtype object
+        '''
+        if s == '' or NA_RE.search(s):
+            return Dtype.NULL
+        if BOOL_RE.search(s):
+            return Dtype.BOOL
+        if INT_RE.search(s):
+            return Dtype.INT
+        if FLOAT_RE.search(s):
+            return Dtype.FLOAT
+        return Dtype.STRING
     
 
 def read_metadata(fname, metadata_format=None):
@@ -249,14 +254,13 @@ def read_metadata(fname, metadata_format=None):
     df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
                  value_vars=[x for x in list(df.columns) if x != 'Replicate'])
     
-    # determine annotationKey types
-    df['annotationType'] = df['annotationValue'].apply(lambda x: infer_type(x))
+    # determine annotationValue types
+    df['annotationType'] = df['annotationValue'].apply(lambda x: Dtype.infer_type(x))
     df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
     types=dict()
     for annotationKey, group in df.groupby('annotationKey'):
         thisType = max(group['annotationType'].tolist())
         types[annotationKey] = str(Dtype.BOOL if thisType is Dtype.NULL else thisType)
-        # types[annotationKey] = str(thisType)
 
     df['annotationType'] = df['annotationKey'].apply(lambda x: types[x])
 
@@ -304,13 +308,75 @@ def update_acquired_ranks(conn):
 
     acquired_ranks = [(row.acquiredRank, row.replicateId) for row in replicates.itertuples()]
     cur = conn.cursor()
-    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?',
-                    acquired_ranks)
+    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?', acquired_ranks)
     conn.commit()
 
     insert_program_metadata(conn, {'replicates.acquiredRank updated': True})
 
     return conn
+
+
+def update_metadata_dtypes(conn):
+    '''
+    Update metadata annotationType column to fix cases where
+    two projects have a different annotationTypes for the same
+    annotationKey. This function will consolidate conflicting
+    types using the order in the Dtype Enum class.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection:
+        Database connection.
+    '''
+
+    # Consolidate differing annotationTypes
+    types = pd.read_sql('SELECT DISTINCT annotationKey, annotationType FROM sampleMetadata;', conn)
+    types['dtype'] = types['annotationType'].apply(lambda x: Dtype[x])
+    types = types.groupby('annotationKey')['dtype'].max().apply(lambda x: str(x)).reset_index()
+    types = [(row.dtype, row.annotationKey) for row in types.itertuples()]
+
+    # Update database
+    cur = conn.cursor()
+    cur.executemany('UPDATE sampleMetadata SET annotationType = ? WHERE annotationKey = ?', types)
+    conn.commit()
+
+    return conn
+
+
+def _add_index_column(col, index, df_name=None, index_name=None):
+    '''
+    Add a column to dataframe from a dict index.
+    Also handle KeyErros when values in key_col do not exist as a key in index.
+
+    Parameters
+    ----------
+    col: pd.Series
+        A Series with key values mapping to index.
+    index: dict
+        A dict mapping key_col to values in index.
+    df_name: str
+        The name of the df to use in any error messages.
+    index_name: str
+        The name of the index to use in any error messages.
+
+    Returns
+    -------
+    pd.Series: The new column to add to df, or None if there was a missing value in index.
+    '''
+
+    # Check that all values in col exist in index
+    table_names = '' if df_name is None or index_name is None else f' for {df_name} in {index_name}'
+    all_good = True
+    for key in col.drop_duplicates().tolist():
+        if key not in index:
+            LOGGER.error(f'Missing required value: {key}{table_names}!')
+            all_good = False
+
+    # Exit now if there are one or more missing values
+    if not all_good:
+        return None
+
+    return col.apply(lambda x: index[x])
 
 
 def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
@@ -412,14 +478,18 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         # deal with existing replicates
         curReplicates = pd.read_sql('SELECT * FROM replicates;', conn)
-        replicates.index = pd.RangeIndex(start=len(curReplicates.index), stop=len(curReplicates.index) + len(replicates.index), step=1)
+        replicates.index = pd.RangeIndex(start=len(curReplicates.index),
+                                         stop=len(curReplicates.index) + len(replicates.index),
+                                         step=1)
         repIndex = {r: i for i, r in zip(replicates['replicate'].index, replicates['replicate'])}
 
         # deal with existing proteins
-        curProteins = pd.read_sql('SELECT * FROM proteins;', conn)
+        curProteins = pd.read_sql('SELECT proteinId, name FROM proteins;', conn)
         curProteinNames = set(curProteins['name'].to_list())
         proteins = proteins[proteins['name'].apply(lambda x: x not in curProteinNames)]
-        proteins.index = pd.RangeIndex(start=len(curProteins.index), stop=len(curProteins.index) + len(proteins.index), step=1)
+        proteins.index = pd.RangeIndex(start=len(curProteins.index),
+                                       stop=len(curProteins.index) + len(proteins.index),
+                                       step=1)
         proteinIndex = {r: i for i, r in zip(curProteins['proteinId'], curProteins['name'])}
         proteinIndex = {**proteinIndex, **{r: i for i, r in zip(proteins['name'].index, proteins['name'])}}
 
@@ -447,18 +517,37 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
         protein_quants = protein_quants.rename(columns={'proteinName': 'name',
                                                         'totalAreaFragment': 'abundance'})
 
-    # add replicateId and proteinId columns to precursors and drop duplicate sequences
-    protein_quants['replicateId'] = protein_quants['replicateName'].apply(lambda x: repIndex[x])
-    protein_quants['proteinId'] = protein_quants['name'].apply(lambda x: proteinIndex[x])
+    # add replicateId and proteinId columns to protein_quants
+    if (rep_id_col := _add_index_column(protein_quants['replicateName'], repIndex,
+                                        'protein_quants', 'repIndex')) is None:
+        return False
+    protein_quants['replicateId'] = rep_id_col
+
+    if (prot_id_col := _add_index_column(protein_quants['name'], proteinIndex,
+                                         'protein_quants', 'proteinIndex')) is None:
+        return False
+    protein_quants['proteinId'] = prot_id_col
+
     protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
 
     # add replicateId and proteinId columns to precursors and drop duplicate sequences
-    precursors['replicateId'] = precursors['replicateName'].apply(lambda x: repIndex[x])
-    precursors['proteinId'] = precursors['proteinName'].apply(lambda x: proteinIndex[x])
+    if (rep_id_col := _add_index_column(precursors['replicateName'], repIndex,
+                                        'precursors', 'repIndex')) is None:
+        return False
+    precursors['replicateId'] = rep_id_col
+
+    if (prot_id_col := _add_index_column(precursors['proteinName'], proteinIndex,
+                                         'precursors', 'proteinIndex')) is None:
+        return False
+    precursors['proteinId'] = prot_id_col
+
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
 
     # add proteinId column and make peptideToProtein df
-    newPairs['proteinId'] = newPairs['proteinName'].apply(lambda x: proteinIndex[x])
+    if (prot_id_col := _add_index_column(newPairs['proteinName'], proteinIndex,
+                                         'peptideToProtein', 'proteinIndex')) is None:
+        return False
+    newPairs['proteinId'] = prot_id_col
     peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
 
     peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
@@ -474,19 +563,25 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
 
         sample_metadata = sample_metadata.loc[sample_metadata['Replicate'].apply(lambda x: x in repIndex),]
 
-        sample_metadata['replicateId'] = sample_metadata['Replicate'].apply(lambda x: repIndex[x])
+        if (rep_id_col := _add_index_column(sample_metadata['Replicate'], repIndex,
+                                            'sample_metadata', 'repIndex')) is None:
+            return False
+        sample_metadata['replicateId'] = rep_id_col
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
     conn = insert_program_metadata(conn, log_metadata)
     conn = update_acquired_ranks(conn)
 
+    if append:
+        conn = update_metadata_dtypes(conn)
+
     conn.close()
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate QC_metrics an batch correction database from '
+    parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
                                                  'Skyline precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')

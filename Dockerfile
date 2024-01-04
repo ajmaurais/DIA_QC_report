@@ -37,8 +37,9 @@ RUN cd /usr/local/bin && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/parse_data.py "$@"' > parse_data && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
     echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/normalize_db.py "$@"' > normalize_db && \
+    echo '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_batch_rmd.py "$@"' > generate_batch_rmd && \
     echo '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
-    chmod 755 generate_qc_qmd normalize_db parse_data entrypoint
+    chmod 755 parse_data normalize_db entrypoint generate_qc_qmd generate_batch_rmd
 
 WORKDIR /data
 
