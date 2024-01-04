@@ -16,9 +16,12 @@ DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA Batch Correction Report'
 
+PYTHON_METHOD_NAMES = ('unnormalized', 'normalized', 'batch_corrected')
+PRECURSOR_METHOD_NAMES = ('totalAreaFragment', 'normalizedArea', 'normalizedArea.bc')
+PROTEIN_METHOD_NAMES = ('abundance', 'normalizedAbundance', 'normalizedAbundance.bc')
 
 def doc_header(command, title=DEFAULT_TITLE):
-    header='''<!-- This document was automatically generated. Do not edit. -->
+    header='''<!-- This document was automatically generated. Command used to genrate document: -->
 <!-- %s -->\n
 ---
 title: "%s"
@@ -40,7 +43,7 @@ def r_block_header(label, echo=False, warning=False, message=False,
     def bool_to_str(boo):
         return 'TRUE' if boo else 'FALSE'
 
-    text = '```{' + f'r {label}, echo={bool_to_str(message)}, warning={bool_to_str(warning)}, message={bool_to_str(message)}'
+    text = '```{' + f'r {label}, echo={bool_to_str(echo)}, warning={bool_to_str(warning)}, message={bool_to_str(message)}'
 
     if fig_width:
         text += f', fig.width={fig_width}'
@@ -165,8 +168,8 @@ library(tidyr)
 library(DBI)
 
 # names for columns at different stages in analysis
-precursor.methods <- c('totalAreaFragment', 'normalizedArea', 'normalizedArea.bc')
-protein.methods <- c('abundance', 'normalizedAbundance', 'normalizedAbundance.bc')
+precursor.methods <- c('{"', '".join(PRECURSOR_METHOD_NAMES)}')
+protein.methods <- c('{"', '".join(PROTEIN_METHOD_NAMES)}')
 '''
 
     if batch1:
@@ -400,6 +403,133 @@ rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
     return text
 
 
+def wide_table(p, py_name, r_name, df_name):
+
+    row_names = ['protein']
+    if p == 'precursor':
+        row_names.append('modifiedSequence')
+        row_names.append('precursorCharge')
+
+    text = f'''\nmessage('Writing {p}s {py_name} to: "{p}s_{py_name}_wide.tsv"')
+write.table(rDIAUtils::pivotLonger({df_name}, valuesFrom='{r_name}',
+                                   rowsName=c('{"', '".join(row_names)}'),
+                                   columnsName='replicate'),
+            file='{p}s_{py_name}_wide.tsv',
+            sep='\\t', row.names=F, quote=F)\n'''
+
+    return text
+
+
+def long_table(p, df_name, unnormalized=True, normalized=True, batch_corrected=True):
+
+    row_identifers = ['replicate', 'protein']
+    quant_value_index = [i for i, value in zip((0, 1, 2), (unnormalized, normalized, batch_corrected)) if value]
+    if p == 'precursor':
+        row_identifers += ['modifiedSequence', 'precursorCharge']
+        quant_values = [PRECURSOR_METHOD_NAMES[i] for i in quant_value_index]
+    else:
+        quant_values = [PROTEIN_METHOD_NAMES[i] for i in quant_value_index]
+
+    text = f'''\nmessage('Writing {p}s long to: "{p}s_long.tsv"')
+write.table(dplyr::select({df_name}, {', '.join(row_identifers)},
+                          {', '.join(quant_values)}),
+            file='{p}s_long.tsv',
+            sep='\\t', row.names=F, quote=F)\n'''
+
+    return text
+
+
+def write_tables_section(precursor_tables, protein_tables, metadata_tables,
+                         any_precursor_tables=True):
+    text = add_header('TSV files generated:', level=1)
+
+    text += r_block_header('write_tables', message=True)
+    text += '\n\n'
+
+    if any_precursor_tables:
+        text += '''dat.precursor.j <- dplyr::left_join(peptideToProtein, dat.precursor,
+                                by='modifiedSequence', relationship='many-to-many')\n'''
+
+    # precursor wide tables
+    for (py_name, write), r_name in zip(precursor_tables['wide'].items(), PRECURSOR_METHOD_NAMES):
+        if write:
+            text += wide_table('precursor', py_name, r_name, 'dat.precursor.j')
+
+    # precursor long tables
+    if any(precursor_tables['long'].values()):
+        text += long_table('precursor', 'dat.precursor.j', **precursor_tables['long'])
+
+    # protein wide tables
+    for (py_name, write), r_name in zip(protein_tables['wide'].items(), PROTEIN_METHOD_NAMES):
+        if write:
+            text += wide_table('protein', py_name, r_name, 'dat.protein')
+
+    # protein long tables
+    if any(protein_tables['long'].values()):
+        text += long_table('protein', 'dat.protein', **protein_tables['long'])
+
+    text += '\n```\n\n'
+
+    return text
+
+
+def validate_bit_mask(mask, n_options=3, n_digits=2):
+    '''
+    Validate bit mask command line argument
+
+    Parameters
+    ----------
+    mask: str
+        Bit mask.
+    n_options: tuple
+        Number of options either 2, or 3.
+    n_digits: int
+        Expected number of digits in mask.
+    '''
+
+    assert(n_options == 2 or n_options == 3)
+
+    max_value = 7 if n_options == 3 else 1
+    if not re.search(f"^[0-{str(max_value)}]+$", mask):
+        LOGGER.error(f'Bit mask digits must be between 0 and {str(max_value)}!')
+        return False
+
+    if len(mask) != n_digits:
+        LOGGER.error(f'Bit mask must be {n_digits} digits!')
+        return False
+
+    return True
+
+
+def parse_bitmask_options(mask, digit_names, options):
+    '''
+    Parse table option bitmask.
+
+    Parameters
+    ----------
+    mask: str
+        Bit mask.
+    digit_names tuple:
+        A tuple with the name to use for each digit in the mask.
+    options: tuple
+        A tuple with a length of 3 mapping bit values to options.
+    '''
+
+    assert len(digit_names) == len(mask)
+    assert len(options) == 3
+
+    def _parse_bitmask(mask):
+        n_digits = len(mask)
+        mask_a = [int(c) for c in mask]
+        for digit in mask_a:
+            yield [bool(digit & (1 << i)) for i in range(3)]
+
+    ret = dict()
+    for key, value in zip(digit_names, _parse_bitmask(mask))):
+        ret[key] = dict(zip(options, value))
+    return ret
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate batch correction rmd report.')
 
@@ -456,7 +586,7 @@ def main():
     table_args = parser.add_argument_group('Output tables',
                      'The tsv files to print are specified by a 2 digit bit mask. '
                      'The first digit is for the wide formated report, and the second digit is for '
-                     'the long formated report. An integer values is assigned for each stage in '
+                     'the long formated report. An integer between 0 and 4 is assigned for each stage in '
                      'the normalization process. 0 for no report, 1 is for unnormalized, 2 is for '
                      'normalized, and 4 is for batch corrected.')
 
@@ -466,11 +596,11 @@ def main():
     # A mask of 70 would produce a (1+2+4=7) would produce a unnormalized, normalized, and batch
     # corrected wide tsv file.
 
-    table_args.add_argument('-p', '--precursorTables', type=int, default=40,
+    table_args.add_argument('-p', '--precursorTables', default='40',
                         help='Tables to write for precursors. 40 is the default')
-    table_args.add_argument('-r', '--proteinTables', type=int, default=40,
+    table_args.add_argument('-r', '--proteinTables', default='40',
                             help='Tables to write for proteins. 40 is the default')
-    table_args.add_argument('--metadataTables', type=int, default=10,
+    table_args.add_argument('--metadataTables', default='10',
                             help='Tables to write for metadata. Only 0 or 1 are supported. '
                                  '0 for false, 1 for true. 10 is the default')
 
@@ -482,6 +612,13 @@ def main():
     string_args = {x: getattr(args, x) for x in string_args}
 
     # check args
+    if not validate_bit_mask(args.precursorTables, 3, 2):
+        LOGGER.error('Error parsing --precursorTables')
+    if not validate_bit_mask(args.proteinTables, 3, 2):
+        LOGGER.error('Error parsing --proteinTables')
+    if not validate_bit_mask(args.metadataTables, 2, 2):
+        LOGGER.error('Error parsing --metadataTables')
+
     if not args.skipTests:
         if not test_metadata_variables(args.db, **string_args,
                                        control_values=args.control_values):
@@ -491,6 +628,12 @@ def main():
     if string_args['batch1'] is None:
         string_args['batch1'] = 'project'
 
+    # parse table_args
+    protein_tables = parse_bitmask_options(args.proteinTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
+    precursor_tables = parse_bitmask_options(args.precursorTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
+    metadata_tables = {t_format: bool(int(char)) for t_format, char in zip(('wide', 'long'), args.metadataTables)}
+
+    # generate rmd
     with open(args.ofname, 'w') as outF:
         outF.write(doc_header('{} {}'.format(os.path.basename(sys.argv[0]), ' '.join(sys.argv[1:])),
                               title=args.title))
@@ -527,6 +670,11 @@ def main():
         outF.write(add_header('Protein batch correction PCA', level=1))
         outF.write(pca_plot('protein', color_vars=args.color_vars))
 
+        # Optional output tables
+        # Check if there is at least 1 table to be written.
+        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
+            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables,
+                                            any_precursor_tables=int(args.precursorTables) > 0))
 
 if __name__ == '__main__':
     main()
