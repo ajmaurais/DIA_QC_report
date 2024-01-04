@@ -439,7 +439,7 @@ write.table(dplyr::select({df_name}, {', '.join(row_identifers)},
     return text
 
 
-def write_tables_section(precursor_tables, protein_tables, metadata_tables,
+def write_tables_section(precursor_tables, protein_tables, # metadata_tables,
                          any_precursor_tables=True):
     text = add_header('TSV files generated:', level=1)
 
@@ -525,7 +525,7 @@ def parse_bitmask_options(mask, digit_names, options):
             yield [bool(digit & (1 << i)) for i in range(3)]
 
     ret = dict()
-    for key, value in zip(digit_names, _parse_bitmask(mask))):
+    for key, value in zip(digit_names, _parse_bitmask(mask)):
         ret[key] = dict(zip(options, value))
     return ret
 
@@ -600,9 +600,9 @@ def main():
                         help='Tables to write for precursors. 40 is the default')
     table_args.add_argument('-r', '--proteinTables', default='40',
                             help='Tables to write for proteins. 40 is the default')
-    table_args.add_argument('--metadataTables', default='10',
-                            help='Tables to write for metadata. Only 0 or 1 are supported. '
-                                 '0 for false, 1 for true. 10 is the default')
+    # table_args.add_argument('--metadataTables', default='10'),
+    #                         help='Tables to write for metadata. Only 0 or 1 are supported. '
+    #                              '0 for false, 1 for true. 10 is the default')
 
     parser.add_argument('db', help='Path to batch database.')
     args = parser.parse_args()
@@ -616,8 +616,8 @@ def main():
         LOGGER.error('Error parsing --precursorTables')
     if not validate_bit_mask(args.proteinTables, 3, 2):
         LOGGER.error('Error parsing --proteinTables')
-    if not validate_bit_mask(args.metadataTables, 2, 2):
-        LOGGER.error('Error parsing --metadataTables')
+    # if not validate_bit_mask(args.metadataTables, 2, 2):
+    #     LOGGER.error('Error parsing --metadataTables')
 
     if not args.skipTests:
         if not test_metadata_variables(args.db, **string_args,
@@ -631,7 +631,7 @@ def main():
     # parse table_args
     protein_tables = parse_bitmask_options(args.proteinTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     precursor_tables = parse_bitmask_options(args.precursorTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
-    metadata_tables = {t_format: bool(int(char)) for t_format, char in zip(('wide', 'long'), args.metadataTables)}
+    # metadata_tables = {t_format: bool(int(char)) for t_format, char in zip(('wide', 'long'), args.metadataTables)}
 
     # generate rmd
     with open(args.ofname, 'w') as outF:
@@ -672,8 +672,9 @@ def main():
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
-        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
-            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables,
+        # if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
+        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables)]) > 0:
+            outF.write(write_tables_section(precursor_tables, protein_tables, # metadata_tables,
                                             any_precursor_tables=int(args.precursorTables) > 0))
 
 if __name__ == '__main__':
