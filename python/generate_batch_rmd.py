@@ -340,9 +340,9 @@ def cv_plot(control_values = None):
         text += '''\n# control sample values specified by --controlValues
 control.values <- c('{}')'''.format("', '".join(control_values))
         text += '''
-    control.reps <- dat.metadata[dat.metadata[[control.key]] %in% control.values,] %>%
-        dplyr::select(replicate, all_of(control.key))
-    control.reps[[control.key]] <- factor(control.reps[[control.key]])\n'''
+control.reps <- dat.metadata[dat.metadata[[control.key]] %in% control.values,] %>%
+    dplyr::select(replicate, all_of(control.key))
+control.reps[[control.key]] <- factor(control.reps[[control.key]])\n'''
 
         filter_text = '''dplyr::filter(replicate %in% control.reps$replicate) %>%
     dplyr::left_join(control.reps, by='replicate') %>%\n'''
@@ -443,7 +443,7 @@ def write_tables_section(precursor_tables, protein_tables, # metadata_tables,
                          any_precursor_tables=True):
     text = add_header('TSV files generated:', level=1)
 
-    text += r_block_header('write_tables', message=True)
+    text += '\n' + r_block_header('write_tables', message=True)
     text += '\n\n'
 
     if any_precursor_tables:
@@ -513,6 +513,12 @@ def parse_bitmask_options(mask, digit_names, options):
         A tuple with the name to use for each digit in the mask.
     options: tuple
         A tuple with a length of 3 mapping bit values to options.
+
+    Return
+    ------
+    ret: dict
+        A dictionary where the keys are the digit_names and values are
+        dictaries mapping options to booleans if their bit was set.
     '''
 
     assert len(digit_names) == len(mask)

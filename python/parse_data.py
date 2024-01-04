@@ -71,6 +71,7 @@ CREATE TABLE sampleMetadata (
     annotationKey TEXT NOT NULL,
     annotationValue TEXT,
     annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
+    PRIMARY KEY (replicateId, annotationKey),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
 )
 ''',
@@ -105,7 +106,8 @@ CREATE TABLE peptideToProtein (
     proteinId INTEGER NOT NULL,
     modifiedSequence VARCHAR(200) NOT NULL,
     PRIMARY KEY (modifiedSequence, proteinId),
-    FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
+    FOREIGN KEY (proteinId) REFERENCES proteins(proteinId),
+    FOREIGN KEY (modifiedSequence) REFERENCES precursors(modifiedSequence)
 )''']
 
 PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
