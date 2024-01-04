@@ -27,11 +27,11 @@ RUN cd /code/quarto && \
 # install python dependencies
 COPY directlfq /code/directlfq
 COPY pyDIAUtils /code/pyDIAUtils
-RUN pip install pandas matplotlib jupyter scikit-learn && \
+RUN pip install jsonschema pandas matplotlib jupyter && \
     cd /code/directlfq && pip install . && \
+    cd /code/pyDIAUtils && pip install . && \
     pip cache purge && \
-    cd /code && rm -rf /code/directlfq && \
-    cd /code/pyDIAUtils && pip install .
+    cd /code && rm -rf /code/directlfq /code/pyDIAUtils
 
 # add python executables
 COPY python/*.py /code/DIA_QC_report/python
