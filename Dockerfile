@@ -26,10 +26,12 @@ RUN cd /code/quarto && \
 
 # install python dependencies
 COPY directlfq /code/directlfq
+COPY pyDIAUtils /code/pyDIAUtils
 RUN pip install pandas matplotlib jupyter scikit-learn && \
     cd /code/directlfq && pip install . && \
     pip cache purge && \
-    cd /code && rm -rf /code/directlfq
+    cd /code && rm -rf /code/directlfq && \
+    cd /code/pyDIAUtils && pip install .
 
 # add python executables
 COPY python/*.py /code/DIA_QC_report/python

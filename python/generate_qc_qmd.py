@@ -96,10 +96,10 @@ import numpy as np
 import pandas as pd
 
 sys.path.append('%s')
-from std_peptide_rt_plot import peptide_rt_plot
-from bar_chart import bar_chart
-from histogram import histogram, box_plot
-from pca_plot import pc_matrix, pca_plot, convert_string_cols
+from pyDIAUtils.std_peptide_rt_plot import peptide_rt_plot
+from pyDIAUtils.bar_chart import bar_chart
+from pyDIAUtils.histogram import histogram, box_plot
+from pyDIAUtils.pca_plot import pc_matrix, pca_plot, convert_string_cols
 
 conn = sqlite3.connect('%s')
 ```\n\n''' % (python_block_header(stack()[0][3]), python_dir, db_path)
@@ -233,50 +233,50 @@ df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
 # actually do pc analysis
 pc, pc_var = pc_matrix(df_wide)
 
-meta_values = {'gender': 'discrete', 'vital_status': 'discrete',
-               'tumor_grade': 'discrete', 'year_of_birth': 'continuous'}
+# meta_values = {'gender': 'discrete', 'vital_status': 'discrete',
+#                'tumor_grade': 'discrete', 'year_of_birth': 'continuous'}
 
 # check if metadata table exists in db
-cur = conn.cursor()
-cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="metadata"')
-table = cur.fetchall()
-
-metadata_length = 0
-if len(table) > 0:
-    cur = conn.cursor()
-    cur.execute('SELECT COUNT(*) FROM metadata')
-    metadata_length = cur.fetchall()[0][0]
+# cur = conn.cursor()
+# cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="metadata"')
+# table = cur.fetchall()
+# 
+# metadata_length = 0
+# if len(table) > 0:
+#     cur = conn.cursor()
+#     cur.execute('SELECT COUNT(*) FROM sampleMetadata')
+#     metadata_length = cur.fetchall()[0][0]
 
 acquired_ranks = df_pc[["replicateId", "acquisition_number"]].drop_duplicates()
 acquired_ranks = pd.DataFrame(acquired_ranks['acquisition_number'], index=acquired_ranks['replicateId'])
 
 # add metadata to pc matrix
-if metadata_length > 0:
-    METADATA_QUERY = 'SELECT replicateId, annotationKey as columns, annotationValue FROM metadata WHERE annotationKey IN ("{}")'.format('", "'.join(meta_values.keys()))
-
-    # get metadata labels for pca plot
-    metadata_df = pd.read_sql(METADATA_QUERY, conn)
-    metadata = metadata_df.pivot(index="replicateId", columns="columns", values="annotationValue")
-    metadata = acquired_ranks.join(metadata)
-    meta_values['acquisition_number'] = 'continuous'
-    metadata = convert_string_cols(metadata)
-
-    # join metadata to pc matrix
-    pc = pc.join(metadata)
-    for label_name, label_type in meta_values.items():
-        if label_type == 'discrete':
-            if any(pc[label_name].apply(pd.isna)):
-                warnings.warn('Missing label values!', Warning)
-            pc[label_name] = pc[label_name].apply(str)
-        elif label_type == 'continuous':
-            if any(pc[label_name].apply(pd.isna)):
-                raise RuntimeError('Cannot have missing label values in continuous scale!')
-        else:
-            raise RuntimeError(f'"{label_type}" is an unknown label_type!')
-
-else:
-    meta_values = {'acquisition_number': 'continuous'}
-    pc = pc.join(acquired_ranks)
+# if metadata_length > 0:
+#     METADATA_QUERY = 'SELECT replicateId, annotationKey as columns, annotationValue FROM sampleMetadata WHERE annotationKey IN ("{}")'.format('", "'.join(meta_values.keys()))
+# 
+#     # get metadata labels for pca plot
+#     metadata_df = pd.read_sql(METADATA_QUERY, conn)
+#     metadata = metadata_df.pivot(index="replicateId", columns="columns", values="annotationValue")
+#     metadata = acquired_ranks.join(metadata)
+#     meta_values['acquisition_number'] = 'continuous'
+#     metadata = convert_string_cols(metadata)
+# 
+#     # join metadata to pc matrix
+#     pc = pc.join(metadata)
+#     for label_name, label_type in meta_values.items():
+#         if label_type == 'discrete':
+#             if any(pc[label_name].apply(pd.isna)):
+#                 warnings.warn('Missing label values!', Warning)
+#             pc[label_name] = pc[label_name].apply(str)
+#         elif label_type == 'continuous':
+#             if any(pc[label_name].apply(pd.isna)):
+#                 raise RuntimeError('Cannot have missing label values in continuous scale!')
+#         else:
+#             raise RuntimeError(f'"{label_type}" is an unknown label_type!')
+# 
+# else:
+meta_values = {'acquisition_number': 'continuous'}
+pc = pc.join(acquired_ranks)
 
 for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
     pca_plot(pc, label_name, pc_var, label_type=label_type, dpi=%i)
