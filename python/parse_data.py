@@ -673,7 +673,6 @@ def check_duplicate_precursors(precursors, mode):
         selections = non_unique[non_unique['UserSetTotal']]
         non_unique_len = len(selections.index)
         selections = selections[~selections.index.duplicated(keep='first')]
-        # ret = ret[keep_cols].merge(selections, how='left', left_index=True, right_index=True)
 
         if non_unique_len != len(selections.index):
             LOGGER.warning(f'After selecing precursors with user set peak boundries, '
@@ -698,13 +697,11 @@ def check_duplicate_precursors(precursors, mode):
                     options.append([f'{i})', row.proteinName, name[1], str(name[2]), str(row.totalAreaFragment)])
                     if have_user_set_col:
                         options[-1].append(str(row.UserSetTotal))
-
                 col_widths = [max([len(options[row][col]) for row in range(len(options))]) for col in range(len(options[0]))]
 
+                # write precursor options
                 sys.stdout.write(f'Choose precursor ({group_i + 1} of {n_groups})\n')
                 sys.stdout.write(f'Replicate: "{name[0]}"\n')
-
-                # write precursor options
                 for row in options:
                     sys.stdout.write('  {}\n'.format('  '.join(row[col].ljust(col_widths[col]) for col in range(len(row)))))
 
@@ -716,14 +713,15 @@ def check_duplicate_precursors(precursors, mode):
                         break
                 sys.stdout.write('Invalid choice!\n')
             selections.append(group.iloc[sele_int])
-            # ret = pd.concat([ret, group.iloc[[sele_int]]])
 
         selections = pd.DataFrame(selections)
         selections.index = selections.index.set_names(key_cols)
-        # selections = selections.set_index(keys=key_cols)
 
+    # overwrite duplicate precursors with selections
     non_unique = non_unique[keep_cols].merge(selections[PRECURSOR_QUALITY_NUMERIC_COLUMNS],
                                              how='left', left_index=True, right_index=True)
+    
+    # Merge duplicates back into main dataframe
     ret = pd.concat([unique, non_unique])
     ret = ret.reset_index()
 
