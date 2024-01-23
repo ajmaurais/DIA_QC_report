@@ -129,9 +129,11 @@ PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'LibraryDotProduct': 'libraryDotProduct',
                                       'IsotopeDotProduct': 'isotopeDotProduct'}
 
-PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['precursorMz', 'averageMassErrorPPM',
-                            'totalAreaFragment', 'totalAreaMs1', 'normalizedArea', 'rt', 'minStartTime',
-                            'maxEndTime', 'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
+PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
+                                     'totalAreaMs1', 'normalizedArea', 'rt', 'minStartTime',
+                                     'maxEndTime', 'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
+
+PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + PRECURSOR_QUALITY_NUMERIC_COLUMNS
 
 REPLICATE_QUALITY_REQUIRED_COLUMNS = {'Replicate': 'replicate',
                                       'AcquiredTime': 'acquiredTime',
@@ -211,7 +213,7 @@ class Dtype(Enum):
         if FLOAT_RE.search(s):
             return Dtype.FLOAT
         return Dtype.STRING
-    
+
 
 def read_metadata(fname, metadata_format=None):
     '''
@@ -252,11 +254,11 @@ def read_metadata(fname, metadata_format=None):
 
     df = pd.DataFrame(data)
     df['Replicate'] = df['Replicate'].apply(lambda x: os.path.splitext(x)[0])
-    
+
     # pivot longer
     df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
                  value_vars=[x for x in list(df.columns) if x != 'Replicate'])
-    
+
     # determine annotationValue types
     df['annotationType'] = df['annotationValue'].apply(lambda x: Dtype.infer_type(x))
     df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
@@ -607,7 +609,7 @@ def check_duplicate_precursors(precursors, mode):
 
     '''
 
-    if mode not in ['e', 'm', 'i']:
+    if mode not in DUPLICATE_PRECURSOR_CHOICES:
         raise ValueError(f'"{mode}" is an invlaid mode!')
 
     LOGGER.info('Checking that all precursors are unique...')
@@ -630,23 +632,26 @@ def check_duplicate_precursors(precursors, mode):
 
     LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursors!')
 
+    # If there duplicate precursors return None
     if mode == 'e':
         return None
 
+    precursors = precursors.set_index(keys=key_cols)
+    keep_cols = [x for x in precursors.columns if x not in PRECURSOR_QUALITY_NUMERIC_COLUMNS]
+
+    # Select first precursor
     if mode == 'f':
         LOGGER.warning(f'Selecting first occurance of duplicate precursors...')
-        areas = ret.groupby(key_cols)['totalAreaFragment'].apply(lambda x: x.iloc[0])
-        ret = precursors.set_index(key_cols)
-        ret = ret.merge(ret[[x for x in ret.columns if x != 'totalAreaFragment']], areas,
-                        left_index=True, right_index=True)
+        areas = precursors[PRECURSOR_QUALITY_NUMERIC_COLUMNS].loc[~precursors.index.duplicated()]
+
+        ret = precursors[keep_cols].merge(areas, how='left', left_index=True, right_index=True)
         return ret.reset_index()
 
-    precursors = precursors.set_index(keys=key_cols)
     counts = unique_precursors.groupby(key_cols).apply(lambda x: len(x))
-
-    unique = precursors[precursors.index.isin(counts[counts == 1].index)]
     non_unique = precursors[precursors.index.isin(counts[counts > 1].index)]
+    unique = precursors[precursors.index.isin(counts[counts == 1].index)]
 
+    # Use precursor peak areas that were manually set.
     if mode == 'm':
         # check UserSetTotal column
         if 'UserSetTotal' not in precursors.columns:
@@ -658,38 +663,67 @@ def check_duplicate_precursors(precursors, mode):
             return None
 
         # check that each group has at least 1 precursor area that was manually set
-        not_manually_adj = non_unique.groupby(key_cols)['UserSetTotal'].agg(lambda x: any(x))
-        if not all(not_manually_adj):
-            LOGGER.error(f'{sum(~not_manually_adj)} precursor groups have no user set peak boundries!')
+        manually_adj = non_unique.groupby(key_cols)['UserSetTotal'].agg(lambda x: any(x))
+        if not all(manually_adj):
+            LOGGER.error(f'{sum(~manually_adj)} precursor groups have no user set peak boundries!')
             return None
 
         # remove precursors which were not manually set
-        non_unique = non_unique[non_unique['UserSetTotal']]
-        non_unique_len = len(non_unique.index)
-        non_unique = non_unique[~non_unique.index.duplicated(keep='first')]
-        ret = pd.concat([unique, non_unique]).reset_index()
+        selections = non_unique[non_unique['UserSetTotal']]
+        non_unique_len = len(selections.index)
+        selections = selections[~selections.index.duplicated(keep='first')]
+        # ret = ret[keep_cols].merge(selections, how='left', left_index=True, right_index=True)
 
-        if non_unique_len != len(non_unique.index):
-            LOGGER.warning(f'After precursors with user set peak boundries, {non_unique_len - len(non_unique.index)} non-unique precursors remain.')
+        if non_unique_len != len(selections.index):
+            LOGGER.warning(f'After precursors with user set peak boundries, {non_unique_len - len(selections.index)} non-unique precursors remain.')
 
+    # Interactive selection mode
     if mode == 'i':
-        
-        ret = unique
         have_user_set_col = 'UserSetTotal' in non_unique.columns
         groups = non_unique.groupby(key_cols)
         n_groups = len(groups)
+        int_re = re.compile('[0-9]+')
+        selections = []
         for group_i, (name, group) in enumerate(groups):
-            # valid_choice = False
-            # while not valid_choice:
-            sys.stdout.write(f'Choose precursor ({group_i + 1} of {n_groups})\n')
-            sys.stdout.write(f'Replicate: "{name[0]}"\n')
-            sys.stdout.write('\tSelection\tSequence\tCharge\tArea{}\n'.format('' if not have_user_set_col else '\tUserSet'))
-            for i, row in enumerate(group.itertuples()):
-                sys.stdout.write(f'\t{i})\t{name[1]}\t{name[2]}\t{row.totalAreaFragment}')
+            valid_choice = False
+            sele_int = None
+            while not valid_choice:
+                # format table of precursor options
+                options = [['Selection', 'Protein', 'Sequence', 'Charge', 'Area']]
                 if have_user_set_col:
-                    sys.stdout.write(f'\t{row.UserSetTotal}')
-                sys.stdout.write('\n')
-                        
+                    options[-1].append('UserSet')
+                for i, row in enumerate(group.itertuples()):
+                    options.append([f'{i})', row.proteinName, name[1], str(name[2]), str(row.totalAreaFragment)])
+                    if have_user_set_col:
+                        options[-1].append(str(row.UserSetTotal))
+
+                col_widths = [max([len(options[row][col]) for row in range(len(options))]) for col in range(len(options[0]))]
+
+                sys.stdout.write(f'Choose precursor ({group_i + 1} of {n_groups})\n')
+                sys.stdout.write(f'Replicate: "{name[0]}"\n')
+
+                # write precursor options
+                for row in options:
+                    sys.stdout.write('  {}\n'.format('  '.join(row[col].ljust(col_widths[col]) for col in range(len(row)))))
+
+                selection = input('Select: ')
+                if int_re.search(selection):
+                    sele_int = int(selection)
+                    if sele_int >= 0 and sele_int < len(group.index):
+                        valid_choice = True
+                        break
+                sys.stdout.write('Invalid choice!')
+            selections.append(group.iloc[sele_int])
+            # ret = pd.concat([ret, group.iloc[[sele_int]]])
+
+        selections = pd.DataFrame(selections)
+        selections.index = selections.index.set_names(key_cols)
+        # selections = selections.set_index(keys=key_cols)
+
+    non_unique = non_unique[keep_cols].merge(selections[PRECURSOR_QUALITY_NUMERIC_COLUMNS],
+                                             how='left', left_index=True, right_index=True)
+    ret = pd.concat([unique, non_unique])
+    ret = ret.reset_index()
 
     return ret
 
@@ -705,83 +739,83 @@ def check_df_columns(df, required_cols, df_name=None):
     return all_good
 
 
-# def main():
-parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
-                                             'Skyline precursor_quality and replicate_quality reports.')
-parser.add_argument('-m', '--metadata', default=None,
-                    help='Annotations corresponding to each file.')
-parser.add_argument('--metadataFormat', default=None, choices=('json', 'tsv'),
-                    help='Specify metadata file format. '
-                         'By default the format is inferred from the file extension.')
-parser.add_argument('--proteins', default=None,
-                    help='Long formatted protein abundance report. '
-                          'If no protein report is given, proteins are quantified in the database '
-                          'by summing all the precursors belonging to that protein.')
-parser.add_argument('-o', '--ofname', default='data.db3',
-                    help='Output file name. Default is ./data.db3')
-parser.add_argument('--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
-                    help='Behavior if output file already exists. '
-                         'By default the script will exit with an error if the file already exists.')
-parser.add_argument('-d', '--duplicatePrecursors', default='e', choices=DUPLICATE_PRECURSOR_CHOICES,
-                    help="How to handle precursors with the same sequence and charge, but different area. "
-                         "'e' for error, 'm' to use the peak area with user adjusted integration boundries, "
-                         "'f' to select first occurance of duplicate precursors, "
-                         "and 'i' to interactively choose which peak are to use. 'e' is the default.")
-parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
-parser.add_argument('replicates', help='Skyline replicate_report')
-parser.add_argument('precursors', help='Skyline precursor_report')
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
+                                                 'Skyline precursor_quality and replicate_quality reports.')
+    parser.add_argument('-m', '--metadata', default=None,
+                        help='Annotations corresponding to each file.')
+    parser.add_argument('--metadataFormat', default=None, choices=('json', 'tsv'),
+                        help='Specify metadata file format. '
+                             'By default the format is inferred from the file extension.')
+    parser.add_argument('--proteins', default=None,
+                        help='Long formatted protein abundance report. '
+                              'If no protein report is given, proteins are quantified in the database '
+                              'by summing all the precursors belonging to that protein.')
+    parser.add_argument('-o', '--ofname', default='data.db3',
+                        help='Output file name. Default is ./data.db3')
+    parser.add_argument('--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
+                        help='Behavior if output file already exists. '
+                             'By default the script will exit with an error if the file already exists.')
+    parser.add_argument('-d', '--duplicatePrecursors', default='e', choices=DUPLICATE_PRECURSOR_CHOICES,
+                        help="How to handle precursors with the same sequence and charge, but different area. "
+                             "'e' for error, 'm' to use the peak area with user adjusted integration boundries, "
+                             "'f' to select first occurance of duplicate precursors, "
+                             "and 'i' to interactively choose which peak are to use. 'e' is the default.")
+    parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
+    parser.add_argument('replicates', help='Skyline replicate_report')
+    parser.add_argument('precursors', help='Skyline precursor_report')
+    args = parser.parse_args()
 
-# read annotations if applicable
-metadata = None
-if args.metadata is not None:
-    try:
-        metadata = read_metadata(args.metadata, args.metadataFormat)
-    except (ValueError, ValidationError) as e:
-        LOGGER.error(e)
+    # read annotations if applicable
+    metadata = None
+    if args.metadata is not None:
+        try:
+            metadata = read_metadata(args.metadata, args.metadataFormat)
+        except (ValueError, ValidationError) as e:
+            LOGGER.error(e)
+            sys.exit(1)
+
+    # read replicates
+    replicates = pd.read_csv(args.replicates, sep='\t')
+    replicates = replicates.rename(columns=REPLICATE_QUALITY_REQUIRED_COLUMNS)
+    if not check_df_columns(replicates, REPLICATE_QUALITY_REQUIRED_COLUMNS.values(), 'replicates'):
         sys.exit(1)
 
-# read replicates
-replicates = pd.read_csv(args.replicates, sep='\t')
-replicates = replicates.rename(columns=REPLICATE_QUALITY_REQUIRED_COLUMNS)
-if not check_df_columns(replicates, REPLICATE_QUALITY_REQUIRED_COLUMNS.values(), 'replicates'):
-    sys.exit(1)
+    replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.values()]
+    replicates['acquiredRank'] = -1 # this will be updated later
+    LOGGER.info('Done reading replicates table...')
 
-replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.values()]
-replicates['acquiredRank'] = -1 # this will be updated later
-LOGGER.info('Done reading replicates table...')
+    # read precursor quality report
+    precursors = pd.read_csv(args.precursors, sep='\t')
+    LOGGER.info('Done reading precursors table...')
+    precursors = precursors.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
+    if not check_df_columns(precursors, PRECURSOR_QUALITY_REQUIRED_COLUMNS.values(), 'precursors'):
+        sys.exit(1)
 
-# read precursor quality report
-precursors = pd.read_csv(args.precursors, sep='\t')
-LOGGER.info('Done reading precursors table...')
-precursors = precursors.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-if not check_df_columns(precursors, PRECURSOR_QUALITY_REQUIRED_COLUMNS.values(), 'precursors'):
-    sys.exit(1)
+    if (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
+        sys.exit(1)
 
-if not (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
-    sys.exit(1)
+    # read protein quants
+    protein_quants = None
+    if args.proteins:
+        protein_quants = pd.read_csv(args.proteins, sep='\t')
+        protein_quants = protein_quants.rename(columns=PROTEIN_QUANTS_REQUIRED_COLUMNS)
+        if not check_df_columns(protein_quants, PROTEIN_QUANTS_REQUIRED_COLUMNS, 'protein_quants'):
+            sys.exit(1)
 
-# # read protein quants
-# protein_quants = None
-# if args.proteins:
-#     protein_quants = pd.read_csv(args.proteins, sep='\t')
-#     protein_quants = protein_quants.rename(columns=PROTEIN_QUANTS_REQUIRED_COLUMNS)
-#     if not check_df_columns(protein_quants, PROTEIN_QUANTS_REQUIRED_COLUMNS, 'protein_quants'):
-#         sys.exit(1)
-# 
-#     protein_quants = protein_quants[PROTEIN_QUANTS_REQUIRED_COLUMNS.keys()]
-#     LOGGER.info('Done reading proteins table...')
-# 
-# # build database
-# LOGGER.info('Writing database...')
-# if not write_db(args.ofname, replicates, precursors,
-#                 protein_quants=protein_quants, sample_metadata=metadata,
-#                 projectName=args.projectName, overwriteMode=args.overwriteMode):
-#     LOGGER.error('Failed to create database!')
-#     sys.exit(1)
-# LOGGER.info('Done writing database...')
+        protein_quants = protein_quants[PROTEIN_QUANTS_REQUIRED_COLUMNS.keys()]
+        LOGGER.info('Done reading proteins table...')
+
+    # build database
+    LOGGER.info('Writing database...')
+    if not write_db(args.ofname, replicates, precursors,
+                    protein_quants=protein_quants, sample_metadata=metadata,
+                    projectName=args.projectName, overwriteMode=args.overwriteMode):
+        LOGGER.error('Failed to create database!')
+        sys.exit(1)
+    LOGGER.info('Done writing database...')
 
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()
 
