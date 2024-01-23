@@ -150,7 +150,7 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
     return all_good
 
 
-def doc_initialize(db_path, batch1, batch2=None,
+def doc_initialize(db_path, batch1, batch2=None, remove_missing=True,
                    color_vars=None, covariate_vars=None,
                    control_key=None, filter_metadata=False):
     '''
@@ -188,6 +188,12 @@ color.vars <- c('{}')'''.format("', '".join(covariate_vars))
     if control_key:
         text += f"\n\n# control sample key specified by --controlKey\ncontrol.key = '{control_key}'"
 
+    precursor_filter = ''
+    protein_filter = ''
+    if remove_missing:
+        precursor_filter = f'\n{" " * 35}WHERE normalizedArea IS NOT NULL'
+        protein_filter = f'\n{" " * 32}WHERE normalizedAbundance IS NOT NULL'
+        
     text += f'''\n
 # Load necissary tables from database
 conn <- DBI::dbConnect(RSQLite::SQLite(), '{db_path}')
@@ -197,7 +203,7 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       precursorCharge,
                                       totalAreaFragment,
                                       normalizedArea
-                                   FROM precursors p;')
+                                   FROM precursors p{precursor_filter};')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
                                             p.name as protein, ptp.modifiedSequence
                                             FROM  peptideToProtein ptp
@@ -208,7 +214,7 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.abundance,
                                     q.normalizedAbundance
                                 FROM proteinQuants q
-                                LEFT JOIN proteins p ON p.proteinId = q.proteinId;')
+                                LEFT JOIN proteins p ON p.proteinId = q.proteinId{protein_filter};')
 dat.rep <- DBI::dbGetQuery(conn, 'SELECT
                                 r.replicate,
                                 r.replicateId,
@@ -404,7 +410,6 @@ rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
 
 
 def wide_table(p, py_name, r_name, df_name):
-
     row_names = ['protein']
     if p == 'precursor':
         row_names.append('modifiedSequence')
@@ -421,7 +426,6 @@ write.table(rDIAUtils::pivotLonger({df_name}, valuesFrom='{r_name}',
 
 
 def long_table(p, df_name, unnormalized=True, normalized=True, batch_corrected=True):
-
     row_identifers = ['replicate', 'protein']
     quant_value_index = [i for i, value in zip((0, 1, 2), (unnormalized, normalized, batch_corrected)) if value]
     if p == 'precursor':
@@ -550,6 +554,9 @@ def main():
                                'covariate variables.')
     file_settings.add_argument('-m', '--bcMethod', choices=['limma', 'combat'], default='combat',
                                help='Batch correction method. Default is "combat".')
+    file_settings.add_argument('--allPrecursors', default=False, action='store_true', dest='all_precursors',
+                               help="Don't remove precursors and proteins with missing values. "
+                                    "Setting this option could caues an error when the rmd renders.")
 
     batch_vars = parser.add_argument_group('Batch variables',
                      'Batch variables are optional. By default the project column in the replicates '
@@ -646,7 +653,8 @@ def main():
 
         # setup
         outF.write(doc_initialize(args.db, **string_args,
-                                  filter_metadata=args.filter_metadata))
+                                  filter_metadata=args.filter_metadata,
+                                  remove_missing=not args.all_precursors))
 
         # precursor batch correction
         outF.write(batch_correction('precursor', string_args['batch1'],
