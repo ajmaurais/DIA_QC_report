@@ -630,11 +630,12 @@ def check_duplicate_precursors(precursors, mode):
     if n_unique == n_unique_areas:
         return precursors
 
-    LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursors!')
-
     # If there duplicate precursors return None
     if mode == 'e':
+        LOGGER.error(f'There are {n_unique_areas - n_unique} non-unique precursors!')
         return None
+
+    LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursors!')
 
     precursors = precursors.set_index(keys=key_cols)
     keep_cols = [x for x in precursors.columns if x not in PRECURSOR_QUALITY_NUMERIC_COLUMNS]
@@ -675,7 +676,8 @@ def check_duplicate_precursors(precursors, mode):
         # ret = ret[keep_cols].merge(selections, how='left', left_index=True, right_index=True)
 
         if non_unique_len != len(selections.index):
-            LOGGER.warning(f'After precursors with user set peak boundries, {non_unique_len - len(selections.index)} non-unique precursors remain.')
+            LOGGER.warning(f'After selecing precursors with user set peak boundries, '
+                           f'{non_unique_len - len(selections.index)} non-unique precursors remain.')
 
     # Interactive selection mode
     if mode == 'i':
@@ -712,7 +714,7 @@ def check_duplicate_precursors(precursors, mode):
                     if sele_int >= 0 and sele_int < len(group.index):
                         valid_choice = True
                         break
-                sys.stdout.write('Invalid choice!')
+                sys.stdout.write('Invalid choice!\n')
             selections.append(group.iloc[sele_int])
             # ret = pd.concat([ret, group.iloc[[sele_int]]])
 
