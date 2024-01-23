@@ -5,7 +5,6 @@ import sqlite3
 import os
 import logging
 from datetime import datetime
-import re
 from multiprocessing import cpu_count
 
 import numpy as np
@@ -105,6 +104,7 @@ def main():
         FROM precursors p
         LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence; ''',
         conn)
+    LOGGER.info('Finished reading precursors.')
 
     df['ion'] = df['modifiedSequence'] + '_' + df['precursorCharge'].astype(str)
     precursor_ids = df[['ion', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
@@ -112,8 +112,25 @@ def main():
 
     REP_COLUMN_NAME = 'replicateId'
 
+    # set zero areas to lowest non-zero value
+    def zero_to_min(group):
+        min_non_zero = min(group[group > 0])
+        group[group == 0] = min_non_zero
+        return group
+    df = df.set_index(keys=[REP_COLUMN_NAME, 'protein', 'ion'])
+    df['totalAreaFragment'] = df.groupby('replicateId')['totalAreaFragment'].apply(zero_to_min).droplevel(0)
+    df = df.reset_index()
+
     # pivot wider
     input_df = df.pivot(index=['protein', 'ion'], columns=REP_COLUMN_NAME, values='totalAreaFragment')
+
+    # remove missing rows
+    n_not_missing = len(input_df.index)
+    input_df = input_df[~input_df.apply(lambda x: any(x.isnull().values), axis = 1)]
+    keep_precursors = set([x[1] for x in input_df.index.tolist()])
+    if len(input_df.index) < n_not_missing:
+        LOGGER.warning(f'Removed {n_not_missing - len(input_df.index):,} of {n_not_missing:,} precursors with missing values.')
+        LOGGER.warning(f'{len(input_df.index):,} precursors without missing values remain.')
 
     # format input_df for DirectLFQ normalization
     input_df.columns.name = None
@@ -122,8 +139,6 @@ def main():
     input_df = lfqutils.remove_allnan_rows_input_df(input_df)
     input_df = dlfq_norm(input_df, num_samples_quadratic=10).complete_dataframe
 
-    # input_df.to_csv('/home/ajm/code/DIA_QC_report/testData/normalize_db/input_df.tsv', sep='\t', index=True)
-     
     # Do DirectLFQ normalization
     LOGGER.info('Running DirectLFQ normalization.')
     protein_df, _ = lfqprot_estimation.estimate_protein_intensities(input_df,
@@ -137,6 +152,9 @@ def main():
     protein_df = protein_df.melt(id_vars='protein', value_name='normalizedArea', var_name='replicateId')
     
     
+    # remove precursors with missing values
+    df = df[df['ion'].apply(lambda x: x in keep_precursors)]
+
     # median normalize precursor quants
     ion_df = median_normalize(df[[REP_COLUMN_NAME, 'ion', 'totalAreaFragment']].drop_duplicates(),
                               [REP_COLUMN_NAME], 'totalAreaFragment')

@@ -720,7 +720,7 @@ def check_duplicate_precursors(precursors, mode):
     # overwrite duplicate precursors with selections
     non_unique = non_unique[keep_cols].merge(selections[PRECURSOR_QUALITY_NUMERIC_COLUMNS],
                                              how='left', left_index=True, right_index=True)
-    
+
     # Merge duplicates back into main dataframe
     ret = pd.concat([unique, non_unique])
     ret = ret.reset_index()
