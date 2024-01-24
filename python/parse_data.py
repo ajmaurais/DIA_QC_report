@@ -760,7 +760,7 @@ def main():
                         help="How to handle precursors with the same sequence and charge, but different area. "
                              "'e' for error, 'm' to use the peak area with user adjusted integration boundaries, "
                              "'f' to select first occurrence of duplicate precursors, "
-                             "and 'i' to interactively choose which peak are to use. 'e' is the default.")
+                             "and 'i' to interactively choose which peak area to use. 'e' is the default.")
     parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
     parser.add_argument('replicates', help='Skyline replicate_report')
     parser.add_argument('precursors', help='Skyline precursor_report')
