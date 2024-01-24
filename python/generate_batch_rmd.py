@@ -21,7 +21,7 @@ PRECURSOR_METHOD_NAMES = ('totalAreaFragment', 'normalizedArea', 'normalizedArea
 PROTEIN_METHOD_NAMES = ('abundance', 'normalizedAbundance', 'normalizedAbundance.bc')
 
 def doc_header(command, title=DEFAULT_TITLE):
-    header='''<!-- This document was automatically generated. Command used to genrate document: -->
+    header='''<!-- This document was automatically generated. Command used to generate document: -->
 <!-- %s -->\n
 ---
 title: "%s"
@@ -237,7 +237,7 @@ DBI::dbDisconnect(conn)\n'''
 dat.meta.l <- dat.meta.l[dat.meta.l$annotationKey %in% c({filter_vars}),]\n'''
 
     text += '''
-# generate wide formated dat.meta from long formated dat.meta.l
+# generate wide formatted dat.meta from long formatted dat.meta.l
 dat.meta <- dat.meta.l %>% dplyr::select(replicateId, annotationKey, annotationValue) %>%
     tidyr::pivot_wider(names_from='annotationKey', values_from='annotationValue')
 
@@ -556,7 +556,7 @@ def main():
                                help='Batch correction method. Default is "combat".')
     file_settings.add_argument('--allPrecursors', default=False, action='store_true', dest='all_precursors',
                                help="Don't remove precursors and proteins with missing values. "
-                                    "Setting this option could caues an error when the rmd renders.")
+                                    "Setting this option could cause an error when the rmd renders.")
 
     batch_vars = parser.add_argument_group('Batch variables',
                      'Batch variables are optional. By default the project column in the replicates '
@@ -582,7 +582,7 @@ def main():
 
     control_vars = parser.add_argument_group('Control sample variables',
                         'Specify a metadata variable to indicate whether a replicate is a control. '
-                        'These key, value pairs will be used to seperate the pannels of the control CV plot. '
+                        'These key, value pairs will be used to separate the panels of the control CV plot. '
                         'If --controlKey is specified, at least one value must be specified with --addControlValue')
 
     control_vars.add_argument('--controlKey', default=None, dest='control_key',
@@ -598,12 +598,12 @@ def main():
 
     table_args = parser.add_argument_group('Output tables',
                      'The tsv files to print are specified by a 2 digit bit mask. '
-                     'The first digit is for the wide formated report, and the second digit is for '
-                     'the long formated report. An integer between 0 and 4 is assigned for each stage in '
+                     'The first digit is for the wide formatted report, and the second digit is for '
+                     'the long formatted report. An integer between 0 and 4 is assigned for each stage in '
                      'the normalization process. 0 for no report, 1 is for unnormalized, 2 is for '
                      'normalized, and 4 is for batch corrected.')
 
-    # Some of these examples might be good to include in the help, but is is already alot of text.
+    # Some of these examples might be good to include in the help, but is is already a lot of text.
     # For example, a mask of 42 would produce a wide batch corrected and long normalized tsv file.
     # A mask of 30 (1+2=3) would produce both a unnormalized and normalized wide tsv file.
     # A mask of 70 would produce a (1+2+4=7) would produce a unnormalized, normalized, and batch

@@ -589,9 +589,9 @@ def check_duplicate_precursors(precursors, mode):
     '''
     Check that all precursors are unique.
     The same precursor could be assigned to multiple proteins in Skyline.
-    When you manually adjust the peak integration boundries for a precursor, Skyline
-    will only adjust the integration boundries for the precursor you are viewing.
-    If the precursor is assigned to more than one protein the boundries will not be synced.
+    When you manually adjust the peak integration boundaries for a precursor, Skyline
+    will only adjust the integration boundaries for the precursor you are viewing.
+    If the precursor is assigned to more than one protein the boundaries will not be synced.
     It is not possible to store duplicate precursors in the database which have different peak
     areas. We must ask the user to specify how to deal with duplicate precursors if they exist.
 
@@ -610,7 +610,7 @@ def check_duplicate_precursors(precursors, mode):
     '''
 
     if mode not in DUPLICATE_PRECURSOR_CHOICES:
-        raise ValueError(f'"{mode}" is an invlaid mode!')
+        raise ValueError(f'"{mode}" is an invalid mode!')
 
     LOGGER.info('Checking that all precursors are unique...')
 
@@ -642,7 +642,7 @@ def check_duplicate_precursors(precursors, mode):
 
     # Select first precursor
     if mode == 'f':
-        LOGGER.warning(f'Selecting first occurance of duplicate precursors...')
+        LOGGER.warning(f'Selecting first occurrence of duplicate precursors...')
         areas = precursors[PRECURSOR_QUALITY_NUMERIC_COLUMNS].loc[~precursors.index.duplicated()]
 
         ret = precursors[keep_cols].merge(areas, how='left', left_index=True, right_index=True)
@@ -656,7 +656,7 @@ def check_duplicate_precursors(precursors, mode):
     if mode == 'm':
         # check UserSetTotal column
         if 'UserSetTotal' not in precursors.columns:
-            LOGGER.error('Need "UserSetTotal" column to select precursors with user set peak boundries!')
+            LOGGER.error('Need "UserSetTotal" column to select precursors with user set peak boundaries!')
             return None
         LOGGER.info('Found "UserSetTotal" column.')
         if precursors.dtypes['UserSetTotal'] != 'bool':
@@ -666,7 +666,7 @@ def check_duplicate_precursors(precursors, mode):
         # check that each group has at least 1 precursor area that was manually set
         manually_adj = non_unique.groupby(key_cols)['UserSetTotal'].agg(lambda x: any(x))
         if not all(manually_adj):
-            LOGGER.error(f'{sum(~manually_adj)} precursor groups have no user set peak boundries!')
+            LOGGER.error(f'{sum(~manually_adj)} precursor groups have no user set peak boundaries!')
             return None
 
         # remove precursors which were not manually set
@@ -675,7 +675,7 @@ def check_duplicate_precursors(precursors, mode):
         selections = selections[~selections.index.duplicated(keep='first')]
 
         if non_unique_len != len(selections.index):
-            LOGGER.warning(f'After selecing precursors with user set peak boundries, '
+            LOGGER.warning(f'After selecting precursors with user set peak boundaries, '
                            f'{non_unique_len - len(selections.index)} non-unique precursors remain.')
 
     # Interactive selection mode
@@ -758,8 +758,8 @@ def main():
                              'By default the script will exit with an error if the file already exists.')
     parser.add_argument('-d', '--duplicatePrecursors', default='e', choices=DUPLICATE_PRECURSOR_CHOICES,
                         help="How to handle precursors with the same sequence and charge, but different area. "
-                             "'e' for error, 'm' to use the peak area with user adjusted integration boundries, "
-                             "'f' to select first occurance of duplicate precursors, "
+                             "'e' for error, 'm' to use the peak area with user adjusted integration boundaries, "
+                             "'f' to select first occurrence of duplicate precursors, "
                              "and 'i' to interactively choose which peak are to use. 'e' is the default.")
     parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
     parser.add_argument('replicates', help='Skyline replicate_report')
