@@ -53,6 +53,21 @@ def r_block_header(label, echo=False, warning=False, message=False,
     return text + '}'
 
 
+def ggsave(plot_path, plot_name, dim):
+    '''
+    Add ggsave line.
+
+    plot_path: str
+        Plot file path.
+    plot_name: str
+        The name of the plot variable.
+    dim: tuple
+        Plot dimensions. Tuple of 2 integers. (height, width)
+    '''
+    assert isinstance(dim, tuple) and len(dim) == 2 and all(isinstance(x, (int, float)) for x in dim)
+    return f"ggsave('{plot_path}', {plot_name}, height={dim[0]}, width={dim[1]})\n"
+
+
 def test_metadata_variables(db_path, batch1=None, batch2=None,
                             covariate_vars=None, color_vars=None,
                             control_key=None, control_values=None):
@@ -305,12 +320,15 @@ dat.{p}.l <- dat.{p} %>%
     return text
 
 
-def precursor_norm_plot():
+def precursor_norm_plot(plot_file_path=None):
     '''
     Generate precursor normalization box plot.
     '''
 
-    text = '\n' + r_block_header('area_dist_plot', fig_width=8, fig_height=10)
+    fig_width = 8
+    fig_height = 10
+
+    text = '\n' + r_block_header('area_dist_plot', fig_width=fig_width, fig_height=fig_height)
     text += '''\n
 dat.p <- dat.precursor.l %>%
     dplyr::left_join(dplyr::select(dat.metadata, replicate, acquiredRank, all_of(batch1)))
@@ -327,16 +345,20 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank, color=g
     xlab('Acquisition number') +
     theme_bw() +
     theme(panel.grid = element_blank(),
-          legend.position = 'top')
+          legend.position = 'top')\n'''
 
-p.norm\n```\n\n\n'''
+    if plot_file_path:
+        text += ggsave(plot_file_path, 'p.norm', (fig_height, fig_width))
+
+    text += '\np.norm\n```\n\n\n'
     return text
 
 
-def cv_plot(control_values = None):
+def cv_plot(control_values=None, plot_file_path=None):
 
+    fig_width = 6.5
     fig_height = 1 + 3 * len(control_values) if control_values else 4
-    text = '\n' + r_block_header('cv_dist_plot', fig_width=6.5, fig_height=fig_height) + '\n'
+    text = '\n' + r_block_header('cv_dist_plot', fig_width=fig_width, fig_height=fig_height) + '\n'
 
     # additional text to add if faceting by control samples
     filter_text = ''
@@ -378,13 +400,17 @@ p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
     theme(panel.grid = element_blank(),
           legend.title=element_blank(),
           legend.direction='horizontal',
-          legend.position = 'top')
-\np.cv\n```\n\n\n'''
+          legend.position = 'top')\n'''
+    
+    if plot_file_path:
+        text += ggsave(plot_file_path, 'p.cv', (fig_height, fig_width))
+
+    text += '\np.cv\n```\n\n\n'
 
     return text
 
 
-def pca_plot(p, color_vars = None):
+def pca_plot(p, color_vars=None, plot_file_path=None):
 
     n_methods = 3
 
@@ -402,10 +428,14 @@ def pca_plot(p, color_vars = None):
                                                      'value', rowsName='{p}', columnsName='replicate')'''
     text += '\n}\n\n'
     text += f'''names({p}.methods) <- c('Unnormalized', '{norm_method} Normalized', 'Batch corrected')
-rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
-                        color.cols=c('Acquisition\\nnumber'='acquiredRank', 'Batch'=batch1{color_vars_text}),
-                        dat.metadata=dat.metadata)
-```\n\n\n'''
+pca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
+    color.cols=c('Acquisition\\nnumber'='acquiredRank', 'Batch'=batch1{color_vars_text}),
+    dat.metadata=dat.metadata)\n'''
+
+    if plot_file_path:
+        text += ggsave(plot_file_path, f'pca.{p}', (fig_height, fig_width))
+
+    text += f'\npca.{p}\n```\n\n\n'
 
     return text
 
@@ -505,7 +535,7 @@ def validate_bit_mask(mask, n_options=3, n_digits=2):
         Expected number of digits in mask.
     '''
 
-    assert(n_options == 2 or n_options == 3)
+    assert n_options in (2, 3)
 
     max_value = 7 if n_options == 3 else 1
     if not re.search(f"^[0-{str(max_value)}]+$", mask):
@@ -570,6 +600,8 @@ def main():
     file_settings.add_argument('--allPrecursors', default=False, action='store_true', dest='all_precursors',
                                help="Don't remove precursors and proteins with missing values. "
                                     "Setting this option could cause an error when the rmd renders.")
+    file_settings.add_argument('--savePlots', default=None, dest='plot_ext',
+                               help='Save all plots to file with specified extension.')
 
     batch_vars = parser.add_argument_group('Batch variables',
                      'Batch variables are optional. By default the project column in the replicates '
@@ -686,19 +718,24 @@ def main():
 
         # precursor normalization plot
         outF.write(add_header('Precursor normalization', level=1))
-        outF.write(precursor_norm_plot())
+        outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.png' if args.plot_ext else None))
 
         # CV distribution plot
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
-        outF.write(cv_plot(control_values=args.control_values))
+        cv_plot_file_path = None
+        if args.plot_ext:
+            cv_plot_file_path = 'plots/{"control_" if args.control_values else ""}cv_dist.{args.plot_ext}'
+        outF.write(cv_plot(control_values=args.control_values, plot_file_path=cv_plot_file_path))
 
         # precursor PCA plot
         outF.write(add_header('Precursor batch correction PCA', level=1))
-        outF.write(pca_plot('precursor', color_vars=args.color_vars))
+        outF.write(pca_plot('precursor', color_vars=args.color_vars,
+                            plot_file_path=f'plots/precursor_pca.{args.plot_ext}' if args.plot_ext else None))
 
         # protein PCA plot
         outF.write(add_header('Protein batch correction PCA', level=1))
-        outF.write(pca_plot('protein', color_vars=args.color_vars))
+        outF.write(pca_plot('protein', color_vars=args.color_vars,
+                            plot_file_path=f'plots/protein_pca.{args.plot_ext}' if args.plot_ext else None))
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
