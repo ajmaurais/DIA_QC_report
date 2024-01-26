@@ -70,7 +70,9 @@ def ggsave(plot_path, plot_name, dim):
 
 def test_metadata_variables(db_path, batch1=None, batch2=None,
                             covariate_vars=None, color_vars=None,
-                            control_key=None, control_values=None):
+                            control_key=None, control_values=None,
+                            exclude_key=None, exclude_values=None,
+                            include_key=None, include_values=None):
     '''
     Test whether it is possible to build a valid query to generate the dat.metadata
     dataframe in the rmd report from the user specified parameters.
@@ -91,6 +93,14 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
         A sampleMetadata annotationKey corresponding to whether a replicate is a control.
     control_values: list
         A list of sampleMetadata annotationValues for each control type.
+    include_key: str
+        A sampleMetadata annotationKey used to include replicates
+    include_values: list
+        A list of sampleMetadata annotationValues to exclude.
+    exclude_key: str
+        A sampleMetadata annotationKey used to exclude replicates
+    exclude_values: list
+        A list of sampleMetadata annotationValues to exclude.
 
     Returns
     -------
@@ -158,6 +168,20 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
 
         else:
             all_good = False
+
+    # Test that control_key exists in metadata table
+    if include_key is not None:
+        if (include_key is not None) != (include_values is not None):
+            LOGGER.error('Must specify both include_key and include_values')
+            conn.close()
+            return False
+
+    # Test that control_key exists in metadata table
+    if exclude_key is not None:
+        if (exclude_key is not None) != (exclude_values is not None):
+            LOGGER.error('Must specify both exclude_key and exclude_values')
+            conn.close()
+            return False
 
     # close db connection
     conn.close()
@@ -636,6 +660,21 @@ def main():
     control_vars.add_argument('--addControlValue', action='append', dest='control_values',
                               help='Add sampleMetadata annotationValue(s) which indicate whether '
                                    'a replicate is a control.')
+
+    filter_vars = parser.add_argument_group('Filter metadata variables',
+                        'Specify metadata variables to use to exclude replicates from batch correction report.')
+
+    filter_vars.add_argument('--filterIncludeKey', default=None, dest='filter_key',
+                             help='sampleMetadata annotationKey that has variables used to include replicates.')
+    filter_vars.add_argument('--addIncludeValue', action='append', dest='include_values',
+                             help='Add sampleMetadata annotationValue(s) which indicate whether '
+                                  'a replicate is a control.')
+
+    filter_vars.add_argument('--filterExcludeKey', default=None, dest='filter_key',
+                             help='sampleMetadata annotationKey that has variables used to exclude replicates.')
+    filter_vars.add_argument('--addExcludeValue', action='append', dest='exclude_values',
+                             help='Add sampleMetadata annotationValue(s) which indicate whether '
+                                  'a replicate is a control.')
 
     parser.add_argument('-s', '--skipTests', default=False, action='store_true',
                         help='Skip tests that batch, color, and covariate variables exist in '
