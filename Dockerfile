@@ -3,22 +3,31 @@ from amazonlinux:latest
 MAINTAINER "Aaron Maurais -- MacCoss Lab"
 
 RUN dnf update && \
-    dnf -y install wget tar unzip pip R-core-devel && \
-    dnf clean all && \
-    mkdir -p /code/DIA_QC_report/python /code/quarto
+    dnf -y install wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
+    dnf clean all
 
 # install rDIAUtils dependencies
-RUN Rscript -e "install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager', 'rmarkdown'), \
-                                 repo='https://ftp.osuosl.org/pub/cran/')" && \
-    Rscript -e "BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE)"
+RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager', 'rmarkdown'), \
+                                                     repo='https://ftp.osuosl.org/pub/cran/'), \
+                                    warning=function(w) stop(w))" && \
+    Rscript -e "withCallingHandlers(BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE), \
+                                    warning=function(w) stop(w))"
 
 # install rDIAUtils R package
 COPY rDIAUtils /code/rDIAUtils
 RUN cd /code/rDIAUtils && \
-    Rscript -e "install.packages('.', type='source', repo=NULL)"
+    Rscript -e "withCallingHandlers(install.packages('.', type='source', repo=NULL), \
+                                    warning=function(w) stop(w))"
  
+# install pandoc
+RUN mkdir -p /code/pandoc && cd /code/pandoc && \
+    wget 'https://github.com/jgm/pandoc/releases/download/3.1.11.1/pandoc-3.1.11.1-linux-amd64.tar.gz' && \
+    tar xvf 'pandoc-3.1.11.1-linux-amd64.tar.gz' && \
+    rm -v 'pandoc-3.1.11.1-linux-amd64.tar.gz' && \
+    ln -s '/code/pandoc/pandoc-3.1.11.1/bin/pandoc' '/usr/local/bin'
+
 # install quarto
-RUN cd /code/quarto && \
+RUN mkdir -p /code/quarto && cd /code/quarto && \
     wget 'https://github.com/quarto-dev/quarto-cli/releases/download/v1.3.433/quarto-1.3.433-linux-amd64.tar.gz' && \
     tar xvf 'quarto-1.3.433-linux-amd64.tar.gz' && \
     rm -v 'quarto-1.3.433-linux-amd64.tar.gz' && \
@@ -28,14 +37,17 @@ RUN cd /code/quarto && \
 # install python dependencies
 COPY directlfq /code/directlfq
 COPY pyDIAUtils /code/pyDIAUtils
-RUN pip install setuptools jsonschema pandas matplotlib jupyter && \
+RUN pip install setuptools jsonschema pyarrow pandas matplotlib jupyter && \
     cd /code/directlfq && pip install . && \
     cd /code/pyDIAUtils && pip install . && \
     pip cache purge && \
     cd /code && rm -rf /code/directlfq /code/pyDIAUtils
 
 # add python executables
-COPY python/*.py /code/DIA_QC_report/python
+COPY python/normalize_db.py /code/DIA_QC_report/python/normalize_db.py
+COPY python/parse_data.py /code/DIA_QC_report/python/parse_data.py
+COPY python/generate_qc_qmd.py /code/DIA_QC_report/python/generate_qc_qmd.py
+COPY python/generate_batch_rmd.py /code/DIA_QC_report/python/generate_batch_rmd.py
 RUN cd /usr/local/bin && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/parse_data.py "$@"' > parse_data && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
