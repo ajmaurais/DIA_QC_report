@@ -316,6 +316,7 @@ dat.p <- dat.precursor.l %>%
     dplyr::left_join(dplyr::select(dat.metadata, replicate, acquiredRank, all_of(batch1)))
 dat.p$method <- factor(dat.p$method, levels=precursor.methods,
                        labels=c('Unnormalized', 'Median Normalized', 'Normalized, Batch Corrected'))
+dat.p$acquiredRank <- as.numeric(as.factor(rank(-dat.p$acquiredRank)))
 
 p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank, color=get(batch1))) +
     facet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top') +
@@ -419,8 +420,7 @@ def wide_table(p, py_name, r_name, df_name):
 write.table(rDIAUtils::pivotLonger({df_name}, valuesFrom='{r_name}',
                                    rowsName=c('{"', '".join(row_names)}'),
                                    columnsName='replicate'),
-            file='{p}s_{py_name}_wide.tsv',
-            sep='\\t', row.names=F, quote=F)\n'''
+            file='{p}s_{py_name}_wide.tsv', sep='\\t', row.names=F, quote=F)\n'''
 
     return text
 
@@ -437,13 +437,12 @@ def long_table(p, df_name, unnormalized=True, normalized=True, batch_corrected=T
     text = f'''\nmessage('Writing {p}s long to: "{p}s_long.tsv"')
 write.table(dplyr::select({df_name}, {', '.join(row_identifers)},
                           {', '.join(quant_values)}),
-            file='{p}s_long.tsv',
-            sep='\\t', row.names=F, quote=F)\n'''
+            file='{p}s_long.tsv', sep='\\t', row.names=F, quote=F)\n'''
 
     return text
 
 
-def write_tables_section(precursor_tables, protein_tables, # metadata_tables,
+def write_tables_section(precursor_tables, protein_tables, metadata_tables,
                          any_precursor_tables=True):
     text = add_header('TSV files generated:', level=1)
 
@@ -451,7 +450,7 @@ def write_tables_section(precursor_tables, protein_tables, # metadata_tables,
     text += '\n\n'
 
     if any_precursor_tables:
-        text += '''dat.precursor.j <- dplyr::left_join(peptideToProtein, dat.precursor,
+        text += '''dat.precursor.j <- dplyr::inner_join(peptideToProtein, dat.precursor,
                                 by='modifiedSequence', relationship='many-to-many')\n'''
 
     # precursor wide tables
@@ -471,6 +470,21 @@ def write_tables_section(precursor_tables, protein_tables, # metadata_tables,
     # protein long tables
     if any(protein_tables['long'].values()):
         text += long_table('protein', 'dat.protein', **protein_tables['long'])
+
+    # metadata tables
+    if metadata_tables['long']:
+        text += '''
+message('Writing metadata long to "metadata_long.tsv"')
+dat.metadata.l <- dplyr::left_join(dat.meta.l, dplyr::select(dat.metadata, replicateId, replicate),
+                                   by='replicateId') %>%
+    dplyr::select(replicate, annotationKey, annotationValue, annotationType)
+write.table(dat.metadata.l, file='metadata_long.tsv', sep='\\t', row.names=F, quote=F)\n'''
+
+    if metadata_tables['wide']:
+        text += '''
+message('Writing metadata wide to "metadata_wide.tsv"')
+write.table(dplyr::select(dat.metadata, -replicateId),
+            file='metadata_wide.tsv', sep='\\t', row.names=F, quote=F)\n'''
 
     text += '\n```\n\n'
 
@@ -529,7 +543,6 @@ def parse_bitmask_options(mask, digit_names, options):
     assert len(options) == 3
 
     def _parse_bitmask(mask):
-        n_digits = len(mask)
         mask_a = [int(c) for c in mask]
         for digit in mask_a:
             yield [bool(digit & (1 << i)) for i in range(3)]
@@ -613,9 +626,9 @@ def main():
                         help='Tables to write for precursors. 40 is the default')
     table_args.add_argument('-r', '--proteinTables', default='40',
                             help='Tables to write for proteins. 40 is the default')
-    # table_args.add_argument('--metadataTables', default='10'),
-    #                         help='Tables to write for metadata. Only 0 or 1 are supported. '
-    #                              '0 for false, 1 for true. 10 is the default')
+    table_args.add_argument('--metadataTables', default='10',
+                            help='Tables to write for metadata. Only 0 or 1 are supported. '
+                                 '0 for false, 1 for true. 10 is the default')
 
     parser.add_argument('db', help='Path to batch database.')
     args = parser.parse_args()
@@ -627,10 +640,13 @@ def main():
     # check args
     if not validate_bit_mask(args.precursorTables, 3, 2):
         LOGGER.error('Error parsing --precursorTables')
+        sys.exit(1)
     if not validate_bit_mask(args.proteinTables, 3, 2):
         LOGGER.error('Error parsing --proteinTables')
-    # if not validate_bit_mask(args.metadataTables, 2, 2):
-    #     LOGGER.error('Error parsing --metadataTables')
+        sys.exit(1)
+    if not validate_bit_mask(args.metadataTables, 2, 2):
+        LOGGER.error('Error parsing --metadataTables')
+        sys.exit(1)
 
     if not args.skipTests:
         if not test_metadata_variables(args.db, **string_args,
@@ -644,7 +660,7 @@ def main():
     # parse table_args
     protein_tables = parse_bitmask_options(args.proteinTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     precursor_tables = parse_bitmask_options(args.precursorTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
-    # metadata_tables = {t_format: bool(int(char)) for t_format, char in zip(('wide', 'long'), args.metadataTables)}
+    metadata_tables = {t_format: bool(int(char)) for t_format, char in zip(('wide', 'long'), args.metadataTables)}
 
     # generate rmd
     with open(args.ofname, 'w') as outF:
@@ -686,10 +702,10 @@ def main():
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
-        # if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
-        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables)]) > 0:
-            outF.write(write_tables_section(precursor_tables, protein_tables, # metadata_tables,
+        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
+            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables,
                                             any_precursor_tables=int(args.precursorTables) > 0))
+
 
 if __name__ == '__main__':
     main()
