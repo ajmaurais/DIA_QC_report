@@ -724,7 +724,7 @@ def main():
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
         cv_plot_file_path = None
         if args.plot_ext:
-            cv_plot_file_path = 'plots/{"control_" if args.control_values else ""}cv_dist.{args.plot_ext}'
+            cv_plot_file_path = f'plots/{"control_" if args.control_values else ""}cv_dist.{args.plot_ext}'
         outF.write(cv_plot(control_values=args.control_values, plot_file_path=cv_plot_file_path))
 
         # precursor PCA plot
