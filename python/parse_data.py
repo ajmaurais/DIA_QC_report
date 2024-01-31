@@ -50,7 +50,6 @@ CREATE TABLE replicates (
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
-    peptide VARCHAR(60),
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,

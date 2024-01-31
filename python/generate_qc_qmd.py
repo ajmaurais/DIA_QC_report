@@ -15,7 +15,6 @@ DEFAULT_DPI = 250
 PEPTIDE_QUERY = '''
 query = \'\'\'SELECT 
     r.acquiredRank,
-    p.peptide,
     p.modifiedSequence,
     p.precursorCharge
 FROM precursors p
@@ -139,7 +138,9 @@ for std in [%s]:
 def missed_cleavages(do_query=True, dpi=DEFAULT_DPI):
     text = '''\n%s\n%s
 # precursor bar chart colored by missed cleavages
-trypsin_re = re.compile('([RK])(?=[^P])')
+trypsin_re = re.compile(r'([RK])(?=[^P])')
+mod_re = re.compile(r'\[[\w+]\]')
+df['peptide'] = df['modifiedSequence'].apply(lambda x: mod_re.sub('', x))
 df['nMissed'] = df['peptide'].apply(lambda x: len(trypsin_re.findall(x)))
 agg = df.groupby(["acquiredRank", "nMissed"])["nMissed"].agg(["count"]).reset_index()
 agg = agg.pivot_table(index='acquiredRank', columns='nMissed', values='count')
