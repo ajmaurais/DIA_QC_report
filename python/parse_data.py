@@ -6,7 +6,7 @@ import json
 import os
 import logging
 from datetime import datetime
-from csv import DictReader as CsvDictReader
+import csv
 import re
 from enum import Enum
 
@@ -14,7 +14,8 @@ import pandas as pd
 from jsonschema import validate, ValidationError
 
 logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
+    level=logging.INFO,
+    format='%(asctime)s - %(filename)s %(funcName)s:%(lineno)d - %(levelname)s: %(message)s'
 )
 LOGGER = logging.getLogger()
 
@@ -223,13 +224,14 @@ def read_metadata(fname, metadata_format=None):
     fname: str
         The path to the metadata file.
     metadata_format: str
-        One of ('tsv', 'json')
+        One of ('tsv', 'csv', 'json')
 
     Returns
     -------
     df: pd.DataFrame
         The sample metadata dataframe.
     '''
+
     if metadata_format:
         _format = metadata_format
     else:
@@ -237,7 +239,28 @@ def read_metadata(fname, metadata_format=None):
 
     if _format == 'tsv':
         with open(fname, 'r') as inF:
-            data = list(CsvDictReader(inF, delimiter='\t'))
+            data = list(csv.DictReader(inF, delimiter='\t'))
+
+    elif _format == 'csv':
+        with open(fname, 'r') as inF:
+            rows = list(csv.reader(inF))
+
+        # check if file is skyline annotations csv
+        if rows[0][0] == 'ElementLocator':
+            headers = ['Replicate'] + [re.sub(r'^annotation_', '', h) for h in rows[0][1:]]
+            new_rows = list()
+            for row in rows:
+                if row[0].startswith('Replicate:/'):
+                    row[0] = re.sub('^Replicate:/', '', row[0])
+                    new_rows.append(row)
+            rows = new_rows
+        elif rows[0][0] == 'Replicate':
+            headers = rows[0]
+        else:
+            raise ValueError('Invalid metadata format!')
+
+        data = [dict(zip(headers, row)) for row in rows]
+
     elif _format == 'json':
         with open(fname, 'r') as inF:
             data = json.load(inF)
@@ -261,7 +284,7 @@ def read_metadata(fname, metadata_format=None):
     # determine annotationValue types
     df['annotationType'] = df['annotationValue'].apply(lambda x: Dtype.infer_type(x))
     df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
-    types=dict()
+    types = dict()
     for annotationKey, group in df.groupby('annotationKey'):
         thisType = max(group['annotationType'].tolist())
         types[annotationKey] = str(Dtype.BOOL if thisType is Dtype.NULL else thisType)
@@ -368,10 +391,12 @@ def _add_index_column(col, index, df_name=None, index_name=None):
     pd.Series: The new column to add to df, or None if there was a missing value in index.
     '''
 
+    ret = col.copy()
+
     # Check that all values in col exist in index
     table_names = '' if df_name is None or index_name is None else f' for {df_name} in {index_name}'
     all_good = True
-    for key in col.drop_duplicates().tolist():
+    for key in ret.drop_duplicates().tolist():
         if key not in index:
             LOGGER.error(f'Missing required value: {key}{table_names}!')
             all_good = False
@@ -380,7 +405,7 @@ def _add_index_column(col, index, df_name=None, index_name=None):
     if not all_good:
         return None
 
-    return col.apply(lambda x: index[x])
+    return ret.apply(lambda x: index[x])
 
 
 def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
@@ -743,7 +768,7 @@ def main():
                                                  'Skyline precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
-    parser.add_argument('--metadataFormat', default=None, choices=('json', 'tsv'),
+    parser.add_argument('--metadataFormat', default=None, choices=('json', 'csv', 'tsv'),
                         help='Specify metadata file format. '
                              'By default the format is inferred from the file extension.')
     parser.add_argument('--proteins', default=None,
@@ -779,9 +804,6 @@ def main():
     replicates = replicates.rename(columns=REPLICATE_QUALITY_REQUIRED_COLUMNS)
     if not check_df_columns(replicates, REPLICATE_QUALITY_REQUIRED_COLUMNS.values(), 'replicates'):
         sys.exit(1)
-
-    replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.values()]
-    replicates['acquiredRank'] = -1 # this will be updated later
     LOGGER.info('Done reading replicates table...')
 
     # read precursor quality report
@@ -794,6 +816,11 @@ def main():
     if (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
         sys.exit(1)
 
+    precursor_reps = set(precursors['replicateName'].drop_duplicates().tolist())
+    if not all(k in precursor_reps for k in replicates['replicate'].tolist()):
+        LOGGER.warning('Not all replicates in replicate report are in precursor report.')
+
+
     # read protein quants
     protein_quants = None
     if args.proteins:
@@ -802,8 +829,38 @@ def main():
         if not check_df_columns(protein_quants, PROTEIN_QUANTS_REQUIRED_COLUMNS, 'protein_quants'):
             sys.exit(1)
 
+        protein_reps = set(protein_quants['replicateName'].drop_duplicates().tolist())
+        if not all(k in protein_reps for k in replicates['replicate'].tolist()):
+            LOGGER.warning('Not all replicates in replicate report are in protein quants.')
+
         protein_quants = protein_quants[PROTEIN_QUANTS_REQUIRED_COLUMNS.keys()]
         LOGGER.info('Done reading proteins table...')
+
+    # check if file names match replicate names
+    if 'FileName' in replicates.columns:
+        if any(replicates['FileName'] != replicates['replicate']):
+            LOGGER.warning('Not all FileNames match replicate names, using FileName instead.')
+
+            # fix names in replicates
+            replicates['FileName'] = replicates['FileName'].apply(lambda x: os.path.splitext(x)[0])
+            rep_name_map = {row.replicate: row.FileName for row in replicates.itertuples()}
+            replicates['replicate'] = replicates['FileName']
+
+            # fix names in precursors
+            try:
+                precursors['replicateName'] = precursors['replicateName'].apply(lambda x: rep_name_map[x])
+                if protein_quants:
+                    protein_quants['replicateName'] = protein_quants['replicateName'].apply(lambda x: rep_name_map[x])
+            except KeyError as e:
+                LOGGER.error(f'KeyError: {str(e)}')
+                LOGGER.error('Replicate and precursor report replicate names do not match!')
+                sys.exit(1)
+
+    else:
+        LOGGER.warning('"FileName" column not found in replciate report, could not check that replicate names match!')
+
+    replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.values()]
+    replicates['acquiredRank'] = -1 # this will be updated later
 
     # build database
     LOGGER.info('Writing database...')
