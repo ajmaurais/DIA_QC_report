@@ -336,7 +336,7 @@ def main():
         outF.write(add_header('MS1 isotopic window dot product distribution', level=2))
         outF.write(pivot_box_plot('isotopeDotProduct', do_query=False, dpi=args.dpi))
 
-        outF.write(add_header('MS1 isotopic window dot product distribution', level=2))
+        outF.write(add_header('MS1 to MS2 ratio', level=2))
         outF.write(ms1_ms2_ratio(do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Batch effects', level=2))
