@@ -34,17 +34,6 @@ RUN mkdir -p /code/quarto && cd /code/quarto && \
     ln -s '/code/quarto/quarto-1.3.433/bin/quarto' '/usr/local/bin' && \
     quarto install tinytex
 
-# Git version information
-ARG GIT_HASH
-ARG GIT_SHORT_HASH
-ARG GIT_UNCOMMITTED_CHANGES
-ARG GIT_LAST_COMMIT
-
-ENV GIT_HASH=${GIT_HASH}
-ENV GIT_SHORT_HASH=${GIT_SHORT_HASH}
-ENV GIT_UNCOMMITTED_CHANGES=${GIT_UNCOMMITTED_CHANGES}
-ENV GIT_LAST_COMMIT=${GIT_LAST_COMMIT}
-
 # install python dependencies
 COPY directlfq /code/directlfq
 COPY pyDIAUtils /code/pyDIAUtils
@@ -66,6 +55,19 @@ RUN cd /usr/local/bin && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_batch_rmd.py "$@"' > generate_batch_rmd && \
     echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
     chmod 755 parse_data normalize_db entrypoint generate_qc_qmd generate_batch_rmd
+
+# Git version information
+ARG GIT_HASH
+ARG GIT_SHORT_HASH
+ARG GIT_UNCOMMITTED_CHANGES
+ARG GIT_LAST_COMMIT
+ARG DOCKER_TAG
+
+ENV GIT_HASH=${GIT_HASH}
+ENV GIT_SHORT_HASH=${GIT_SHORT_HASH}
+ENV GIT_UNCOMMITTED_CHANGES=${GIT_UNCOMMITTED_CHANGES}
+ENV GIT_LAST_COMMIT=${GIT_LAST_COMMIT}
+ENV DOCKER_TAG=${DOCKER_TAG}
 
 WORKDIR /data
 

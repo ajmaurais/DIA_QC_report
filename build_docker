@@ -43,9 +43,12 @@ def main():
     for key, value in git_info.items():
         docker_command.append('--build-arg')
         docker_command.append(f"GIT_{key.upper()}={value}")
-    
+
     docker_command.append('--build-arg')
     docker_command.append(f"GIT_SHORT_HASH={git_info['hash'][:8]}")
+
+    docker_command.append('--build-arg')
+    docker_command.append(f'DOCKER_TAG={args.tag}')
 
     docker_command.append(REPO_HEAD_DIR)
 
