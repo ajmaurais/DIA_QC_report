@@ -56,6 +56,9 @@ RUN cd /usr/local/bin && \
     echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
     chmod 755 parse_data normalize_db entrypoint generate_qc_qmd generate_batch_rmd
 
+# Git version information
+
+
 WORKDIR /data
 
 CMD []
