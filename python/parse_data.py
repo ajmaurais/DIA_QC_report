@@ -155,16 +155,16 @@ def _initialize(fname):
         try:
             cur.execute(command)
         except sqlite3.OperationalError as e:
-            raise RuntimeError(f'Error running command: {command}')
+            raise RuntimeError(f'Error running command: {command}') from e
 
     conn.commit()
     return conn
 
 
-NA_RE = re.compile('^(NA|NULL|#N/A|NaN)$')
-BOOL_RE = re.compile('^(true|True|TRUE|false|FALSE|False)$')
-INT_RE = re.compile('^[+\-]?\d+$')
-FLOAT_RE = re.compile('^[+\-]?(\d+(.\d*)?|.\d+|\d+(.\d*)?[eE][+\-]?\d+)$')
+NA_RE = re.compile(r'^(NA|NULL|#N/A|NaN)$')
+BOOL_RE = re.compile(r'^(true|True|TRUE|false|FALSE|False)$')
+INT_RE = re.compile(r'^[+\-]?\d+$')
+FLOAT_RE = re.compile(r'^[+\-]?(\d+(\.\d*)?|\.\d+|\d+(\.\d*)?[eE][+\-]?\d+)$')
 
 
 class Dtype(Enum):
@@ -178,14 +178,14 @@ class Dtype(Enum):
         return self.name
 
     def __lt__(self, rhs):
-        if type(rhs) == type(self):
+        if isinstance(rhs, Dtype):
             return self.value < rhs.value
 
         raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
 
     def __ge__(self, rhs):
-        if type(rhs) == type(self):
+        if isinstance(rhs, Dtype):
             return self.value >= rhs.value
 
         raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
