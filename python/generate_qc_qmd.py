@@ -3,7 +3,41 @@ import sys
 import os
 import argparse
 import re
+import sqlite3
 from inspect import stack
+import logging
+
+from enum import Enum
+
+class Dtype(Enum):
+    NULL=0
+    BOOL=1
+    INT=2
+    FLOAT=3
+    STRING=4
+
+    def __str__(self):
+        return self.name
+
+    def __lt__(self, rhs):
+        if isinstance(rhs, Dtype):
+            return self.value < rhs.value
+
+        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
+
+
+    def __ge__(self, rhs):
+        if isinstance(rhs, Dtype):
+            return self.value >= rhs.value
+
+        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(filename)s %(funcName)s:%(lineno)d - %(levelname)s: %(message)s'
+)
+LOGGER = logging.getLogger()
 
 PYTHON_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -13,7 +47,7 @@ DEFAULT_TITLE = 'DIA QC report'
 DEFAULT_DPI = 250
 
 PEPTIDE_QUERY = '''
-query = \'\'\'SELECT 
+query = \'\'\'SELECT
     r.acquiredRank,
     p.modifiedSequence,
     p.precursorCharge
@@ -27,7 +61,7 @@ df = df.drop_duplicates()
 '''
 
 PRECURSOR_QUERY = '''
-query = \'\'\'SELECT 
+query = \'\'\'SELECT
     p.replicateId,
     r.acquiredRank,
     p.modifiedSequence,
@@ -183,7 +217,7 @@ def _pivot_box_plot(values, title=None, dpi=DEFAULT_DPI):
                 title += f" {c.lower()}"
             else:
                 title += c
-    
+
     text = '''
 data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
     columns="acquiredRank", values='%s', aggfunc=sum)
@@ -217,8 +251,46 @@ box_plot(data, 'Transition / precursor ratio',
     return text
 
 
-def pc_analysis(do_query, dpi):
-    text = '''\n%s\n%s
+def get_meta_key_types(db_path, keys):
+    '''
+    Determine whether each metadata key is discrete or continious.
+    '''
+
+    if keys is None or len(keys) == 0:
+        return {}
+
+    def continious_discrete(var_type):
+        if var_type is Dtype['FLOAT'] or var_type is Dtype['INT']:
+            return 'continuous'
+        return 'discrete'
+
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT DISTINCT annotationKey as key, annotationType as type FROM sampleMetadata;')
+        db_types = [(x[0], Dtype[x[1]]) for x in cur.fetchall() if x[0] in keys]
+
+    min_types = dict()
+    for key, var_type in db_types:
+        if key in min_types:
+            min_types[key] = max(min_types[key], var_type)
+        else:
+            min_types[key] = var_type
+
+    types = {key: continious_discrete(var_type) for key, var_type in min_types.items()}
+
+    return types
+
+
+def pc_analysis(do_query, dpi, meta_keys):
+
+    text = f'''\n{python_block_header(stack()[0][3])}'''
+
+    if do_query:
+        text += PRECURSOR_QUERY
+    else:
+        text += '\n'
+
+    text += f'''
 df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', 'totalAreaFragment']]
 df_pc['acquisition_number'] = df['acquiredRank']
 
@@ -234,56 +306,70 @@ df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
 # actually do pc analysis
 pc, pc_var = pc_matrix(df_wide)
 
-# meta_values = {'gender': 'discrete', 'vital_status': 'discrete',
-#                'tumor_grade': 'discrete', 'year_of_birth': 'continuous'}
+acquired_ranks = df_pc[['replicateId', 'acquisition_number']].drop_duplicates().set_index('replicateId')
 
-# check if metadata table exists in db
-# cur = conn.cursor()
-# cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="metadata"')
-# table = cur.fetchall()
-# 
-# metadata_length = 0
-# if len(table) > 0:
-#     cur = conn.cursor()
-#     cur.execute('SELECT COUNT(*) FROM sampleMetadata')
-#     metadata_length = cur.fetchall()[0][0]
+meta_values = {str(meta_keys)}
+'''
 
-acquired_ranks = df_pc[["replicateId", "acquisition_number"]].drop_duplicates()
-acquired_ranks = pd.DataFrame(acquired_ranks['acquisition_number'], index=acquired_ranks['replicateId'])
-
+    text += """
 # add metadata to pc matrix
-# if metadata_length > 0:
-#     METADATA_QUERY = 'SELECT replicateId, annotationKey as columns, annotationValue FROM sampleMetadata WHERE annotationKey IN ("{}")'.format('", "'.join(meta_values.keys()))
-# 
-#     # get metadata labels for pca plot
-#     metadata_df = pd.read_sql(METADATA_QUERY, conn)
-#     metadata = metadata_df.pivot(index="replicateId", columns="columns", values="annotationValue")
-#     metadata = acquired_ranks.join(metadata)
-#     meta_values['acquisition_number'] = 'continuous'
-#     metadata = convert_string_cols(metadata)
-# 
-#     # join metadata to pc matrix
-#     pc = pc.join(metadata)
-#     for label_name, label_type in meta_values.items():
-#         if label_type == 'discrete':
-#             if any(pc[label_name].apply(pd.isna)):
-#                 warnings.warn('Missing label values!', Warning)
-#             pc[label_name] = pc[label_name].apply(str)
-#         elif label_type == 'continuous':
-#             if any(pc[label_name].apply(pd.isna)):
-#                 raise RuntimeError('Cannot have missing label values in continuous scale!')
-#         else:
-#             raise RuntimeError(f'"{label_type}" is an unknown label_type!')
-# 
-# else:
-meta_values = {'acquisition_number': 'continuous'}
-pc = pc.join(acquired_ranks)
+if len(meta_values) > 0:
+    METADATA_QUERY = '''SELECT replicateId,
+                             annotationKey as key,
+                             annotationValue as value,
+                             annotationType as type
+                         FROM sampleMetadata
+                         WHERE annotationKey IN ("{}")'''.format('", "'.join(meta_values.keys()))
 
+    # get metadata labels for pca plot
+    metadata = pd.read_sql(METADATA_QUERY, conn)
+    metadata = convert_string_cols(metadata)
+    metadata = acquired_ranks.join(metadata)
+
+    # join metadata to pc matrix
+    pc = pc.join(metadata)
+    for label_name, label_type in meta_values.items():
+        if label_type == 'discrete':
+            if any(pc[label_name].apply(pd.isna)):
+                warnings.warn('Missing label values!', Warning)
+            pc[label_name] = pc[label_name].apply(str)
+        elif label_type == 'continuous':
+            if any(pc[label_name].apply(pd.isna)):
+                raise RuntimeError('Cannot have missing label values in continuous scale!')
+        else:
+            raise RuntimeError(f'"{label_type}" is an unknown label_type!')
+
+else:
+    pc = pc.join(acquired_ranks)
+
+meta_values['acquisition_number'] = 'continuous'
+"""
+
+    text += f'''
 for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
-    pca_plot(pc, label_name, pc_var, label_type=label_type, dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
+    pca_plot(pc, label_name, pc_var, label_type=label_type, dpi={dpi})
+```\n\n'''
 
     return text
+
+
+def check_meta_keys_exist(db_path, keys):
+    '''
+    Check that each metadata key exists in sampleMetadata table.
+    '''
+    all_good = True
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT DISTINCT annotationKey FROM sampleMetadata;')
+        metadata_keys = {x[0] for x in cur.fetchall()}
+
+        for key in keys:
+            if key not in metadata_keys:
+                all_good = False
+                LOGGER.error(f'Missing annotationKey: "{key}"')
+
+    return all_good
+
 
 
 def main():
@@ -292,16 +378,19 @@ def main():
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
     parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
                         help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
-    # parser.add_argument('-f', '--format', default=f'{DEFAULT_EXT}',
-    #                     help=f'Output file format. Default is "{DEFAULT_EXT}"')
     parser.add_argument('-a', '--addStdProtein', action='append', default=[],
                         help='Add standard protein name for retention time plot.')
+    parser.add_argument('-c', '--addColorVar', action='append', default=None, dest='color_vars',
+                        help='Add a annotationKey to color PCA plots.')
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
     parser.add_argument('db', help='Path to precursor quality database.')
     args = parser.parse_args()
 
-    # ofname = f'{args.ofname}.{args.format}'
+    # check that metadata annotatioKeys exist
+    if args.color_vars:
+        check_meta_keys_exist(args.db, args.color_vars)
+
 
     with open(args.ofname, 'w') as outF:
         outF.write(doc_header('{} {}'.format(os.path.abspath(__file__),
@@ -340,7 +429,8 @@ def main():
         outF.write(ms1_ms2_ratio(do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Batch effects', level=2))
-        outF.write(pc_analysis(do_query=False, dpi=args.dpi))
+        outF.write(pc_analysis(do_query=False, dpi=args.dpi,
+                               meta_keys=get_meta_key_types(args.db, args.color_vars)))
 
         outF.write(doc_finalize())
 
