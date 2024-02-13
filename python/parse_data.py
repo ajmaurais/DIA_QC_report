@@ -823,8 +823,10 @@ def main():
         sys.exit(1)
 
     if args.group_proteins_by == 'gene':
-        precursors['proteinName'] = precursors[['proteinName', 'ProteinGene']].apply(lambda x: x[0] if pd.isna(x[1]) else x[1],
-                                                                                     axis=1)
+        def protein_uid(row):
+            return row.proteinName if pd.isna(row.ProteinGene) else row.ProteinGene
+
+        precursors['proteinName'] = precursors.apply(protein_uid, axis=1)
 
     if (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
         sys.exit(1)
