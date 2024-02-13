@@ -785,6 +785,8 @@ def main():
                              "'e' for error, 'm' to use the peak area with user adjusted integration boundaries, "
                              "'f' to select first occurrence of duplicate precursors, "
                              "and 'i' to interactively choose which peak area to use. 'e' is the default.")
+    parser.add_argument('--groupBy', choices=['protein', 'gene'], default='protein', dest='group_proteins_by',
+                        help="Choose whether to group precursors by gene or protein. Default is 'protein'")
     parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
     parser.add_argument('replicates', help='Skyline replicate_report')
     parser.add_argument('precursors', help='Skyline precursor_report')
@@ -809,9 +811,20 @@ def main():
     # read precursor quality report
     precursors = pd.read_csv(args.precursors, sep='\t')
     LOGGER.info('Done reading precursors table...')
+
+    # rename columns
     precursors = precursors.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-    if not check_df_columns(precursors, PRECURSOR_QUALITY_REQUIRED_COLUMNS.values(), 'precursors'):
+
+    precursor_cols = list(PRECURSOR_QUALITY_REQUIRED_COLUMNS.values())
+    if args.group_proteins_by == 'gene':
+        precursor_cols.append('ProteinGene')
+
+    if not check_df_columns(precursors, precursor_cols, 'precursors'):
         sys.exit(1)
+
+    if args.group_proteins_by == 'gene':
+        precursors['proteinName'] = precursors[['proteinName', 'ProteinGene']].apply(lambda x: x[0] if pd.isna(x[1]) else x[1],
+                                                                                     axis=1)
 
     if (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
         sys.exit(1)
@@ -838,7 +851,7 @@ def main():
 
     # check if file names match replicate names
     if 'FileName' in replicates.columns:
-        if any(replicates['FileName'] != replicates['replicate']):
+        if any(replicates['replicate'] != replicates['FileName'].apply(lambda x: os.path.splitext(x)[0])):
             LOGGER.warning('Not all FileNames match replicate names, using FileName instead.')
 
             # fix names in replicates
