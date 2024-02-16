@@ -213,7 +213,7 @@ def main():
     conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(TIME_FORMAT))
     conn = update_meta_value(conn, 'precursor_normalization_method', 'median')
     conn = update_meta_value(conn, 'protein_normalization_method', 'DirectLFQ')
-    conn = update_meta_value(conn, 'is_normalized', True)
+    conn = update_meta_value(conn, 'is_normalized', 'True')
     conn = update_meta_value(conn, 'Normalization command', current_command)
     conn = update_meta_value(conn, 'command_log', previous_commands + current_command)
      

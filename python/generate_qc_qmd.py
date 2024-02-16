@@ -109,6 +109,14 @@ def add_header(text, level=1):
     return f'{"#" * level} {text}\n'
 
 
+def open_pannel_tabset():
+    return '\n::: { .panel-tabset }\n\n'
+
+
+def close_pannel_tabset():
+    return '\n:::\n'
+
+
 def python_block_header(label):
     text = '''```{python}
 #| label: %s
@@ -118,7 +126,7 @@ def python_block_header(label):
     return text
 
 
-def doc_initialize(db_path, python_dir):
+def doc_initialize(db_path):
     text='''\n%s\n
 import sys
 import re
@@ -128,14 +136,13 @@ from scipy.stats import zscore
 import numpy as np
 import pandas as pd
 
-sys.path.append('%s')
 from pyDIAUtils.std_peptide_rt_plot import peptide_rt_plot
 from pyDIAUtils.bar_chart import bar_chart
-from pyDIAUtils.histogram import histogram, box_plot
+from pyDIAUtils.histogram import histogram, box_plot, multi_boxplot
 from pyDIAUtils.pca_plot import pc_matrix, pca_plot, convert_string_cols
 
 conn = sqlite3.connect('%s')
-```\n\n''' % (python_block_header(stack()[0][3]), python_dir, db_path)
+```\n\n''' % (python_block_header(stack()[0][3]), db_path)
 
     return text
 
@@ -228,7 +235,7 @@ box_plot(data, '%s', dpi=%i)\n''' % (values, title, dpi)
 
 def cammel_to_underscore(s):
     ret = "".join("_" + c.lower() if c.isupper() else c for c in s).strip("_")
-    ret = re.sub("(.)([A-Z])", r"\1_\2", ret).lower()
+    ret = re.sub(r"(.)([A-Z])", r"\1_\2", ret).lower()
     return ret
 
 
@@ -243,7 +250,7 @@ def ms1_ms2_ratio(do_query=True, dpi=DEFAULT_DPI):
 df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
 df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
 data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-                 columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
+                      columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
 box_plot(data, 'Transition / precursor ratio',
          limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3), dpi=%i)
 ```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
@@ -281,52 +288,88 @@ def get_meta_key_types(db_path, keys):
     return types
 
 
-def pc_analysis(do_query, dpi, meta_keys):
+def is_normalized(conn):
+    ''' Determine if metadata.is_normalized is True '''
 
-    text = f'''\n{python_block_header(stack()[0][3])}'''
+    cur = conn.cursor()
+    cur.execute('SELECT value FROM metadata WHERE key == "is_normalized"')
+    value = cur.fetchall()
 
-    if do_query:
-        text += PRECURSOR_QUERY
+    if len(value) == 0:
+        LOGGER.warning("'is_normalized' key not in metadata table!")
+        return False
+
+    value = value[0][0].lower()
+    if value in ('true', '1'):
+        return True
+
+    LOGGER.warning('metadata.is_normalized is False. Only using unnormalized values.')
+    return False
+
+
+def precursor_areas(quant_cols):
+
+    quant_col_query = ',\n'.join([f'{key} as {value}' for key, value in quant_cols.items()])
+
+    Stack = stack()
+    text = f"""\n{python_block_header(Stack[0][3])}
+
+query = '''SELECT
+    p.replicateId,
+    r.acquiredRank as acquisitionNumber,
+    p.modifiedSequence,
+    p.precursorCharge,
+    {quant_col_query}
+FROM precursors p
+LEFT JOIN replicates r ON p.replicateId = r.replicateId;'''
+
+df_areas = pd.read_sql(query, conn)\n"""
+
+    data_levels = {v: i for i, v in enumerate(quant_cols.values())}
+    text += f'data_levels = {str(data_levels)}\n'
+
+    text += '''\ndf_areas = df_areas.melt(id_vars=['acquisitionNumber', 'modifiedSequence', 'precursorCharge'],
+                         value_vars=list(data_levels.keys()),
+                         var_name='method', value_name='area')
+
+df_areas['log2Area'] = df_areas['area'].apply(np.log2)
+
+dats = dict()
+for level in data_levels:
+    dats[level] = df_areas[df_areas['method'] == level].pivot_table(index=['modifiedSequence', 'precursorCharge'],
+                                                                    columns='acquisitionNumber', values='log2Area')
+    dats[level] = dats[level].dropna()
+
+multi_boxplot(dats, data_levels, dpi=250)\n\n```\n\n'''
+
+    return text
+
+
+def pc_metadata(meta_keys=None):
+
+    text = f'''\n{python_block_header(stack()[0][3])}\n'''
+
+    if meta_keys is None or len(meta_keys) == 0:
+        text += f'\nmeta_values = {str(meta_keys)}\n'
     else:
-        text += '\n'
+        text += """METADATA_QUERY = '''SELECT replicateId,
+                         annotationKey as key,
+                         annotationValue as value,
+                         annotationType as type
+                     FROM sampleMetadata
+                     WHERE annotationKey IN ("{}")'''.format('", "'.join(meta_values.keys()))
 
-    text += f'''
-df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', 'totalAreaFragment']]
-df_pc['acquisition_number'] = df['acquiredRank']
-
-# set zero areas to the minimum non-zero value
-df_pc.loc[df_pc['totalAreaFragment'].apply(lambda x: not np.isfinite(x) or x == 0), 'totalAreaFragment'] = min(df_pc[df_pc['totalAreaFragment'] > 0]['totalAreaFragment'])
-
-df_pc['log2TotalAreaFragment'] = np.log10(df_pc['totalAreaFragment'])
-df_pc['zScore'] = df_pc.groupby('acquisition_number')['log2TotalAreaFragment'].transform(lambda x: np.abs(zscore(x)))
-
-df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-                         columns="replicateId", values='zScore')
-
-# actually do pc analysis
-pc, pc_var = pc_matrix(df_wide)
-
-acquired_ranks = df_pc[['replicateId', 'acquisition_number']].drop_duplicates().set_index('replicateId')
-
-meta_values = {str(meta_keys)}
-'''
+# get metadata labels for pca plot
+metadata = pd.read_sql(METADATA_QUERY, conn)
+metadata = convert_string_cols(metadata)
+metadata = acquired_ranks.join(metadata)
+        """
 
     text += """
-# add metadata to pc matrix
-if len(meta_values) > 0:
-    METADATA_QUERY = '''SELECT replicateId,
-                             annotationKey as key,
-                             annotationValue as value,
-                             annotationType as type
-                         FROM sampleMetadata
-                         WHERE annotationKey IN ("{}")'''.format('", "'.join(meta_values.keys()))
+meta_values['acquisition_number'] = 'continuous'
 
-    # get metadata labels for pca plot
-    metadata = pd.read_sql(METADATA_QUERY, conn)
-    metadata = convert_string_cols(metadata)
-    metadata = acquired_ranks.join(metadata)
-
-    # join metadata to pc matrix
+def join_metadata(pc, metadata, meta_values):
+    ''' join metadata to pc matrix '''
     pc = pc.join(metadata)
     for label_name, label_type in meta_values.items():
         if label_type == 'discrete':
@@ -338,12 +381,53 @@ if len(meta_values) > 0:
                 raise RuntimeError('Cannot have missing label values in continuous scale!')
         else:
             raise RuntimeError(f'"{label_type}" is an unknown label_type!')
+    return pc
+\n```\n\n"""
 
-else:
-    pc = pc.join(acquired_ranks)
+    return text
 
-meta_values['acquisition_number'] = 'continuous'
+
+def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', set_zero_to_min=True):
+
+    text = '\n{}\n'.format(python_block_header(f'{stack()[0][3]}_{quant_col}'))
+
+    if do_query:
+        text += f"""query = '''SELECT
+    p.replicateId,
+    r.acquiredRank as acquisition_number,
+    p.modifiedSequence,
+    p.precursorCharge,
+    p.{quant_col}
+FROM PRECURSORS p
+LEFT JOIN replicates r ON p.replicateId = r.replicateId
+WHERE p.{quant_col} IS NOT NULL;'''
+
+df_pc = pd.read_sql(query, conn)
 """
+    else:
+        text += f'''
+df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', '{quant_col}']]
+df_pc['acquisition_number'] = df['acquiredRank']\n'''
+
+    if set_zero_to_min:
+        text += f'''\n# set zero areas to the minimum non-zero value
+sele = df_pc['{quant_col}'].apply(lambda x: not np.isfinite(x) or x == 0)
+df_pc.loc[sele, '{quant_col}'] = min(df_pc[df_pc['{quant_col}'] > 0]['{quant_col}'])\n'''
+
+    text += f'''
+df_pc['log2TotalAreaFragment'] = np.log2(df_pc['{quant_col}'])
+# df_pc['zScore'] = df_pc.groupby('acquisition_number')['log2TotalAreaFragment'].transform(lambda x: np.abs(zscore(x)))
+
+df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
+                            columns="replicateId", values='{quant_col}')
+df_wide = df_wide.dropna()
+
+# do pc analysis
+pc, pc_var = pc_matrix(df_wide)
+
+acquired_ranks = df_pc[['replicateId', 'acquisition_number']].drop_duplicates().set_index('replicateId')
+
+pc = join_metadata(pc, acquired_ranks, meta_values)\n'''
 
     text += f'''
 for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
@@ -353,23 +437,21 @@ for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
     return text
 
 
-def check_meta_keys_exist(db_path, keys):
+def check_meta_keys_exist(conn, keys):
     '''
     Check that each metadata key exists in sampleMetadata table.
     '''
     all_good = True
-    with sqlite3.connect(db_path) as conn:
-        cur = conn.cursor()
-        cur.execute('SELECT DISTINCT annotationKey FROM sampleMetadata;')
-        metadata_keys = {x[0] for x in cur.fetchall()}
+    cur = conn.cursor()
+    cur.execute('SELECT DISTINCT annotationKey FROM sampleMetadata;')
+    metadata_keys = {x[0] for x in cur.fetchall()}
 
-        for key in keys:
-            if key not in metadata_keys:
-                all_good = False
-                LOGGER.error(f'Missing annotationKey: "{key}"')
+    for key in keys:
+        if key not in metadata_keys:
+            all_good = False
+            LOGGER.error(f'Missing annotationKey: "{key}"')
 
     return all_good
-
 
 
 def main():
@@ -387,16 +469,26 @@ def main():
     parser.add_argument('db', help='Path to precursor quality database.')
     args = parser.parse_args()
 
+    if os.path.isfile(args.db):
+        conn = sqlite3.connect(args.db)
+    else:
+        LOGGER.error(f"Database file: '{args.db}' does not exist!")
+        sys.exit(1)
+
     # check that metadata annotatioKeys exist
     if args.color_vars:
-        check_meta_keys_exist(args.db, args.color_vars)
+        check_meta_keys_exist(conn, args.color_vars)
+
+    # Check if metadata.is_normalized is set to True
+    db_is_normalized = is_normalized(conn)
+    conn.close()
 
 
     with open(args.ofname, 'w') as outF:
         outF.write(doc_header('{} {}'.format(os.path.abspath(__file__),
                               ' '.join(sys.argv[1:])), title=args.title))
         outF.write(add_header('Peptide independent metrics', level=1))
-        outF.write(doc_initialize(args.db, PYTHON_DIR))
+        outF.write(doc_initialize(args.db))
 
         outF.write(add_header('Replicate TIC areas', level=2))
         outF.write(replicate_tic_areas(dpi=args.dpi))
@@ -428,9 +520,30 @@ def main():
         outF.write(add_header('MS1 to MS2 ratio', level=2))
         outF.write(ms1_ms2_ratio(do_query=False, dpi=args.dpi))
 
+        # Precursor areas section
+        quant_cols = {'totalAreaFragment': 'Unnormalized'}
+        if db_is_normalized:
+            quant_cols['normalizedArea'] = 'Normalized'
+
+        outF.write(add_header('Precursor areas', level=2))
+        outF.write(precursor_areas(quant_cols))
+
+        # Batch effects section
         outF.write(add_header('Batch effects', level=2))
-        outF.write(pc_analysis(do_query=False, dpi=args.dpi,
-                               meta_keys=get_meta_key_types(args.db, args.color_vars)))
+
+        outF.write(pc_metadata(meta_keys=get_meta_key_types(args.db, args.color_vars)))
+
+        outF.write(open_pannel_tabset())
+
+        outF.write(add_header('Unnormalized', level=3))
+        outF.write(pc_analysis(do_query=False, dpi=args.dpi))
+
+        if db_is_normalized:
+            outF.write(add_header('Normalized', level=3))
+            outF.write(pc_analysis(do_query=True, dpi=args.dpi,
+                                   quant_col='normalizedArea', set_zero_to_min=False))
+
+        outF.write(close_pannel_tabset())
 
         outF.write(doc_finalize())
 
