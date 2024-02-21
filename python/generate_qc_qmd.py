@@ -350,9 +350,10 @@ def pc_metadata(meta_keys=None):
     text = f'''\n{python_block_header(stack()[0][3])}\n'''
 
     if meta_keys is None or len(meta_keys) == 0:
-        text += f'\nmeta_values = {str(meta_keys)}\n'
+        text += '\nmeta_values = {}\n'
     else:
-        text += """METADATA_QUERY = '''SELECT replicateId,
+        text += f'\nmeta_values = {str(meta_keys)}\n'
+        text += """\nMETADATA_QUERY = '''SELECT replicateId,
                          annotationKey as key,
                          annotationValue as value,
                          annotationType as type
@@ -361,16 +362,14 @@ def pc_metadata(meta_keys=None):
 
 # get metadata labels for pca plot
 metadata = pd.read_sql(METADATA_QUERY, conn)
-metadata = convert_string_cols(metadata)
-metadata = acquired_ranks.join(metadata)
-        """
+metadata = convert_string_cols(metadata)\n"""
 
-    text += """
-meta_values['acquisition_number'] = 'continuous'
+    text += """\nmeta_values['acquisition_number'] = 'continuous'
 
-def join_metadata(pc, metadata, meta_values):
+def join_metadata(pc, acquired_ranks, meta_values):
     ''' join metadata to pc matrix '''
-    pc = pc.join(metadata)
+    this_metadata = acquired_ranks.join(metadata)
+    pc = pc.join(this_metadata)
     for label_name, label_type in meta_values.items():
         if label_type == 'discrete':
             if any(pc[label_name].apply(pd.isna)):
