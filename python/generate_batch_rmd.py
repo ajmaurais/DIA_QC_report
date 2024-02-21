@@ -237,6 +237,7 @@ dat.rep <- DBI::dbGetQuery(conn, 'SELECT
                                 r.project
                              FROM replicates r;')
 dat.meta.l <- DBI::dbGetQuery(conn, 'SELECT * FROM sampleMetadata;')
+meta.types <- DBI::dbGetQuery(conn, 'SELECT * from sampleMetadataTypes;')
 DBI::dbDisconnect(conn)\n'''
 
     if filter_metadata:
@@ -257,7 +258,6 @@ dat.meta <- dat.meta.l %>% dplyr::select(replicateId, annotationKey, annotationV
     tidyr::pivot_wider(names_from='annotationKey', values_from='annotationValue')
 
 # convert columns in wide metadata df to the type specified by annotationType
-meta.types <- unique(dplyr::select(dat.meta.l, annotationKey, annotationType))
 meta.types <- setNames(meta.types$annotationType, meta.types$annotationKey)
 converters <- list(BOOL=as.logical, INT=as.integer, FLOAT=as.double, STRING=function(x){x})
 for(column in names(meta.types)) {
