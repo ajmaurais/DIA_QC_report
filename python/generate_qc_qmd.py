@@ -1,4 +1,3 @@
-
 import sys
 import os
 import argparse
@@ -273,17 +272,10 @@ def get_meta_key_types(db_path, keys):
 
     with sqlite3.connect(db_path) as conn:
         cur = conn.cursor()
-        cur.execute('SELECT DISTINCT annotationKey as key, annotationType as type FROM sampleMetadata;')
+        cur.execute('SELECT annotationKey as key, annotationType as type FROM sampleMetadataTypes;')
         db_types = [(x[0], Dtype[x[1]]) for x in cur.fetchall() if x[0] in keys]
 
-    min_types = dict()
-    for key, var_type in db_types:
-        if key in min_types:
-            min_types[key] = max(min_types[key], var_type)
-        else:
-            min_types[key] = var_type
-
-    types = {key: continious_discrete(var_type) for key, var_type in min_types.items()}
+    types = {key: continious_discrete(var_type) for key, var_type in db_types}
 
     return types
 
@@ -354,11 +346,12 @@ def pc_metadata(meta_keys=None):
     else:
         text += f'\nmeta_values = {str(meta_keys)}\n'
         text += """\nMETADATA_QUERY = '''SELECT replicateId,
-                         annotationKey as key,
-                         annotationValue as value,
-                         annotationType as type
-                     FROM sampleMetadata
-                     WHERE annotationKey IN ("{}")'''.format('", "'.join(meta_values.keys()))
+                         m.annotationKey as key,
+                         m.annotationValue as value,
+                         t.annotationType as type
+                     FROM sampleMetadata m
+                     LEFT JOIN sampleMetadataTypes t ON t.annotationKey == m.annotationKey
+                     WHERE m.annotationKey IN ("{}")'''.format('", "'.join(meta_values.keys()))
 
 # get metadata labels for pca plot
 metadata = pd.read_sql(METADATA_QUERY, conn)
