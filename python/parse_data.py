@@ -72,26 +72,29 @@ CREATE TABLE sampleMetadata (
     replicateId INTEGER NOT NULL,
     annotationKey TEXT NOT NULL,
     annotationValue TEXT,
-    annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
     PRIMARY KEY (replicateId, annotationKey),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
-)
-''',
+    FOREIGN KEY (annotationKey) REFERENCES sampleMetadataTypes(annotationKey)
+)''',
+'''
+CREATE TABLE sampleMetadataTypes (
+    annotationKey TEXT NOT NULL,
+    annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
+    PRIMARY KEY (annotationKey)
+)''',
 '''
 CREATE TABLE metadata (
     key TEXT NOT NULL,
     value TEXT,
     PRIMARY KEY (key)
-)
-''',
+)''',
 '''
 CREATE TABLE proteins (
     proteinId INTEGER PRIMARY KEY,
     accession VARCHAR(25),
     name VARCHAR(50) UNIQUE,
     description VARCHAR(200)
-)
-''',
+)''',
 '''
 CREATE TABLE proteinQuants (
     replicateId INTEGER NOT NULL,
@@ -101,8 +104,7 @@ CREATE TABLE proteinQuants (
     PRIMARY KEY (replicateId, proteinId),
     FOREIGN KEY (replicateId) REFERENCES replicates(replicateId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
-)
-''',
+)''',
 '''
 CREATE TABLE peptideToProtein (
     proteinId INTEGER NOT NULL,
@@ -282,16 +284,23 @@ def read_metadata(fname, metadata_format=None):
                  value_vars=[x for x in list(df.columns) if x != 'Replicate'])
 
     # determine annotationValue types
-    df['annotationType'] = df['annotationValue'].apply(lambda x: Dtype.infer_type(x))
-    df['annotationValue'] = df.apply(lambda x: pd.NA if x.annotationType is Dtype.NULL else x.annotationValue, axis=1)
     types = dict()
-    for annotationKey, group in df.groupby('annotationKey'):
-        thisType = max(group['annotationType'].tolist())
-        types[annotationKey] = str(Dtype.BOOL if thisType is Dtype.NULL else thisType)
+    for row in df.itertuples():
+        if row.annotationKey in types:
+            types[row.annotationKey] = max(types[row.annotationKey],
+                                           Dtype.infer_type(row.annotationValue))
+        else:
+            types[row.annotationKey] = Dtype.infer_type(row.annotationValue)
 
-    df['annotationType'] = df['annotationKey'].apply(lambda x: types[x])
+    # set values of Dtype.NULL to NA
+    df['annotationValue'] = df.apply(lambda x: pd.NA if types[x.annotationKey] is Dtype.NULL
+                                                     else x.annotationValue, axis=1)
 
-    return df
+    types_df = {'annotationKey': [], 'annotationType': []}
+    for key in types:
+        types[key] = Dtype.BOOL if types[key] is Dtype.NULL else types[key]
+
+    return df, types
 
 
 def insert_program_metadata(conn, metadata):
@@ -343,7 +352,7 @@ def update_acquired_ranks(conn):
     return conn
 
 
-def update_metadata_dtypes(conn):
+def update_metadata_dtypes(conn, new_types):
     '''
     Update metadata annotationType column to fix cases where
     two projects have a different annotationTypes for the same
@@ -354,17 +363,32 @@ def update_metadata_dtypes(conn):
     ----------
     conn: sqlite3.Connection:
         Database connection.
+    new_types: dict
+        A dictionary of new annotationKey, annotationType pairs.
     '''
 
     # Consolidate differing annotationTypes
-    types = pd.read_sql('SELECT DISTINCT annotationKey, annotationType FROM sampleMetadata;', conn)
-    types['dtype'] = types['annotationType'].apply(lambda x: Dtype[x])
-    types = types.groupby('annotationKey')['dtype'].max().apply(lambda x: str(x)).reset_index()
-    types = [(row.dtype, row.annotationKey) for row in types.itertuples()]
+    cur = conn.cursor()
+    cur.execute('SELECT annotationKey, annotationType FROM sampleMetadataTypes;')
+    existing_types = {x[0]: Dtype[x[1]] for x in cur.fetchall()}
+
+    # consolidate new and existing data types
+    for key, value in new_types.items():
+        if key not in existing_types:
+            existing_types[key] = value
+            continue
+        existing_types[key] = max(existing_types[key], value)
 
     # Update database
+    insert_query = '''
+        INSERT INTO sampleMetadataTypes (annotationKey, annotationType)
+        VALUES(?, ?)
+        ON CONFLICT(annotationKey) DO UPDATE SET annotationType = ?
+    '''
     cur = conn.cursor()
-    cur.executemany('UPDATE sampleMetadata SET annotationType = ? WHERE annotationKey = ?', types)
+    for annotationKey, dtype in existing_types.items():
+        annotationType = str(dtype)
+        cur.execute(insert_query, (annotationKey, annotationType, annotationType))
     conn.commit()
 
     return conn
@@ -408,7 +432,8 @@ def _add_index_column(col, index, df_name=None, index_name=None):
     return ret.apply(lambda x: index[x])
 
 
-def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata=None,
+def write_db(fname, replicates, precursors, protein_quants=None,
+             sample_metadata=None, sample_metadata_types=None,
              projectName=None, overwriteMode='error'):
     '''
     Write reports to precursor sqlite database.
@@ -424,7 +449,9 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     protein_quants: pd.DataFrame
         Long formatted protein quants dataframe (optional)
     sample_metadata: pd.DataFrame
-        Metadata dataframe (optional)
+        Metadata values dataframe (optional)
+    sample_metadata_types: dict
+        Dict mapping metadata annotationKey to annotationType (optional)
     projectName: str
         The project name to use in the replicates table.
     overwriteMode: str
@@ -440,6 +467,10 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
     # Metadata to add to db
     current_command = ' '.join(sys.argv)
     log_metadata = {'command_log': current_command}
+
+    if sample_metadata is not None and sample_metadata_types is None:
+        LOGGER.error('Must specify both sample_metadata and sample_metadata_types!')
+        return False
 
     # Initialize database if applicable and get database connection
     conn = None
@@ -596,14 +627,19 @@ def write_db(fname, replicates, precursors, protein_quants=None, sample_metadata
                                             'sample_metadata', 'repIndex')) is None:
             return False
         sample_metadata['replicateId'] = rep_id_col
-        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue', 'annotationType']]
+        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']] #, 'annotationType']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
+
+        if append:
+            conn = update_metadata_dtypes(conn, sample_metadata_types)
+        else:
+            insert_query = 'INSERT INTO sampleMetadataTypes (annotationKey, annotationType) VALUES (?, ?)'
+            cur = conn.cursor()
+            cur.executemany(insert_query, [(k, str(v)) for k, v in sample_metadata_types.items()])
+            conn.commit()
 
     conn = insert_program_metadata(conn, log_metadata)
     conn = update_acquired_ranks(conn)
-
-    if append:
-        conn = update_metadata_dtypes(conn)
 
     conn.close()
     return True
@@ -796,7 +832,7 @@ def main():
     metadata = None
     if args.metadata is not None:
         try:
-            metadata = read_metadata(args.metadata, args.metadataFormat)
+            metadata, metadata_types = read_metadata(args.metadata, args.metadataFormat)
         except (ValueError, ValidationError) as e:
             LOGGER.error(e)
             sys.exit(1)
@@ -880,7 +916,8 @@ def main():
     # build database
     LOGGER.info('Writing database...')
     if not write_db(args.ofname, replicates, precursors,
-                    protein_quants=protein_quants, sample_metadata=metadata,
+                    protein_quants=protein_quants,
+                    sample_metadata=metadata, sample_metadata_types=metadata_types,
                     projectName=args.projectName, overwriteMode=args.overwriteMode):
         LOGGER.error('Failed to create database!')
         sys.exit(1)
