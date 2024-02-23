@@ -424,7 +424,7 @@ def pca_plot(p, color_vars=None, plot_file_path=None):
 
     text += f'\n\n# {p} PCAs\npcs.{p} <- list()\nfor(method in {p}.methods)'
     text += '{' + f'''
-    pcs.{p} [[method]] <- rDIAUtils::pcAnalysis(dat.{p}.l[dat.{p}.l$method == method,],
+    pcs.{p}[[method]] <- rDIAUtils::pcAnalysis(dat.{p}.l[dat.{p}.l$method == method,],
                                                      'value', rowsName='{p}', columnsName='replicate')'''
     text += '\n}\n\n'
     text += f'''names({p}.methods) <- c('Unnormalized', '{norm_method} Normalized', 'Batch corrected')
