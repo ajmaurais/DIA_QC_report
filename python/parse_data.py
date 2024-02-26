@@ -830,6 +830,7 @@ def main():
 
     # read annotations if applicable
     metadata = None
+    metadata_types = None
     if args.metadata is not None:
         try:
             metadata, metadata_types = read_metadata(args.metadata, args.metadataFormat)
