@@ -5,7 +5,7 @@ import sqlite3
 import os
 import logging
 from datetime import datetime
-from multiprocessing import cpu_count
+import multiprocessing
 
 import numpy as np
 import pandas as pd
@@ -81,6 +81,24 @@ def median_normalize(df, key_cols, value_col):
     return df[cols]
 
 
+def do_normalization(input_dict):
+    # format input_df for DirectLFQ normalization
+    input_df = input_dict['input_df']
+    input_df.columns.name = None
+    input_df = input_df.reset_index()
+    input_df = lfqutils.index_and_log_transform_input_df(input_df)
+    input_df = lfqutils.remove_allnan_rows_input_df(input_df)
+    input_df = dlfq_norm(input_df, num_samples_quadratic=10).complete_dataframe
+
+    # Do DirectLFQ normalization
+    protein_df, _ = lfqprot_estimation.estimate_protein_intensities(input_df,
+                                                                    min_nonan=1,
+                                                                    num_samples_quadratic=10,
+                                                                    num_cores=multiprocessing.cpu_count() - 1)
+                                                                    # num_cores = 1)
+    input_dict['protein_df'] = protein_df
+
+
 def main():
 
     parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
@@ -132,26 +150,13 @@ def main():
         LOGGER.warning(f'Removed {n_not_missing - len(input_df.index):,} of {n_not_missing:,} precursors with missing values.')
         LOGGER.warning(f'{len(input_df.index):,} precursors without missing values remain.')
 
-    # format input_df for DirectLFQ normalization
-    input_df.columns.name = None
-    input_df = input_df.reset_index()
-    input_df = lfqutils.index_and_log_transform_input_df(input_df)
-    input_df = lfqutils.remove_allnan_rows_input_df(input_df)
-    input_df = dlfq_norm(input_df, num_samples_quadratic=10).complete_dataframe
-
-    # Do DirectLFQ normalization
+    manager = multiprocessing.Manager()
+    ret = manager.dict()
+    ret['input_df'] = input_df
+    p = multiprocessing.Process(target=do_normalization, args=(ret,))
+    p.start()
     LOGGER.info('Running DirectLFQ normalization.')
-    protein_df, _ = lfqprot_estimation.estimate_protein_intensities(input_df,
-                                                                    min_nonan=1,
-                                                                    num_samples_quadratic=10,
-                                                                    num_cores=cpu_count())
-                                                                    # num_cores = 1)
-    LOGGER.info('Finished with DirectLFQ normalization.')
 
-    # pivot protein_df longer
-    protein_df = protein_df.melt(id_vars='protein', value_name='normalizedArea', var_name='replicateId')
-    
-    
     # remove precursors with missing values
     df = df[df['ion'].apply(lambda x: x in keep_precursors)]
 
@@ -184,6 +189,13 @@ def main():
     conn.commit()
     LOGGER.info('Done updating precursor normalizedArea values.')
 
+    p.join()
+    LOGGER.info('Finished with DirectLFQ normalization.')
+
+    # pivot protein_df longer
+    protein_df = ret['protein_df']
+    protein_df = protein_df.melt(id_vars='protein', value_name='normalizedArea', var_name='replicateId')
+    
     # insert or update proteinQuant rows
     protein_query = '''
         INSERT INTO proteinQuants (replicateId, proteinId, normalizedAbundance)
