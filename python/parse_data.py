@@ -325,6 +325,16 @@ def insert_program_metadata(conn, metadata):
     return conn
 
 
+def get_meta_value(conn, key):
+    ''' Get the value for a key from the metadata table '''
+    cur = conn.cursor()
+    cur.execute('SELECT value FROM metadata WHERE key == ?', (key,))
+    value = cur.fetchall()
+    if len(value) == 1:
+        return value[0][0]
+    LOGGER.error(f"Could not get key '{key}' from metadata table!")
+    return None
+
 def update_acquired_ranks(conn):
     '''
     Populate acquiredRank column in replicates table.
@@ -434,7 +444,8 @@ def _add_index_column(col, index, df_name=None, index_name=None):
 
 def write_db(fname, replicates, precursors, protein_quants=None,
              sample_metadata=None, sample_metadata_types=None,
-             projectName=None, overwriteMode='error'):
+             projectName=None, overwriteMode='error',
+             group_precursors_by='protein'):
     '''
     Write reports to precursor sqlite database.
 
@@ -457,6 +468,10 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     overwriteMode: str
         Behavior when the output file already exists.
         Choices are 'error', 'overwrite', or 'append'
+    group_precursors_by: str
+        How are precursors grouped?
+        The only effect this argument has is to add an entry in the
+        database metadata table.
 
     Returns
     -------
@@ -467,6 +482,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     # Metadata to add to db
     current_command = ' '.join(sys.argv)
     log_metadata = {'command_log': current_command}
+    log_metadata['group_precursors_by'] = group_precursors_by
 
     if sample_metadata is not None and sample_metadata_types is None:
         LOGGER.error('Must specify both sample_metadata and sample_metadata_types!')
@@ -479,7 +495,8 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         if overwriteMode == 'error':
             LOGGER.error(f'{fname} already exists. Use the --overwriteMode option to append or overwrite')
             return False
-        elif overwriteMode == 'overwrite':
+
+        if overwriteMode == 'overwrite':
             LOGGER.warning(f'{fname} already exists. Overwriting...')
             os.remove(fname)
             conn = _initialize(fname)
@@ -489,12 +506,21 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             append = True
 
             # get commands previously run on database
-            cur = conn.cursor()
-            cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
-            log_metadata['command_log'] = f'{cur.fetchall()[0][0]}\n{log_metadata["command_log"]}'
+            if (command_log := get_meta_value(conn, 'command_log')) is None:
+                return False
+            log_metadata['command_log'] = command_log
+
+            # check that existing precursors in db were grouped by current method
+            if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
+                return False
+            if current_group_by != group_precursors_by:
+                LOGGER.error(f"Database grouping method '{current_group_by}' does not match '{group_precursors_by}'")
+                return False
+
         else:
             LOGGER.error(f'"{overwriteMode}" is an unknown overwriteMode!')
             return False
+
     else:
         conn = _initialize(fname)
 
@@ -821,7 +847,7 @@ def main():
                              "'e' for error, 'm' to use the peak area with user adjusted integration boundaries, "
                              "'f' to select first occurrence of duplicate precursors, "
                              "and 'i' to interactively choose which peak area to use. 'e' is the default.")
-    parser.add_argument('--groupBy', choices=['protein', 'gene'], default='protein', dest='group_proteins_by',
+    parser.add_argument('--groupBy', choices=['protein', 'gene'], default='protein', dest='group_precursors_by',
                         help="Choose whether to group precursors by gene or protein. Default is 'protein'")
     parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
     parser.add_argument('replicates', help='Skyline replicate_report')
@@ -853,13 +879,13 @@ def main():
     precursors = precursors.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
 
     precursor_cols = list(PRECURSOR_QUALITY_REQUIRED_COLUMNS.values())
-    if args.group_proteins_by == 'gene':
+    if args.group_precursors_by == 'gene':
         precursor_cols.append('ProteinGene')
 
     if not check_df_columns(precursors, precursor_cols, 'precursors'):
         sys.exit(1)
 
-    if args.group_proteins_by == 'gene':
+    if args.group_precursors_by == 'gene':
         def protein_uid(row):
             return row.proteinName if pd.isna(row.ProteinGene) else row.ProteinGene
 
@@ -919,7 +945,8 @@ def main():
     if not write_db(args.ofname, replicates, precursors,
                     protein_quants=protein_quants,
                     sample_metadata=metadata, sample_metadata_types=metadata_types,
-                    projectName=args.projectName, overwriteMode=args.overwriteMode):
+                    projectName=args.projectName, overwriteMode=args.overwriteMode,
+                    group_precursors_by=args.group_precursors_by):
         LOGGER.error('Failed to create database!')
         sys.exit(1)
     LOGGER.info('Done writing database...')
