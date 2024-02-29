@@ -359,10 +359,15 @@ metadata = convert_string_cols(metadata)\n"""
 
     text += """\nmeta_values['acquisition_number'] = 'continuous'
 
-def join_metadata(pc, acquired_ranks, meta_values):
+def join_metadata(pc, acquired_ranks, meta_values, metadata=None):
     ''' join metadata to pc matrix '''
-    this_metadata = acquired_ranks.join(metadata)
+
+    if metadata is None:
+        this_metadata = acquired_ranks
+    else:
+        this_metadata = acquired_ranks.join(metadata)
     pc = pc.join(this_metadata)
+
     for label_name, label_type in meta_values.items():
         if label_type == 'discrete':
             if any(pc[label_name].apply(pd.isna)):
@@ -379,12 +384,12 @@ def join_metadata(pc, acquired_ranks, meta_values):
     return text
 
 
-def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', set_zero_to_min=True):
+def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', set_zero_to_min=True, have_color_vars=False):
 
     text = '\n{}\n'.format(python_block_header(f'{stack()[0][3]}_{quant_col}'))
 
     if do_query:
-        text += f"""query = '''SELECT
+        text += f"""\nquery = '''SELECT
     p.replicateId,
     r.acquiredRank as acquisition_number,
     p.modifiedSequence,
@@ -419,7 +424,7 @@ pc, pc_var = pc_matrix(df_wide)
 
 acquired_ranks = df_pc[['replicateId', 'acquisition_number']].drop_duplicates().set_index('replicateId')
 
-pc = join_metadata(pc, acquired_ranks, meta_values)\n'''
+pc = join_metadata(pc, acquired_ranks, meta_values, {'metadata=metadata' if have_color_vars else ''})\n'''
 
     text += f'''
 for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
@@ -528,12 +533,14 @@ def main():
         outF.write(open_pannel_tabset())
 
         outF.write(add_header('Unnormalized', level=3))
-        outF.write(pc_analysis(do_query=False, dpi=args.dpi))
+        outF.write(pc_analysis(do_query=False, dpi=args.dpi,
+                               have_color_vars=args.color_vars is not None))
 
         if db_is_normalized:
             outF.write(add_header('Normalized', level=3))
             outF.write(pc_analysis(do_query=True, dpi=args.dpi,
-                                   quant_col='normalizedArea', set_zero_to_min=False))
+                                   quant_col='normalizedArea', set_zero_to_min=False,
+                                   have_color_vars=args.color_vars is not None))
 
         outF.write(close_pannel_tabset())
 
