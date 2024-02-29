@@ -4,41 +4,12 @@ import argparse
 import re
 import sqlite3
 from inspect import stack
-import logging
 
 from enum import Enum
 
-class Dtype(Enum):
-    NULL=0
-    BOOL=1
-    INT=2
-    FLOAT=3
-    STRING=4
-
-    def __str__(self):
-        return self.name
-
-    def __lt__(self, rhs):
-        if isinstance(rhs, Dtype):
-            return self.value < rhs.value
-
-        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
-
-
-    def __ge__(self, rhs):
-        if isinstance(rhs, Dtype):
-            return self.value >= rhs.value
-
-        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(filename)s %(funcName)s:%(lineno)d - %(levelname)s: %(message)s'
-)
-LOGGER = logging.getLogger()
-
-PYTHON_DIR = os.path.dirname(os.path.abspath(__file__))
+from pyDIAUtils.metadata import Dtype
+from pyDIAUtils.logger import LOGGER
+from pyDIAUtils.dia_db_utils import is_normalized
 
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
@@ -278,25 +249,6 @@ def get_meta_key_types(db_path, keys):
     types = {key: continious_discrete(var_type) for key, var_type in db_types}
 
     return types
-
-
-def is_normalized(conn):
-    ''' Determine if metadata.is_normalized is True '''
-
-    cur = conn.cursor()
-    cur.execute('SELECT value FROM metadata WHERE key == "is_normalized"')
-    value = cur.fetchall()
-
-    if len(value) == 0:
-        LOGGER.warning("'is_normalized' key not in metadata table!")
-        return False
-
-    value = value[0][0].lower()
-    if value in ('true', '1'):
-        return True
-
-    LOGGER.warning('metadata.is_normalized is False. Only using unnormalized values.')
-    return False
 
 
 def precursor_areas(quant_cols):

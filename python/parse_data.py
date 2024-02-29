@@ -13,11 +13,12 @@ from enum import Enum
 import pandas as pd
 from jsonschema import validate, ValidationError
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(filename)s %(funcName)s:%(lineno)d - %(levelname)s: %(message)s'
-)
-LOGGER = logging.getLogger()
+from pyDIAUtils.logger import LOGGER
+from pyDIAUtils.dia_db_utils import SCHEMA, PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
+from pyDIAUtils.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
+from pyDIAUtils.dia_db_utils import insert_program_metadata_key_pairs as insert_program_metadata
+from pyDIAUtils.dia_db_utils import get_meta_value
+from pyDIAUtils.metadata import Dtype
 
 # sample metadata json schema
 METADATA_SCHEMA = {
@@ -32,87 +33,6 @@ METADATA_SCHEMA = {
     'minProperties': 1
 }
 
-
-TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
-
-PRECURSOR_KEY_COLS = ('replicateId', 'modifiedSequence', 'precursorCharge')
-
-SCHEMA = [
-'''
-CREATE TABLE replicates (
-    replicateId INTEGER PRIMARY KEY,
-    replicate TEXT NOT NULL,
-    project TEXT NOT NULL,
-    acquiredTime BLOB NOT NULL,
-    acquiredRank INTEGER NOT NULL,
-    ticArea REAL NOT NULL,
-    UNIQUE(replicate, project) ON CONFLICT FAIL
-)''',
-f'''
-CREATE TABLE precursors (
-    replicateId INTEGER NOT NULL,
-    modifiedSequence VARCHAR(200) NOT NULL,
-    precursorCharge INTEGER NOT NULL,
-    precursorMz REAL,
-    averageMassErrorPPM REAL,
-    totalAreaFragment REAL,
-    totalAreaMs1 REAL,
-    normalizedArea REAL,
-    rt REAL,
-    minStartTime REAL,
-    maxEndTime REAL,
-    maxFwhm REAL,
-    libraryDotProduct REAL,
-    isotopeDotProduct REAL,
-    PRIMARY KEY ({', '.join(PRECURSOR_KEY_COLS)}),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
-)''',
-'''
-CREATE TABLE sampleMetadata (
-    replicateId INTEGER NOT NULL,
-    annotationKey TEXT NOT NULL,
-    annotationValue TEXT,
-    PRIMARY KEY (replicateId, annotationKey),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId)
-    FOREIGN KEY (annotationKey) REFERENCES sampleMetadataTypes(annotationKey)
-)''',
-'''
-CREATE TABLE sampleMetadataTypes (
-    annotationKey TEXT NOT NULL,
-    annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
-    PRIMARY KEY (annotationKey)
-)''',
-'''
-CREATE TABLE metadata (
-    key TEXT NOT NULL,
-    value TEXT,
-    PRIMARY KEY (key)
-)''',
-'''
-CREATE TABLE proteins (
-    proteinId INTEGER PRIMARY KEY,
-    accession VARCHAR(25),
-    name VARCHAR(50) UNIQUE,
-    description VARCHAR(200)
-)''',
-'''
-CREATE TABLE proteinQuants (
-    replicateId INTEGER NOT NULL,
-    proteinId INTEGER NOT NULL,
-    abundance REAL,
-    normalizedAbundance REAL,
-    PRIMARY KEY (replicateId, proteinId),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId),
-    FOREIGN KEY (proteinId) REFERENCES proteins(proteinId)
-)''',
-'''
-CREATE TABLE peptideToProtein (
-    proteinId INTEGER NOT NULL,
-    modifiedSequence VARCHAR(200) NOT NULL,
-    PRIMARY KEY (modifiedSequence, proteinId),
-    FOREIGN KEY (proteinId) REFERENCES proteins(proteinId),
-    FOREIGN KEY (modifiedSequence) REFERENCES precursors(modifiedSequence)
-)''']
 
 PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'ProteinAccession': 'proteinAccession',
@@ -161,60 +81,6 @@ def _initialize(fname):
 
     conn.commit()
     return conn
-
-
-NA_RE = re.compile(r'^(NA|NULL|#N/A|NaN)$')
-BOOL_RE = re.compile(r'^(true|True|TRUE|false|FALSE|False)$')
-INT_RE = re.compile(r'^[+\-]?\d+$')
-FLOAT_RE = re.compile(r'^[+\-]?(\d+(\.\d*)?|\.\d+|\d+(\.\d*)?[eE][+\-]?\d+)$')
-
-
-class Dtype(Enum):
-    NULL=0
-    BOOL=1
-    INT=2
-    FLOAT=3
-    STRING=4
-
-    def __str__(self):
-        return self.name
-
-    def __lt__(self, rhs):
-        if isinstance(rhs, Dtype):
-            return self.value < rhs.value
-
-        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
-
-
-    def __ge__(self, rhs):
-        if isinstance(rhs, Dtype):
-            return self.value >= rhs.value
-
-        raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
-
-    @staticmethod
-    def infer_type(s):
-        '''
-        Infer datatype for string.
-
-        Parameters
-        ----------
-        s: str
-            The string to test.
-
-        Returns
-        -------
-        Dtype object
-        '''
-        if s == '' or NA_RE.search(s):
-            return Dtype.NULL
-        if BOOL_RE.search(s):
-            return Dtype.BOOL
-        if INT_RE.search(s):
-            return Dtype.INT
-        if FLOAT_RE.search(s):
-            return Dtype.FLOAT
-        return Dtype.STRING
 
 
 def read_metadata(fname, metadata_format=None):
@@ -301,107 +167,6 @@ def read_metadata(fname, metadata_format=None):
         types[key] = Dtype.BOOL if types[key] is Dtype.NULL else types[key]
 
     return df, types
-
-
-def insert_program_metadata(conn, metadata):
-    '''
-    Insert multiple metadata key, value pairs into the metadata table.
-    If the key already exists it is overwritten.
-
-    Parameters
-    ----------
-    conn: sqlite3.Connection:
-        Database connection.
-    metadata: dict
-        A dict with key, value pairs.
-    '''
-    cur = conn.cursor()
-    for key, value in metadata.items():
-        cur.execute(f'''
-            INSERT INTO metadata
-                (key, value) VALUES ("{key}", "{value}")
-            ON CONFLICT(key) DO UPDATE SET value = "{value}" ''')
-    conn.commit()
-    return conn
-
-
-def get_meta_value(conn, key):
-    ''' Get the value for a key from the metadata table '''
-    cur = conn.cursor()
-    cur.execute('SELECT value FROM metadata WHERE key == ?', (key,))
-    value = cur.fetchall()
-    if len(value) == 1:
-        return value[0][0]
-    LOGGER.error(f"Could not get key '{key}' from metadata table!")
-    return None
-
-def update_acquired_ranks(conn):
-    '''
-    Populate acquiredRank column in replicates table.
-
-    Parameters
-    ----------
-    conn: sqlite3.Connection:
-        Database connection.
-    '''
-
-    replicates = pd.read_sql('SELECT replicateId, acquiredTime FROM replicates;', conn)
-
-    # parse acquired times and add acquiredRank
-    replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, TIME_FORMAT))
-    ranks = [(rank, i) for rank, i in enumerate(replicates['acquiredTime'].sort_values().index)]
-    replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
-
-    acquired_ranks = [(row.acquiredRank, row.replicateId) for row in replicates.itertuples()]
-    cur = conn.cursor()
-    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?', acquired_ranks)
-    conn.commit()
-
-    insert_program_metadata(conn, {'replicates.acquiredRank updated': True})
-
-    return conn
-
-
-def update_metadata_dtypes(conn, new_types):
-    '''
-    Update metadata annotationType column to fix cases where
-    two projects have a different annotationTypes for the same
-    annotationKey. This function will consolidate conflicting
-    types using the order in the Dtype Enum class.
-
-    Parameters
-    ----------
-    conn: sqlite3.Connection:
-        Database connection.
-    new_types: dict
-        A dictionary of new annotationKey, annotationType pairs.
-    '''
-
-    # Consolidate differing annotationTypes
-    cur = conn.cursor()
-    cur.execute('SELECT annotationKey, annotationType FROM sampleMetadataTypes;')
-    existing_types = {x[0]: Dtype[x[1]] for x in cur.fetchall()}
-
-    # consolidate new and existing data types
-    for key, value in new_types.items():
-        if key not in existing_types:
-            existing_types[key] = value
-            continue
-        existing_types[key] = max(existing_types[key], value)
-
-    # Update database
-    insert_query = '''
-        INSERT INTO sampleMetadataTypes (annotationKey, annotationType)
-        VALUES(?, ?)
-        ON CONFLICT(annotationKey) DO UPDATE SET annotationType = ?
-    '''
-    cur = conn.cursor()
-    for annotationKey, dtype in existing_types.items():
-        annotationType = str(dtype)
-        cur.execute(insert_query, (annotationKey, annotationType, annotationType))
-    conn.commit()
-
-    return conn
 
 
 def _add_index_column(col, index, df_name=None, index_name=None):
@@ -545,7 +310,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     replicates['project'] = projectName
 
     # populate some metadata values not that we have the projectName
-    log_metadata[f'Add {projectName} time'] = datetime.now().strftime(TIME_FORMAT)
+    log_metadata[f'Add {projectName} time'] = datetime.now().strftime(METADATA_TIME_FORMAT)
     log_metadata[f'Add {projectName} command'] = current_command
     log_metadata['replicates.acquiredRank updated'] = False
     log_metadata[f'is_normalized'] = False # set this to False because we are adding unnormalized data

@@ -3,7 +3,6 @@ import sys
 import argparse
 import sqlite3
 import os
-import logging
 from datetime import datetime
 from multiprocessing import cpu_count
 
@@ -13,36 +12,9 @@ import directlfq.utils as lfqutils
 from directlfq.normalization import NormalizationManagerSamplesOnSelectedProteins as dlfq_norm
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
-logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
-)
-LOGGER = logging.getLogger()
-
-TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
-
-
-def update_meta_value(conn, key, value):
-    '''
-    Add or update value in metadata table.
-    
-    Parameters
-    ----------
-    conn: sqlite3.Connection:
-        Database connection.
-    key: str
-        The metadata key
-    value: str
-        The metadata value
-    '''
-    cur = conn.cursor()
-    cur.execute('''
-        INSERT INTO metadata
-            (key, value) VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = ? ''',
-                (key, value, value))
-    conn.commit()
-
-    return conn
+from pyDIAUtils.dia_db_utils import METADATA_TIME_FORMAT
+from pyDIAUtils.dia_db_utils import update_meta_value
+from pyDIAUtils.logger import LOGGER
 
 
 def median_normalize(df, key_cols, value_col):
@@ -210,7 +182,7 @@ def main():
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(TIME_FORMAT))
+    conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(METADATA_TIME_FORMAT))
     conn = update_meta_value(conn, 'precursor_normalization_method', 'median')
     conn = update_meta_value(conn, 'protein_normalization_method', 'DirectLFQ')
     conn = update_meta_value(conn, 'is_normalized', 'True')

@@ -2,18 +2,15 @@
 import sys
 import os
 import argparse
-import logging
 import re
 from collections import namedtuple
 import sqlite3
 
 import pandas as pd
 
+from pyDIAUtils.dia_db_utils import get_meta_value
+from pyDIAUtils.logger import LOGGER
 
-logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
-)
-LOGGER = logging.getLogger()
 
 TABLE_TYPES = ('combined', 'split', 'drop')
 
@@ -82,7 +79,7 @@ def pivot_data_wider(dat, quant_col, index, group_method):
     if group_method == 'split':
         ret = ret.explode('accession')
         return ret
-    
+
     if group_method == 'drop':
         ret = ret[ret['accession'].apply(lambda x: len(x) == 1)]
         return ret
@@ -153,7 +150,7 @@ def concat_gene_data(accession_set, gene_data, sep=' / '):
 
 def main():
     parser = argparse.ArgumentParser()
-    
+
     gene_group_args = parser.add_argument_group('Gene grouping',
                                                 description="Choose how to display gene groups in output tables. "
                                                             "'combined': Show all genes in group in the same row seperated by --sep. "
@@ -161,11 +158,11 @@ def main():
                                                             "'skip': Don't include gene groups with more than one gene in table.")
     gene_group_args.add_argument('--protein', default='combined', type=str,
                                  help=f''' How to display gene groups in protein table.
-                                      Grouping method should unambigiously match one 
+                                      Grouping method should unambigiously match one
                                       of ['{"', '".join(TABLE_TYPES)}']''')
     gene_group_args.add_argument('--precursor', default='combined', type=str,
                                  help=f''' How to display gene groups in precursor table.
-                                      Grouping method should unambigiously match one 
+                                      Grouping method should unambigiously match one
                                       of ['{"', '".join(TABLE_TYPES)}']''')
     gene_group_args.add_argument('-s', '--sep', default='; ', type=str, dest='gene_group_sep',
                                  help="Gene group seperator. Default is ' / '")
@@ -173,58 +170,68 @@ def main():
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
     parser.add_argument('database', help='The precursor database.')
-    
+
     args = parser.parse_args()
-    
+
     if protein_match := unambigious_match(TABLE_TYPES, args.protein) is None:
         LOGGER.error(f"Could not unambigiously determine protein table type: '{args.protein}'\n")
         sys.exit(1)
-    
+
     if precursor_match := unambigious_match(TABLE_TYPES, args.precursor) is None:
         LOGGER.error(f"Could not unambigiously determine precursor table type: '{args.precursor}'\n")
         sys.exit(1)
-    
+
     if os.path.isfile(args.database):
         conn = sqlite3.connect(args.database)
-    
+
+        # check that existing precursors in db were grouped by current method
+        if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
+            return False
+        if current_group_by != 'gene':
+            LOGGER.error('Precursors in database must be grouped by gene!')
+            return False
+
+        if (is_normalized := get_meta_value(conn, 'is_normalized')) is None:
+            return False
+
         # read proteins
         LOGGER.info('Reading protein table from database...')
         dat_protein = pd.read_sql(PROTEIN_QUERY, conn)
         replicate_names = dat_protein['replicate'].drop_duplicates().to_list()
         LOGGER.info('Done reading protein table!')
-    
+
         # read precursors
         LOGGER.info('Reading precursor table from database...')
         dat_precursor = pd.read_sql(PRECURSOR_QUERY, conn)
         LOGGER.info('Done reading precursor table!')
-    
+
         conn.close()
     else:
         LOGGER.error('Database file does not exist!')
         sys.exit(1)
-    
+
     # read gene ID lookup table
     gene_ids = pd.read_csv(args.gene_table)
     if not check_df_columns(gene_ids, GENE_ID_TABLE_COLS):
         sys.exit(1)
     gene_ids = gene_ids[list(GENE_ID_TABLE_COLS.keys())].rename(columns=GENE_ID_TABLE_COLS)
-    
+
     # pivot proteins wider
     accessions = set()
     proteins = {'proteins_unnormalized': 'abundance', 'proteins_normalized': 'normalizedAbundance'}
     for method in proteins:
         proteins[method] = pivot_data_wider(dat_protein, proteins[method], 'accession', protein_match)
         accessions = accessions | set(proteins[method]['accession'].drop_duplicates().to_list())
-    
+
     # pivot precursors wider
     precursors = {'precursors_unnormalized': 'area', 'precursors_normalized': 'normalizedArea'}
     for method in precursors:
         precursors[method] = pivot_data_wider(dat_precursor, precursors[method],
                                              ['accession', 'modifiedSequence', 'precursorCharge'], precursor_match)
         accessions = accessions | set(precursors[method]['accession'].drop_duplicates().to_list())
-    
+
     data = proteins | precursors
-    
+
     # make accession gene data lookup
     gene_ids = gene_ids.drop_duplicates(subset='accession')
     LOGGER.info('Looking up gene data for protein accessions.')
@@ -232,7 +239,7 @@ def main():
     LOGGER.info(f'Found gene data for {len(gene_data_lookup)} protein accessions.')
     if len(missing_accessions) > 0:
         LOGGER.warning(f'Missing gene data for {len(missing_accessions)} protein accessions!')
-    
+
     # join gene data to tables
     for method in data:
         data[method] = data[method].set_index('accession').join(gene_data_lookup.set_index('accession'),
@@ -241,7 +248,7 @@ def main():
         columns = list(data[method].columns)
         columns.insert(0, columns.pop(columns.index('Gene')))
         data[method] = data[method].loc[:, columns]
-    
+
     # write tables
     for method in data:
         fname = f'{"" if args.prefix is None else args.prefix + "_"}{method}.tsv'

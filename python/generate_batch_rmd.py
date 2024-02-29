@@ -4,13 +4,8 @@ import os
 import argparse
 import re
 import sqlite3
-import logging
 
-
-logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s - %(filename)s %(funcName)s - %(levelname)s: %(message)s'
-)
-LOGGER = logging.getLogger()
+from pyDIAUtils.logger import LOGGER
 
 DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
@@ -208,7 +203,7 @@ color.vars <- c('{}')'''.format("', '".join(covariate_vars))
     if remove_missing:
         precursor_filter = f'\n{" " * 35}WHERE normalizedArea IS NOT NULL'
         protein_filter = f'\n{" " * 32}WHERE normalizedAbundance IS NOT NULL'
-        
+
     text += f'''\n
 # Load necissary tables from database
 conn <- DBI::dbConnect(RSQLite::SQLite(), '{db_path}')
@@ -401,7 +396,7 @@ p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
           legend.title=element_blank(),
           legend.direction='horizontal',
           legend.position = 'top')\n'''
-    
+
     if plot_file_path:
         text += ggsave(plot_file_path, 'p.cv', (fig_height, fig_width))
 
