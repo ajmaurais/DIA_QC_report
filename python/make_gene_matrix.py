@@ -193,6 +193,7 @@ def main():
 
         if (is_normalized := get_meta_value(conn, 'is_normalized')) is None:
             return False
+        is_normalized = True if is_normalized.lower() == 'true' else False
 
         # read proteins
         LOGGER.info('Reading protein table from database...')
@@ -216,15 +217,21 @@ def main():
         sys.exit(1)
     gene_ids = gene_ids[list(GENE_ID_TABLE_COLS.keys())].rename(columns=GENE_ID_TABLE_COLS)
 
+    proteins = {'proteins_unnormalized': 'abundance'}
+    precursors = {'precursors_unnormalized': 'area'}
+    if is_normalized:
+        proteins['proteins_normalized'] = 'normalizedAbundance'
+        precursors['precursors_normalized'] = 'normalizedArea'
+    else:
+        LOGGER.warning('Database is not normalized. Only writing unnormalized reports.')
+
     # pivot proteins wider
     accessions = set()
-    proteins = {'proteins_unnormalized': 'abundance', 'proteins_normalized': 'normalizedAbundance'}
     for method in proteins:
         proteins[method] = pivot_data_wider(dat_protein, proteins[method], 'accession', protein_match)
         accessions = accessions | set(proteins[method]['accession'].drop_duplicates().to_list())
 
     # pivot precursors wider
-    precursors = {'precursors_unnormalized': 'area', 'precursors_normalized': 'normalizedArea'}
     for method in precursors:
         precursors[method] = pivot_data_wider(dat_precursor, precursors[method],
                                              ['accession', 'modifiedSequence', 'precursorCharge'], precursor_match)
