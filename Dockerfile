@@ -48,13 +48,15 @@ COPY python/normalize_db.py /code/DIA_QC_report/python/normalize_db.py
 COPY python/parse_data.py /code/DIA_QC_report/python/parse_data.py
 COPY python/generate_qc_qmd.py /code/DIA_QC_report/python/generate_qc_qmd.py
 COPY python/generate_batch_rmd.py /code/DIA_QC_report/python/generate_batch_rmd.py
+COPY python/make_gene_matrix.py /code/DIA_QC_report/python/make_gene_matrix.py
 RUN cd /usr/local/bin && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/parse_data.py "$@"' > parse_data && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/normalize_db.py "$@"' > normalize_db && \
     echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_batch_rmd.py "$@"' > generate_batch_rmd && \
+    echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/make_gene_matrix.py "$@"' > make_gene_matrix && \
     echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
-    chmod 755 parse_data normalize_db entrypoint generate_qc_qmd generate_batch_rmd
+    chmod 755 parse_data normalize_db entrypoint generate_qc_qmd generate_batch_rmd make_gene_matrix
 
 # Git version information
 ARG GIT_BRANCH
