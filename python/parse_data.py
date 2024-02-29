@@ -833,10 +833,10 @@ def main():
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'csv', 'tsv'),
                         help='Specify metadata file format. '
                              'By default the format is inferred from the file extension.')
-    parser.add_argument('--proteins', default=None,
-                        help='Long formatted protein abundance report. '
-                              'If no protein report is given, proteins are quantified in the database '
-                              'by summing all the precursors belonging to that protein.')
+    # parser.add_argument('--proteins', default=None,
+    #                     help='Long formatted protein abundance report. '
+    #                           'If no protein report is given, proteins are quantified in the database '
+    #                           'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',
                         help='Output file name. Default is ./data.db3')
     parser.add_argument('--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
@@ -901,18 +901,18 @@ def main():
 
     # read protein quants
     protein_quants = None
-    if args.proteins:
-        protein_quants = pd.read_csv(args.proteins, sep='\t')
-        protein_quants = protein_quants.rename(columns=PROTEIN_QUANTS_REQUIRED_COLUMNS)
-        if not check_df_columns(protein_quants, PROTEIN_QUANTS_REQUIRED_COLUMNS, 'protein_quants'):
-            sys.exit(1)
+    # if args.proteins:
+    #     protein_quants = pd.read_csv(args.proteins, sep='\t')
+    #     protein_quants = protein_quants.rename(columns=PROTEIN_QUANTS_REQUIRED_COLUMNS)
+    #     if not check_df_columns(protein_quants, PROTEIN_QUANTS_REQUIRED_COLUMNS, 'protein_quants'):
+    #         sys.exit(1)
 
-        protein_reps = set(protein_quants['replicateName'].drop_duplicates().tolist())
-        if not all(k in protein_reps for k in replicates['replicate'].tolist()):
-            LOGGER.warning('Not all replicates in replicate report are in protein quants.')
+    #     protein_reps = set(protein_quants['replicateName'].drop_duplicates().tolist())
+    #     if not all(k in protein_reps for k in replicates['replicate'].tolist()):
+    #         LOGGER.warning('Not all replicates in replicate report are in protein quants.')
 
-        protein_quants = protein_quants[PROTEIN_QUANTS_REQUIRED_COLUMNS.keys()]
-        LOGGER.info('Done reading proteins table...')
+    #     protein_quants = protein_quants[PROTEIN_QUANTS_REQUIRED_COLUMNS.keys()]
+    #     LOGGER.info('Done reading proteins table...')
 
     # check if file names match replicate names
     if 'FileName' in replicates.columns:
