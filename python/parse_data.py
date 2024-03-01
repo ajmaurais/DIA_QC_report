@@ -33,7 +33,6 @@ METADATA_SCHEMA = {
     'minProperties': 1
 }
 
-
 PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'ProteinAccession': 'proteinAccession',
                                       'ProteinName': 'proteinName',
@@ -127,7 +126,23 @@ def read_metadata(fname, metadata_format=None):
         else:
             raise ValueError('Invalid metadata format!')
 
+        if not all(len(x) == len(rows[0]) for x in rows):
+            raise ValueError('Invalid metadata format!')
+
+        drop_headers = list()
+        for column_i in range(1, len(rows[0])):
+            if all(rows[row_i][column_i] == '' for row_i in range(len(rows))):
+                drop_headers.append(headers[column_i])
+
         data = [dict(zip(headers, row)) for row in rows]
+        for i in range(len(data)):
+            for header in drop_headers:
+                del data[i][header]
+
+        # return None if all annotations are empty
+        if not any(x in data[0] for x in headers[1:]):
+            LOGGER.warning('All replicate annotations are empty!')
+            return None, None
 
     elif _format == 'json':
         with open(fname, 'r') as inF:
@@ -692,7 +707,7 @@ def main():
             # fix names in precursors
             try:
                 precursors['replicateName'] = precursors['replicateName'].apply(lambda x: rep_name_map[x])
-                if protein_quants:
+                if protein_quants is not None:
                     protein_quants['replicateName'] = protein_quants['replicateName'].apply(lambda x: rep_name_map[x])
             except KeyError as e:
                 LOGGER.error(f'KeyError: {str(e)}')
@@ -703,7 +718,7 @@ def main():
         LOGGER.warning('"FileName" column not found in replciate report, could not check that replicate names match!')
 
     replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.values()]
-    replicates['acquiredRank'] = -1 # this will be updated later
+    replicates['acquiredRank'] = -1 # this will be populated later
 
     # build database
     LOGGER.info('Writing database...')
@@ -712,7 +727,7 @@ def main():
                     sample_metadata=metadata, sample_metadata_types=metadata_types,
                     projectName=args.projectName, overwriteMode=args.overwriteMode,
                     group_precursors_by=args.group_precursors_by):
-        LOGGER.error('Failed to create database!')
+        LOGGER.error(f'Failed to {"create" if args.overwriteMode != "append" else "append to"} database!')
         sys.exit(1)
     LOGGER.info('Done writing database...')
 
