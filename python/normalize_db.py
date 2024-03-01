@@ -14,6 +14,7 @@ import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 from pyDIAUtils.dia_db_utils import METADATA_TIME_FORMAT
 from pyDIAUtils.dia_db_utils import update_meta_value
+from pyDIAUtils.dia_db_utils import check_schema_version
 from pyDIAUtils.logger import LOGGER
 
 
@@ -62,7 +63,15 @@ def main():
 
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.db)
+    if os.path.isfile(args.db):
+        conn = sqlite3.connect(args.db)
+    else:
+        LOGGER.error(f'Database file ({args.db}) does not exist!')
+        sys.exit(1)
+
+    # check database version
+    if not check_schema_version(conn):
+        sys.exit(1)
 
     # get precursor table from db
     LOGGER.info('Reading precursors from database...')

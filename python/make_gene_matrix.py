@@ -8,9 +8,9 @@ import sqlite3
 
 import pandas as pd
 
-from pyDIAUtils.dia_db_utils import get_meta_value
+from pyDIAUtils.dia_db_utils import get_meta_value, is_normalized
+from pyDIAUtils.dia_db_utils import check_schema_version
 from pyDIAUtils.logger import LOGGER
-
 
 TABLE_TYPES = ('combined', 'split', 'drop')
 
@@ -183,33 +183,36 @@ def main():
 
     if os.path.isfile(args.database):
         conn = sqlite3.connect(args.database)
-
-        # check that existing precursors in db were grouped by current method
-        if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
-            return False
-        if current_group_by != 'gene':
-            LOGGER.error('Precursors in database must be grouped by gene!')
-            return False
-
-        if (is_normalized := get_meta_value(conn, 'is_normalized')) is None:
-            return False
-        is_normalized = True if is_normalized.lower() == 'true' else False
-
-        # read proteins
-        LOGGER.info('Reading protein table from database...')
-        dat_protein = pd.read_sql(PROTEIN_QUERY, conn)
-        replicate_names = dat_protein['replicate'].drop_duplicates().to_list()
-        LOGGER.info('Done reading protein table!')
-
-        # read precursors
-        LOGGER.info('Reading precursor table from database...')
-        dat_precursor = pd.read_sql(PRECURSOR_QUERY, conn)
-        LOGGER.info('Done reading precursor table!')
-
-        conn.close()
     else:
         LOGGER.error('Database file does not exist!')
         sys.exit(1)
+
+    # check database version
+    if not check_schema_version(conn):
+        sys.exit(1)
+
+    # check that existing precursors in db were grouped by current method
+    if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
+        LOGGER.error('group_precursors_by key not found in metadata table!')
+        sys.exit(1)
+    if current_group_by != 'gene':
+        LOGGER.error('Precursors in database must be grouped by gene!')
+        sys.exit(1)
+
+    db_normalized = is_normalized(conn)
+
+    # read proteins
+    LOGGER.info('Reading protein table from database...')
+    dat_protein = pd.read_sql(PROTEIN_QUERY, conn)
+    replicate_names = dat_protein['replicate'].drop_duplicates().to_list()
+    LOGGER.info('Done reading protein table!')
+
+    # read precursors
+    LOGGER.info('Reading precursor table from database...')
+    dat_precursor = pd.read_sql(PRECURSOR_QUERY, conn)
+    LOGGER.info('Done reading precursor table!')
+
+    conn.close()
 
     # read gene ID lookup table
     gene_ids = pd.read_csv(args.gene_table)
@@ -219,7 +222,7 @@ def main():
 
     proteins = {'proteins_unnormalized': 'abundance'}
     precursors = {'precursors_unnormalized': 'area'}
-    if is_normalized:
+    if db_normalized:
         proteins['proteins_normalized'] = 'normalizedAbundance'
         precursors['precursors_normalized'] = 'normalizedArea'
     else:

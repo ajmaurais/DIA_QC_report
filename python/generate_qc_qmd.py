@@ -10,6 +10,7 @@ from enum import Enum
 from pyDIAUtils.metadata import Dtype
 from pyDIAUtils.logger import LOGGER
 from pyDIAUtils.dia_db_utils import is_normalized
+from pyDIAUtils.dia_db_utils import check_schema_version
 
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
@@ -422,6 +423,10 @@ def main():
         conn = sqlite3.connect(args.db)
     else:
         LOGGER.error(f"Database file: '{args.db}' does not exist!")
+        sys.exit(1)
+
+    # check database version
+    if not check_schema_version(conn):
         sys.exit(1)
 
     # check that metadata annotatioKeys exist

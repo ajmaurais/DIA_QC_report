@@ -14,10 +14,12 @@ import pandas as pd
 from jsonschema import validate, ValidationError
 
 from pyDIAUtils.logger import LOGGER
-from pyDIAUtils.dia_db_utils import SCHEMA, PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
+from pyDIAUtils.dia_db_utils import SCHEMA, SCHEMA_VERSION
+from pyDIAUtils.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
 from pyDIAUtils.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
 from pyDIAUtils.dia_db_utils import insert_program_metadata_key_pairs as insert_program_metadata
 from pyDIAUtils.dia_db_utils import get_meta_value
+from pyDIAUtils.dia_db_utils import check_schema_version
 from pyDIAUtils.metadata import Dtype
 
 # sample metadata json schema
@@ -263,6 +265,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     current_command = ' '.join(sys.argv)
     log_metadata = {'command_log': current_command}
     log_metadata['group_precursors_by'] = group_precursors_by
+    log_metadata['schema_version'] = SCHEMA_VERSION
 
     if sample_metadata is not None and sample_metadata_types is None:
         LOGGER.error('Must specify both sample_metadata and sample_metadata_types!')
@@ -284,6 +287,10 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         elif overwriteMode == 'append':
             conn = sqlite3.connect(fname)
             append = True
+
+            # check database version
+            if not check_schema_version(conn):
+                return False
 
             # get commands previously run on database
             if (command_log := get_meta_value(conn, 'command_log')) is None:

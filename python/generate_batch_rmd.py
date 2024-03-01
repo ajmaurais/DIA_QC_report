@@ -6,6 +6,7 @@ import re
 import sqlite3
 
 from pyDIAUtils.logger import LOGGER
+from pyDIAUtils.dia_db_utils import check_schema_version
 
 DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
@@ -94,7 +95,15 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
     '''
 
     # initialize db connection
-    conn = sqlite3.connect(db_path)
+    if os.path.isfile(db_path):
+        conn = sqlite3.connect(db_path)
+    else:
+        LOGGER.error(f'Database file ({db_path}) does not exist!')
+        sys.exit(1)
+
+    # check database version
+    if not check_schema_version(conn):
+        sys.exit(1)
 
     # If no batch vars, test if we can use replicates.project
     if batch1 is None and batch2 is None:
