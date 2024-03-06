@@ -295,7 +295,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             # get commands previously run on database
             if (command_log := get_meta_value(conn, 'command_log')) is None:
                 return False
-            log_metadata['command_log'] = command_log
+            log_metadata['command_log'] = f'{command_log}\n{log_metadata["command_log"]}'
 
             # check that existing precursors in db were grouped by current method
             if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
@@ -423,11 +423,11 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     newPairs['proteinId'] = prot_id_col
     peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
 
-    peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
-    proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
-    protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
     replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
+    proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
+    protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
+    peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
 
     if sample_metadata is not None:
         missing_metadata = [x for x in sample_metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]
@@ -439,9 +439,6 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         if (rep_id_col := _add_index_column(sample_metadata['Replicate'], repIndex,
                                             'sample_metadata', 'repIndex')) is None:
             return False
-        sample_metadata['replicateId'] = rep_id_col
-        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']] #, 'annotationType']]
-        sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
         if append:
             conn = update_metadata_dtypes(conn, sample_metadata_types)
@@ -450,6 +447,10 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             cur = conn.cursor()
             cur.executemany(insert_query, [(k, str(v)) for k, v in sample_metadata_types.items()])
             conn.commit()
+
+        sample_metadata['replicateId'] = rep_id_col
+        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']] #, 'annotationType']]
+        sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
     conn = insert_program_metadata(conn, log_metadata)
     conn = update_acquired_ranks(conn)
