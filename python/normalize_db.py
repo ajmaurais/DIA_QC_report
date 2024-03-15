@@ -5,6 +5,7 @@ import sqlite3
 import os
 from datetime import datetime
 from multiprocessing import cpu_count
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,7 @@ import directlfq.protein_intensity_estimation as lfqprot_estimation
 from pyDIAUtils.dia_db_utils import METADATA_TIME_FORMAT
 from pyDIAUtils.dia_db_utils import update_meta_value
 from pyDIAUtils.dia_db_utils import check_schema_version
+from pyDIAUtils.dia_db_utils import update_acquired_ranks
 from pyDIAUtils.logger import LOGGER
 
 
@@ -34,7 +36,7 @@ def median_normalize(df, key_cols, value_col):
     '''
     cols = df.columns.tolist()
     cols.append('normalizedArea')
-    
+
     # log2 transform
     df['log2Area'] = np.log2(df[value_col].replace(0, np.nan))
 
@@ -54,14 +56,105 @@ def median_normalize(df, key_cols, value_col):
     return df[cols]
 
 
+def mark_reps_skipped(conn, reps=None, projects=None):
+    '''
+
+    '''
+
+    reps = reps if reps is not None else []
+    projects = projects if projects is not None else []
+
+    # retrieve data from replicates table
+    cur = conn.cursor()
+    cur.execute('SELECT replicateId, replicate, project, includeRep FROM replicates;')
+    db_reps = cur.fetchall()
+
+    db_rep_index = dict()
+    for i, rep in enumerate(db_reps):
+        if rep in db_rep_index:
+            db_rep_index[rep[1]][rep[2]] = i
+        else:
+            db_rep_index[rep[1]] = {rep[2]: i}
+
+    def check_missing(var_name, missing_vals):
+        if len(missing_vals) > 0:
+            for rep in reps:
+                LOGGER.error(f"{var_name} '{rep}' is not in database!")
+            return True
+        return False
+
+    # make sure all reps and projects specified exist in db
+    missing_reps = [rep for rep in reps if rep not in db_rep_index]
+    all_projects = {x for xs in [list(rep.keys()) for rep in db_rep_index.values()] for x in xs}
+    missing_projects = [proj for proj in projects if proj not in all_projects]
+    if check_missing('Replicate', missing_reps) or check_missing('Project', missing_projects):
+        return False
+
+    rep_index_to_false = []
+    for rep in reps:
+        for i in db_rep_index[rep].values():
+            rep_index_to_false.append(i)
+
+    for rep, rep_projects in db_rep_index.items():
+        for proj in projects:
+            if proj in rep_projects:
+                rep_index_to_false.append(rep_projects[proj])
+
+    rep_index_to_false = Counter(rep_index_to_false)
+    for rep_i, count in rep_index_to_false.items():
+        if count > 1:
+            LOGGER.warning(f"Replicate '{db_reps[rep_i][1]}' was set to be excluded {count} times!")
+
+    LOGGER.info(f'Excluding {len(rep_index_to_false)} replicates.')
+    cur = conn.cursor()
+    cur.executemany('UPDATE replicates SET includeRep = FALSE WHERE replicateId = ?;',
+                    [(db_reps[rep_i][0],) for rep_i in rep_index_to_false])
+    conn.commit()
+
+    return True
+
+
+def mark_all_reps_includced(conn):
+    '''
+    Set all replicates.includeRep values to TRUE and update replicates.acquiredRank if necissary.
+    '''
+    cur = conn.cursor()
+    cur.execute('SELECT includeRep, COUNT(includeRep) FROM replicates GROUP BY includeRep;')
+    include_rep_counts = Counter({x[0]: x[1] for x in cur.fetchall()})
+
+    if 0 in include_rep_counts:
+        LOGGER.info(f'Setting {include_rep_counts[0]} includeRep values to TRUE.')
+        cur.execute('UPDATE replicates SET includeRep = TRUE;')
+        conn.commit()
+        update_acquired_ranks(conn)
+    else:
+        LOGGER.warning(f'All replicates are already included.')
+
+
 def main():
 
     parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
     # parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
     #                     help='Normalization method to use.')
+    exclude_args = parser.add_argument_group('Filter replicates',
+                                             'Add replicates or projects to exclude from normalization. '
+                                             'The replicates.includeRep value will simply be set to FALSE '
+                                             'the replicate will not be deleted from the database.')
+    exclude_args.add_argument('-x', '--excludeRep', action='append', default=[],
+                              help='Add replicate to exclude from normalization.')
+    exclude_args.add_argument('-p', '--excludeProject', action='append', default=[],
+                              help='Exclude project from normalization.')
+    exclude_args.add_argument('-a', '--useAll', action='store_true', default=False,
+                              help='Use all replicates for normalization and set all '
+                                    'replciates.includeRep values to TRUE.')
     parser.add_argument('db', help='Path to sqlite batch database.')
 
     args = parser.parse_args()
+
+    exclude_reps = sum([len(args.excludeRep), len(args.excludeProject)]) > 0
+    if exclude_reps and args.useAll:
+        LOGGER.error('exclude Rep/Project and --useAll arguments conflict!')
+        sys.exit(1)
 
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)
@@ -73,6 +166,16 @@ def main():
     if not check_schema_version(conn):
         sys.exit(1)
 
+    # remove replicates if applicable
+    if exclude_reps:
+        if not mark_reps_skipped(conn, reps=args.excludeRep,
+                                 projects=args.excludeProject):
+            sys.exit(1)
+        conn = update_acquired_ranks(conn)
+
+    if args.useAll:
+        mark_all_reps_includced(conn)
+
     # get precursor table from db
     LOGGER.info('Reading precursors from database...')
     df = pd.read_sql('''
@@ -83,9 +186,15 @@ def main():
             p.precursorCharge,
             p.totalAreaFragment
         FROM precursors p
-        LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence; ''',
+        LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence
+        LEFT JOIN replicates r ON p.replicateId == r.replicateId
+        WHERE r.includeRep == TRUE; ''',
         conn)
     LOGGER.info('Finished reading precursors.')
+
+    if len(df.index) == 0:
+        LOGGER.error('All replicates in database have been excluded!')
+        sys.exit(1)
 
     df['ion'] = df['modifiedSequence'] + '_' + df['precursorCharge'].astype(str)
     precursor_ids = df[['ion', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
@@ -131,8 +240,8 @@ def main():
 
     # pivot protein_df longer
     protein_df = protein_df.melt(id_vars='protein', value_name='normalizedArea', var_name='replicateId')
-    
-    
+
+
     # remove precursors with missing values
     df = df[df['ion'].apply(lambda x: x in keep_precursors)]
 
@@ -197,7 +306,7 @@ def main():
     conn = update_meta_value(conn, 'is_normalized', 'True')
     conn = update_meta_value(conn, 'Normalization command', current_command)
     conn = update_meta_value(conn, 'command_log', previous_commands + current_command)
-     
+
     conn.close()
 
 
