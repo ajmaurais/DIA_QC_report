@@ -3,7 +3,7 @@ import sys
 import os
 import argparse
 import re
-from collections import namedtuple
+from collections import namedtuple, Counter
 import sqlite3
 
 import pandas as pd
@@ -28,16 +28,24 @@ PROTEIN_QUERY = '''
 SELECT
     prot.accession,
 	r.replicate,
+    a.aliquot_id,
 	q.abundance,
 	q.normalizedAbundance
 FROM proteinQuants q
 LEFT JOIN proteins prot ON prot.proteinId == q.proteinId
 LEFT JOIN replicates r ON r.replicateId == q.replicateId
-WHERE prot.accession IS NOT NULL;'''
+LEFT JOIN (
+    SELECT
+        replicateId, annotationValue as aliquot_id
+    FROM sampleMetadata
+    WHERE annotationKey == 'aliquot_id'
+) a ON a.replicateId == q.replicateId
+WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;'''
 
 PRECURSOR_QUERY = '''
 SELECT
 	r.replicate,
+    a.aliquot_id,
 	prot.accession as accession,
 	p.modifiedSequence,
 	p.precursorCharge,
@@ -47,8 +55,37 @@ FROM precursors p
 LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence
 LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId
 LEFT JOIN replicates r ON r.replicateId == p.replicateId
-WHERE prot.accession IS NOT NULL;
+LEFT JOIN (
+    SELECT
+        replicateId, annotationValue as aliquot_id
+    FROM sampleMetadata
+    WHERE annotationKey == 'aliquot_id'
+) a ON a.replicateId == p.replicateId
+WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;
 '''
+
+
+def check_aliquot_id(df, df_name):
+    # check that aliquot_id column exists in df
+    if 'aliquot_id' not in df.columns:
+        LOGGER.error(f'In {df_name} df: aliquot_id column does not exist!')
+        return False
+
+    # make sure that no aliquot_ids are NA
+    rep_ids = df[['replicate', 'aliquot_id']].drop_duplicates()
+    na_counts = Counter(pd.isna(rep_ids['aliquot_id']))
+    if True in na_counts:
+        LOGGER.error(f'Missing aliquot_id for {na_counts[True]} replicates!')
+        return False
+
+    # Make sure that all aliquot_ids are unique
+    id_diff = len(set(rep_ids['replicate'].to_list())) - len(set(rep_ids['aliquot_id'].to_list()))
+    if id_diff != 0:
+        LOGGER.error('Not all aliquot_ids are unique!')
+        return False
+
+    return True
+
 
 
 def unambigious_match(choices, substr):
@@ -69,14 +106,20 @@ def check_df_columns(df, required_cols, df_name=None):
     return all_good
 
 
-def pivot_data_wider(dat, quant_col, index, group_method):
-    ret = dat.pivot(columns='replicate', index=index,
+def pivot_data_wider(dat, quant_col, index,
+                     group_method='split', rep_id_col='replicate'):
+
+    if group_method not in TABLE_TYPES:
+        LOGGER.warning(f"group_method '{group_method}' unknown!")
+
+    ret = dat.pivot(columns=rep_id_col, index=index,
                     values=quant_col).reset_index()
     ret.columns.name = None
 
     ret['accession'] = ret['accession'].apply(lambda x: tuple(SPLIT_RE.split(x)))
 
     if group_method == 'split':
+        ret['gene_group'] = ret['accession']
         ret = ret.explode('accession')
         return ret
 
@@ -121,11 +164,19 @@ def concat_gene_data(accession_set, gene_data, sep=' / '):
         gene_data_dict[row.accession] = Gene(row.Gene, row.NCBIGeneID, row.Authority,
                                              row.Description, row.Chromosome, row.Locus)
 
+    def iter_accession_group(group):
+        if isinstance(group, (list, tuple)):
+            for i in group:
+                yield i
+        elif isinstance(group, str):
+            yield group
+        else:
+            raise ValueError('Unknown group type!')
+
     missing_accessions = set()
     for accession_group in accession_set:
-
         row_initiated = False
-        for accession in accession_group:
+        for accession in iter_accession_group(accession_group):
             if accession not in gene_data_dict:
                 missing_accessions.add(accession)
                 continue
@@ -156,11 +207,11 @@ def main():
                                                             "'combined': Show all genes in group in the same row seperated by --sep. "
                                                             "'split': Show each gene in group on a seperate row. "
                                                             "'skip': Don't include gene groups with more than one gene in table.")
-    gene_group_args.add_argument('--protein', default='combined', type=str,
+    gene_group_args.add_argument('--protein', default='split', type=str,
                                  help=f''' How to display gene groups in protein table.
                                       Grouping method should unambigiously match one
                                       of ['{"', '".join(TABLE_TYPES)}']''')
-    gene_group_args.add_argument('--precursor', default='combined', type=str,
+    gene_group_args.add_argument('--precursor', default='split', type=str,
                                  help=f''' How to display gene groups in precursor table.
                                       Grouping method should unambigiously match one
                                       of ['{"', '".join(TABLE_TYPES)}']''')
@@ -168,16 +219,18 @@ def main():
                                  help="Gene group seperator. Default is ' / '")
 
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
+    parser.add_argument('--useAliquotId', default=False, action='store_true',
+                        help='Use aliquot_id as column headers instead of replicate name.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
     parser.add_argument('database', help='The precursor database.')
 
     args = parser.parse_args()
 
-    if protein_match := unambigious_match(TABLE_TYPES, args.protein) is None:
+    if (protein_match := unambigious_match(TABLE_TYPES, args.protein)) is None:
         LOGGER.error(f"Could not unambigiously determine protein table type: '{args.protein}'\n")
         sys.exit(1)
 
-    if precursor_match := unambigious_match(TABLE_TYPES, args.precursor) is None:
+    if (precursor_match := unambigious_match(TABLE_TYPES, args.precursor)) is None:
         LOGGER.error(f"Could not unambigiously determine precursor table type: '{args.precursor}'\n")
         sys.exit(1)
 
@@ -204,7 +257,6 @@ def main():
     # read proteins
     LOGGER.info('Reading protein table from database...')
     dat_protein = pd.read_sql(PROTEIN_QUERY, conn)
-    replicate_names = dat_protein['replicate'].drop_duplicates().to_list()
     LOGGER.info('Done reading protein table!')
 
     # read precursors
@@ -213,6 +265,13 @@ def main():
     LOGGER.info('Done reading precursor table!')
 
     conn.close()
+
+    # check aliquot_id column if necissary
+    rep_id_col = 'replicate'
+    if args.useAliquotId:
+        if not check_aliquot_id(dat_protein, 'protein') or not check_aliquot_id(dat_precursor, 'precursor'):
+            sys.exit(1)
+        rep_id_col = 'aliquot_id'
 
     # read gene ID lookup table
     gene_ids = pd.read_csv(args.gene_table)
@@ -231,13 +290,15 @@ def main():
     # pivot proteins wider
     accessions = set()
     for method in proteins:
-        proteins[method] = pivot_data_wider(dat_protein, proteins[method], 'accession', protein_match)
+        proteins[method] = pivot_data_wider(dat_protein, proteins[method], 'accession',
+                                            group_method=protein_match, rep_id_col=rep_id_col)
         accessions = accessions | set(proteins[method]['accession'].drop_duplicates().to_list())
 
     # pivot precursors wider
     for method in precursors:
         precursors[method] = pivot_data_wider(dat_precursor, precursors[method],
-                                             ['accession', 'modifiedSequence', 'precursorCharge'], precursor_match)
+                                              ['accession', 'modifiedSequence', 'precursorCharge'],
+                                              group_method=precursor_match, rep_id_col=rep_id_col)
         accessions = accessions | set(precursors[method]['accession'].drop_duplicates().to_list())
 
     data = proteins | precursors
@@ -250,13 +311,27 @@ def main():
     if len(missing_accessions) > 0:
         LOGGER.warning(f'Missing gene data for {len(missing_accessions)} protein accessions!')
 
+    # make gene group lookup
+    gene_id_lookup = {row.accession: row.Gene for row in gene_data_lookup.itertuples()}
+    gene_groups = {}
+    for group in data['proteins_unnormalized']['gene_group'].drop_duplicates().to_list():
+        gene_id_group = set()
+        for prot_id in group:
+            gene_id_group.add(gene_id_lookup[prot_id])
+        gene_groups[group] = args.gene_group_sep.join(gene_id_group)
+
     # join gene data to tables
     for method in data:
         data[method] = data[method].set_index('accession').join(gene_data_lookup.set_index('accession'),
                                                                 how='inner', on='accession')
         data[method] = data[method].reset_index(drop=True)
+
+        data[method]['GeneGroup'] = data[method]['gene_group'].apply(lambda x: gene_groups[x])
+
         columns = list(data[method].columns)
+        columns.pop(columns.index('gene_group'))
         columns.insert(0, columns.pop(columns.index('Gene')))
+        columns.insert(1, columns.pop(columns.index('GeneGroup')))
         data[method] = data[method].loc[:, columns]
 
     # write tables
