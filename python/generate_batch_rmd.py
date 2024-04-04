@@ -210,19 +210,21 @@ color.vars <- c('{}')'''.format("', '".join(covariate_vars))
     precursor_filter = ''
     protein_filter = ''
     if remove_missing:
-        precursor_filter = f'\n{" " * 35}WHERE normalizedArea IS NOT NULL'
-        protein_filter = f'\n{" " * 32}WHERE normalizedAbundance IS NOT NULL'
+        precursor_filter = ' AND normalizedArea IS NOT NULL'
+        protein_filter = ' AND normalizedAbundance IS NOT NULL'
 
     text += f'''\n
 # Load necissary tables from database
 conn <- DBI::dbConnect(RSQLite::SQLite(), '{db_path}')
 dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
-                                      replicateId,
-                                      modifiedSequence,
-                                      precursorCharge,
-                                      totalAreaFragment,
-                                      normalizedArea
-                                   FROM precursors p{precursor_filter};')
+                                      p.replicateId,
+                                      p.modifiedSequence,
+                                      p.precursorCharge,
+                                      p.totalAreaFragment,
+                                      p.normalizedArea
+                                   FROM precursors p
+                                   LEFT JOIN replicates r ON r.replicateId == p.replicateId
+                                   WHERE r.includeRep == TRUE{precursor_filter};')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
                                             p.name as protein, ptp.modifiedSequence
                                             FROM  peptideToProtein ptp
@@ -233,13 +235,16 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.abundance,
                                     q.normalizedAbundance
                                 FROM proteinQuants q
-                                LEFT JOIN proteins p ON p.proteinId = q.proteinId{protein_filter};')
+                                LEFT JOIN proteins p ON p.proteinId = q.proteinId
+                                LEFT JOIN replicates r ON r.replicateId == q.replicateId
+                                WHERE r.includeRep == TRUE{protein_filter};')
 dat.rep <- DBI::dbGetQuery(conn, 'SELECT
                                 r.replicate,
                                 r.replicateId,
                                 r.acquiredRank,
                                 r.project
-                             FROM replicates r;')
+                             FROM replicates r
+                             WHERE r.includeRep == TRUE;')
 dat.meta.l <- DBI::dbGetQuery(conn, 'SELECT * FROM sampleMetadata;')
 meta.types <- DBI::dbGetQuery(conn, 'SELECT * from sampleMetadataTypes;')
 DBI::dbDisconnect(conn)\n'''

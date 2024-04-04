@@ -25,7 +25,7 @@ query = \'\'\'SELECT
 FROM precursors p
 LEFT JOIN replicates r
     ON p.replicateId = r.replicateId
-WHERE p.totalAreaFragment > 0;\'\'\'
+WHERE p.totalAreaFragment > 0 AND r.includeRep == TRUE;\'\'\'
 
 df = pd.read_sql(query, conn)
 df = df.drop_duplicates()
@@ -46,7 +46,8 @@ query = \'\'\'SELECT
     p.isotopeDotProduct
 FROM precursors p
 LEFT JOIN replicates r
-    ON p.replicateId = r.replicateId;\'\'\'
+    ON p.replicateId = r.replicateId
+WHERE r.includeRep == TRUE;\'\'\'
 
 df = pd.read_sql(query, conn)
 df = df.drop_duplicates()
@@ -131,7 +132,7 @@ def doc_finalize():
 def replicate_tic_areas(dpi=DEFAULT_DPI):
     text='''\n%s\n
 # replicate tic bar chart
-tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates', conn)
+tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates WHERE includeRep == TRUE', conn)
 bar_chart(tic, 'TIC area', dpi=%s)
 ```\n\n''' % (python_block_header(stack()[0][3]), dpi)
     return text
@@ -266,7 +267,8 @@ query = '''SELECT
     p.precursorCharge,
     {quant_col_query}
 FROM precursors p
-LEFT JOIN replicates r ON p.replicateId = r.replicateId;'''
+LEFT JOIN replicates r ON p.replicateId = r.replicateId
+WHERE r.includeRep == TRUE;'''
 
 df_areas = pd.read_sql(query, conn)\n"""
 
@@ -350,7 +352,7 @@ def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', set_zero_to_min=Tr
     p.{quant_col}
 FROM PRECURSORS p
 LEFT JOIN replicates r ON p.replicateId = r.replicateId
-WHERE p.{quant_col} IS NOT NULL;'''
+WHERE p.{quant_col} IS NOT NULL AND r.includeRep == TRUE;'''
 
 df_pc = pd.read_sql(query, conn)
 """
