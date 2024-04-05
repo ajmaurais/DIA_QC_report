@@ -7,6 +7,7 @@ import sqlite3
 
 from pyDIAUtils.logger import LOGGER
 from pyDIAUtils.dia_db_utils import check_schema_version
+from pyDIAUtils.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
 DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
@@ -528,68 +529,6 @@ write.table(dplyr::select(dat.metadata, -replicateId),
     text += '\n```\n\n'
 
     return text
-
-
-def validate_bit_mask(mask, n_options=3, n_digits=2):
-    '''
-    Validate bit mask command line argument
-
-    Parameters
-    ----------
-    mask: str
-        Bit mask.
-    n_options: tuple
-        Number of options either 2, or 3.
-    n_digits: int
-        Expected number of digits in mask.
-    '''
-
-    assert n_options in (2, 3)
-
-    max_value = 7 if n_options == 3 else 1
-    if not re.search(f"^[0-{str(max_value)}]+$", mask):
-        LOGGER.error(f'Bit mask digits must be between 0 and {str(max_value)}!')
-        return False
-
-    if len(mask) != n_digits:
-        LOGGER.error(f'Bit mask must be {n_digits} digits!')
-        return False
-
-    return True
-
-
-def parse_bitmask_options(mask, digit_names, options):
-    '''
-    Parse table option bitmask.
-
-    Parameters
-    ----------
-    mask: str
-        Bit mask.
-    digit_names tuple:
-        A tuple with the name to use for each digit in the mask.
-    options: tuple
-        A tuple with a length of 3 mapping bit values to options.
-
-    Return
-    ------
-    ret: dict
-        A dictionary where the keys are the digit_names and values are
-        dictaries mapping options to booleans if their bit was set.
-    '''
-
-    assert len(digit_names) == len(mask)
-    assert len(options) == 3
-
-    def _parse_bitmask(mask):
-        mask_a = [int(c) for c in mask]
-        for digit in mask_a:
-            yield [bool(digit & (1 << i)) for i in range(3)]
-
-    ret = dict()
-    for key, value in zip(digit_names, _parse_bitmask(mask)):
-        ret[key] = dict(zip(options, value))
-    return ret
 
 
 def main():
