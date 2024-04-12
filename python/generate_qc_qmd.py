@@ -18,7 +18,9 @@ DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA QC report'
 DEFAULT_DPI = 250
 
-METHOD_NAMES = ('unnormalized', 'normalized')
+METHOD_NAMES = ['unnormalized', 'normalized']
+PRECURSOR_METHOD_NAMES = dict(zip(METHOD_NAMES, ['totalAreaFragment', 'normalizedArea']))
+PROTEIN_METHOD_NAMES = dict(zip(METHOD_NAMES, ['abundance', 'normalizedAbundance']))
 TABLE_TYPES = ('wide', 'long')
 
 PEPTIDE_QUERY = '''
@@ -105,6 +107,7 @@ def python_block_header(label):
 def doc_initialize(db_path):
     text='''\n%s\n
 import sys
+import os
 import re
 import sqlite3
 from statistics import stdev
@@ -124,9 +127,7 @@ conn = sqlite3.connect('%s')
 
 
 def doc_finalize():
-    text='''\n%s\n
-    conn.close()
-```\n\n''' % (python_block_header(stack()[0][3]))
+    text=f'\n{python_block_header(stack()[0][3])}\n\nconn.close()\n```\n\n'
 
     return text
 
@@ -343,7 +344,7 @@ def join_metadata(pc, acquired_ranks, meta_values, metadata=None):
     return text
 
 
-def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', set_zero_to_min=True, have_color_vars=False):
+def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', have_color_vars=False):
 
     text = '\n{}\n'.format(python_block_header(f'{stack()[0][3]}_{quant_col}'))
 
@@ -392,17 +393,102 @@ def wide_table():
     pass
 
 
-def long_table():
-    pass
-
-
 def write_tables_section(precursor_tables, protein_tables, metadata_tables):
-    text = f"""\n{python_block_header(stack()[0][3])}"""
+
+    def any_tables(table_opts):
+        return any(table_opts[d][m] for d in table_opts for m in table_opts[d])
+
+    def my_join(sep, fstr, l):
+        return sep.join(fstr.format(i) for i in l)
+
+    text = f"""\n{python_block_header(stack()[0][3])}
+
+if not os.path.isdir('tables'):
+    os.mkdir('tables')\n"""
+
+    # precursor tables
+    if any_tables(precursor_tables):
+        text += """
+# precursor tables
+df_prec = pd.read_sql('''
+SELECT
+    r.replicate,
+    prot.name as protein,
+    p.modifiedSequence,
+    p.precursorCharge,
+    p.totalAreaFragment,
+    p.normalizedArea
+FROM precursors p
+LEFT JOIN replicates r ON r.replicateId == p.replicateId
+LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence
+LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId;''', conn)
+"""
+
+        # long tables, if any
+        long_methods = [PRECURSOR_METHOD_NAMES[k] for k, v in precursor_tables['long'].items() if v]
+        if len(long_methods) > 0:
+            text += """\ndf_prec[['replicate',\n\t'protein',\n\t'modifiedSequence',\n\t'precursorCharge',
+{}]].to_csv('tables/precursors_long.tsv', sep='\\t', index=False)
+""".format(my_join(',\n', "\t'{}'", long_methods))
+
+        # wide tables, if any
+        for method, write in precursor_tables['wide'].items():
+            if write:
+                text += f'''\ndf_prec.pivot(index=['protein', 'modifiedSequence', 'precursorCharge'],
+              columns='replicate',
+              values='{PRECURSOR_METHOD_NAMES[method]}').to_csv('tables/precursors_wide_{method}.tsv', sep='\\t', index=True)\n'''
+
+    # protein tables
+    if any_tables(protein_tables):
+        text += """
+# protein tables
+df_prot = pd.read_sql('''
+SELECT
+    r.replicate,
+    prot.name as protein,
+    q.abundance,
+    q.normalizedAbundance
+FROM proteinQuants q
+LEFT JOIN replicates r ON r.replicateId == q.replicateId
+LEFT JOIN proteins prot ON prot.proteinId == q.proteinId;''', conn)
+"""
+
+        # long tables, if any
+        long_methods = [PROTEIN_METHOD_NAMES[k] for k, v in protein_tables['long'].items() if v]
+        if len(long_methods) > 0:
+            text += """\ndf_prot[['replicate',\n\t'protein',
+{}]].to_csv('tables/proteins_long.tsv', sep='\\t', index=False)\n
+""".format(my_join(',\n', "\t'{}'", long_methods))
+
+        # wide tables, if any
+        for method, write in protein_tables['wide'].items():
+            if write:
+                text += f'''\ndf_prot.pivot(index='protein',
+              columns='replicate',
+              values='{PROTEIN_METHOD_NAMES[method]}').to_csv('tables/proteins_wide_{method}.tsv', sep='\\t', index=True)\n'''
+
+    # metadata tables
+    if any_tables(metadata_tables):
+        text += """
+df_meta = pd.read_sql('''
+SELECT
+    r.replicate,
+    m.annotationKey as key,
+    m.annotationValue as value
+FROM sampleMetadata m
+LEFT JOIN replicates r ON r.replicateId == m.replicateId;''', conn)
+"""
+
+        if metadata_tables['long']['write'] == True:
+            text += "\ndf_meta.to_csv('tables/metadata_long.tsv', sep='\\t', index=False)\n"
+
+        if metadata_tables['wide']['write'] == True:
+            text += """\ndf_meta.pivot(index='replicate',
+              columns='key',
+              values='value').to_csv('tables/metadata_wide.tsv', sep='\\t', index=False)\n"""
 
     text += '```\n\n'
-
     return text
-
 
 
 def check_meta_keys_exist(conn, keys):
@@ -551,14 +637,14 @@ def main():
         if db_is_normalized:
             outF.write(add_header('Normalized', level=3))
             outF.write(pc_analysis(do_query=True, dpi=args.dpi,
-                                   quant_col='normalizedArea', set_zero_to_min=False,
+                                   quant_col='normalizedArea',
                                    have_color_vars=args.color_vars is not None))
 
         outF.write(close_pannel_tabset())
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
-        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
+        if sum(int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)) > 0:
             outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
 
         outF.write(doc_finalize())
