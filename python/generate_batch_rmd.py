@@ -278,6 +278,12 @@ dat.protein <- dplyr::left_join(dat.protein,
                                 by='replicateId')
 dat.metadata <- dplyr::left_join(dat.rep, dat.meta, by='replicateId')
 
+dat.metadata[[batch1]] <- factor(dat.metadata[[batch1]])\n'''
+
+    if batch2:
+        text += 'dat.metadata[[batch2]] <- factor(dat.metadata[[batch2]])\n'
+
+    text += '''
 # combine sequence and precursorCharge cols
 dat.precursor$precursor <- with(dat.precursor, paste(modifiedSequence, precursorCharge, sep='_'))
 
