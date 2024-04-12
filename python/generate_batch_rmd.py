@@ -482,14 +482,14 @@ write.table(dplyr::select({df_name}, {', '.join(row_identifers)},
     return text
 
 
-def write_tables_section(precursor_tables, protein_tables, metadata_tables,
-                         any_precursor_tables=True):
+def write_tables_section(precursor_tables, protein_tables, metadata_tables):
+
     text = add_header('TSV files generated:', level=1)
 
     text += '\n' + r_block_header('write_tables', message=True)
     text += '\n\n'
 
-    if any_precursor_tables:
+    if any(t for d in precursor_tables.values() for t in d.values()):
         text += '''dat.precursor.j <- dplyr::inner_join(peptideToProtein, dat.precursor,
                                 by='modifiedSequence', relationship='many-to-many')\n'''
 
@@ -512,7 +512,7 @@ def write_tables_section(precursor_tables, protein_tables, metadata_tables,
         text += long_table('protein', 'dat.protein', **protein_tables['long'])
 
     # metadata tables
-    if metadata_tables['long']:
+    if metadata_tables['long']['write']:
         text += '''
 message('Writing metadata long to "metadata_long.tsv"')
 dat.metadata.l <- dplyr::left_join(dat.meta.l, dplyr::select(dat.metadata, replicateId, replicate),
@@ -520,7 +520,7 @@ dat.metadata.l <- dplyr::left_join(dat.meta.l, dplyr::select(dat.metadata, repli
     dplyr::select(replicate, annotationKey, annotationValue, annotationType)
 write.table(dat.metadata.l, file='metadata_long.tsv', sep='\\t', row.names=F, quote=F)\n'''
 
-    if metadata_tables['wide']:
+    if metadata_tables['wide']['write']:
         text += '''
 message('Writing metadata wide to "metadata_wide.tsv"')
 write.table(dplyr::select(dat.metadata, -replicateId),
@@ -590,7 +590,7 @@ def main():
                              'sampleMetadata table?')
 
     table_args = parser.add_argument_group('Output tables',
-                     'The tsv files to print are specified by a 2 digit bit mask. '
+                     'The tsv files to write are specified by a 2 digit bit mask. '
                      'The first digit is for the wide formatted report, and the second digit is for '
                      'the long formatted report. An integer between 0 and 4 is assigned for each stage in '
                      'the normalization process. 0 for no report, 1 is for unnormalized, 2 is for '
@@ -624,7 +624,7 @@ def main():
     if not validate_bit_mask(args.proteinTables, 3, 2):
         LOGGER.error('Error parsing --proteinTables')
         sys.exit(1)
-    if not validate_bit_mask(args.metadataTables, 2, 2):
+    if not validate_bit_mask(args.metadataTables, 1, 2):
         LOGGER.error('Error parsing --metadataTables')
         sys.exit(1)
 
@@ -640,7 +640,7 @@ def main():
     # parse table_args
     protein_tables = parse_bitmask_options(args.proteinTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     precursor_tables = parse_bitmask_options(args.precursorTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
-    metadata_tables = {t_format: bool(int(char)) for t_format, char in zip(('wide', 'long'), args.metadataTables)}
+    metadata_tables = parse_bitmask_options(args.metadataTables, ('wide', 'long'), ('write',))
 
     # generate rmd
     with open(args.ofname, 'w') as outF:
@@ -688,8 +688,7 @@ def main():
         # Optional output tables
         # Check if there is at least 1 table to be written.
         if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
-            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables,
-                                            any_precursor_tables=int(args.precursorTables) > 0))
+            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
 
 
 if __name__ == '__main__':

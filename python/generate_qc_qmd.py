@@ -11,11 +11,15 @@ from pyDIAUtils.metadata import Dtype
 from pyDIAUtils.logger import LOGGER
 from pyDIAUtils.dia_db_utils import is_normalized
 from pyDIAUtils.dia_db_utils import check_schema_version
+from pyDIAUtils.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA QC report'
 DEFAULT_DPI = 250
+
+METHOD_NAMES = ('unnormalized', 'normalized')
+TABLE_TYPES = ('wide', 'long')
 
 PEPTIDE_QUERY = '''
 query = \'\'\'SELECT
@@ -389,6 +393,23 @@ for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
     return text
 
 
+def wide_table():
+    pass
+
+
+def long_table():
+    pass
+
+
+def write_tables_section(precursor_tables, protein_tables, metadata_tables):
+    text = f"""\n{python_block_header(stack()[0][3])}"""
+
+    text += '```\n\n'
+
+    return text
+
+
+
 def check_meta_keys_exist(conn, keys):
     '''
     Check that each metadata key exists in sampleMetadata table.
@@ -418,8 +439,35 @@ def main():
                         help='Add a annotationKey to color PCA plots.')
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
+
+    table_args = parser.add_argument_group('Output tables',
+                     'The tsv files to write are specified by a 2 digit bit mask. '
+                     'The first digit is for the wide formatted report, and the second digit is for '
+                     'the long formatted report. An integer between 0 and 2 is assigned for each stage in '
+                     'the normalization process. 0 for no report, 1 is for unnormalized, '
+                     'and 2 is for normalized.')
+
+    table_args.add_argument('-p', '--precursorTables', default='00',
+                        help='Tables to write for precursors. 00 is the default')
+    table_args.add_argument('-r', '--proteinTables', default='00',
+                            help='Tables to write for proteins. 00 is the default')
+    table_args.add_argument('--metadataTables', default='00',
+                            help='Tables to write for metadata. Only 0 or 1 are supported. '
+                                 '0 for false, 1 for true. 10 is the default')
+
     parser.add_argument('db', help='Path to precursor quality database.')
     args = parser.parse_args()
+
+    # check args
+    if not validate_bit_mask(args.precursorTables, 2, 2):
+        LOGGER.error('Error parsing --precursorTables')
+        sys.exit(1)
+    if not validate_bit_mask(args.proteinTables, 2, 2):
+        LOGGER.error('Error parsing --proteinTables')
+        sys.exit(1)
+    if not validate_bit_mask(args.metadataTables, 1, 2):
+        LOGGER.error('Error parsing --metadataTables')
+        sys.exit(1)
 
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)
@@ -439,6 +487,16 @@ def main():
     db_is_normalized = is_normalized(conn)
     conn.close()
 
+    # parse table_args
+    protein_tables = parse_bitmask_options(args.proteinTables, TABLE_TYPES, METHOD_NAMES)
+    precursor_tables = parse_bitmask_options(args.precursorTables, TABLE_TYPES, METHOD_NAMES)
+    metadata_tables = parse_bitmask_options(args.metadataTables, TABLE_TYPES, ('write',))
+
+    for table_type, table, in [['protein', protein_tables], ['precursor', precursor_tables]]:
+        if any(table[direction]['normalized'] for direction in TABLE_TYPES) and not db_is_normalized:
+            LOGGER.warning(f'Database is not normalized. Skipping {table_type}')
+            for direction in TABLE_TYPES:
+                table[direction]['normalized'] = False
 
     with open(args.ofname, 'w') as outF:
         outF.write(doc_header('{} {}'.format(os.path.abspath(__file__),
@@ -502,6 +560,11 @@ def main():
                                    have_color_vars=args.color_vars is not None))
 
         outF.write(close_pannel_tabset())
+
+        # Optional output tables
+        # Check if there is at least 1 table to be written.
+        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
+            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
 
         outF.write(doc_finalize())
 
