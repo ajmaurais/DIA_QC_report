@@ -365,13 +365,8 @@ df_pc = pd.read_sql(query, conn)
 df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', '{quant_col}']]
 df_pc['acquisition_number'] = df['acquiredRank']\n'''
 
-    if set_zero_to_min:
-        text += f'''\n# set zero areas to the minimum non-zero value
-sele = df_pc['{quant_col}'].apply(lambda x: not np.isfinite(x) or x == 0)
-df_pc.loc[sele, '{quant_col}'] = min(df_pc[df_pc['{quant_col}'] > 0]['{quant_col}'])\n'''
-
     text += f'''
-df_pc['log2TotalAreaFragment'] = np.log2(df_pc['{quant_col}'])
+df_pc['log2TotalAreaFragment'] = np.log2(df_pc['{quant_col}'] + 1)
 # df_pc['zScore'] = df_pc.groupby('acquisition_number')['log2TotalAreaFragment'].transform(lambda x: np.abs(zscore(x)))
 
 df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],

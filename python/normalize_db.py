@@ -127,12 +127,15 @@ def main():
     REP_COLUMN_NAME = 'replicateId'
 
     # set zero areas to lowest non-zero value
-    def zero_to_min(group):
-        min_non_zero = min(group[group > 0])
-        group[group == 0] = min_non_zero
-        return group
-    df = df.set_index(keys=[REP_COLUMN_NAME, 'protein', 'ion'])
-    df['totalAreaFragment'] = df.groupby('replicateId')['totalAreaFragment'].apply(zero_to_min).droplevel(0)
+    # def zero_to_min(group):
+    #     min_non_zero = min(group[group > 0])
+    #     group[group == 0] = min_non_zero
+    #     return group
+    # df = df.set_index(keys=[REP_COLUMN_NAME, 'protein', 'ion'])
+    # df['totalAreaFragment'] = df.groupby('replicateId')['totalAreaFragment'].apply(zero_to_min).droplevel(0)
+
+    # add 1 to all precursor areas so the log2 of zeros is finite
+    df['totalAreaFragment'] = df['totalAreaFragment'] + 1
     df = df.reset_index()
 
     # pivot wider

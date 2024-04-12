@@ -294,10 +294,10 @@ dat.metadata[[batch1]] <- factor(dat.metadata[[batch1]])\n'''
 dat.precursor$precursor <- with(dat.precursor, paste(modifiedSequence, precursorCharge, sep='_'))
 
 # log2 transform abundances
-dat.precursor$totalAreaFragment <- log2(rDIAUtils::zeroToMin(dat.precursor$totalAreaFragment))
-dat.precursor$normalizedArea <- log2(rDIAUtils::zeroToMin(dat.precursor$normalizedArea))
-dat.protein$abundance <- log2(rDIAUtils::zeroToMin(dat.protein$abundance))
-dat.protein$normalizedAbundance <- log2(rDIAUtils::zeroToMin(dat.protein$normalizedAbundance))\n```\n\n\n'''
+dat.precursor$totalAreaFragment <- log2(dat.precursor$totalAreaFragment + 1)
+dat.precursor$normalizedArea <- log2(dat.precursor$normalizedArea + 1)
+dat.protein$abundance <- log2(dat.protein$abundance + 1)
+dat.protein$normalizedAbundance <- log2(dat.protein$normalizedAbundance + 1)\n```\n\n\n'''
 
     return text
 
