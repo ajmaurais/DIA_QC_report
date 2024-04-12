@@ -37,7 +37,7 @@ RUN mkdir -p /code/quarto && cd /code/quarto && \
 # install python dependencies
 COPY directlfq /code/directlfq
 COPY pyDIAUtils /code/pyDIAUtils
-RUN pip install setuptools jsonschema pyarrow pandas matplotlib jupyter && \
+RUN pip install setuptools jsonschema pyarrow pandas matplotlib jupyter pip install dask[dataframe] && \
     cd /code/directlfq && pip install . && \
     cd /code/pyDIAUtils && pip install . && \
     pip cache purge && \

@@ -8,7 +8,8 @@ import re
 
 
 REPO_HEAD_DIR = os.path.dirname(os.path.abspath(__file__))
-DOCKER_IMAGE_NAME = 'mauraisa/dia_qc_report'
+# DOCKER_IMAGE_NAME = 'mauraisa/dia_qc_report'
+DOCKER_IMAGE_NAME = 'quay.io/mauraisa/dia_qc_report'
 
 
 def get_git_info(cwd=None):
