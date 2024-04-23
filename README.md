@@ -2,7 +2,7 @@
 
 ## Parsing Skyline reports
 
-The `parse_data` script is used to combine .tsv reports exported from one or more Skyline documents into a sqlite database which is used in all subsequent steps. `parse_data` requires a precursor level and replicae level report from each Skyline document. The templates for both reports are in the `resources` subdirectory.
+The `parse_data` script is used to combine .tsv reports exported from one or more Skyline documents into a sqlite database which is used in all subsequent steps. `parse_data` requires a precursor level and replicate level report from each Skyline document. The templates for both reports are in the `resources` subdirectory.
 
 <details>
   <summary>Batch and QC database schema</summary>
@@ -11,7 +11,7 @@ The `parse_data` script is used to combine .tsv reports exported from one or mor
 
 </details>
 
-To create a new databse:
+To create a new database:
 
 ```
 parse_data --projectName <document_1> <document_1_replicate_quality.tsv> <document_1_precursor_quality.tsv> 
