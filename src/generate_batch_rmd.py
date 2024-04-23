@@ -5,9 +5,9 @@ import argparse
 import re
 import sqlite3
 
-from pyDIAUtils.logger import LOGGER
-from pyDIAUtils.dia_db_utils import check_schema_version
-from pyDIAUtils.dia_db_utils import validate_bit_mask, parse_bitmask_options
+from .submodules.logger import LOGGER
+from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
 DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'

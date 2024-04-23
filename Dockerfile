@@ -3,8 +3,10 @@ from amazonlinux:latest
 MAINTAINER "Aaron Maurais -- MacCoss Lab"
 
 RUN dnf update && \
-    dnf -y install wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
-    dnf clean all
+    dnf -y install git wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
+    dnf clean all && \
+    echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > /usr/local/bin/entrypoint && \
+    chmod +x /usr/local/bin/entrypoint
 
 # install rDIAUtils dependencies
 RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager', 'rmarkdown'), \
@@ -35,28 +37,16 @@ RUN mkdir -p /code/quarto && cd /code/quarto && \
     quarto install tinytex
 
 # install python dependencies
-COPY directlfq /code/directlfq
-COPY pyDIAUtils /code/pyDIAUtils
-RUN pip install setuptools jsonschema pyarrow pandas matplotlib jupyter pip install dask[dataframe] && \
-    cd /code/directlfq && pip install . && \
-    cd /code/pyDIAUtils && pip install . && \
+COPY src /code/DIA_QC_report/src
+COPY pyproject.toml /code/DIA_QC_report
+RUN pip install setuptools && \
+    cd /code/DIA_QC_report && \
+    pip install . && \
     pip cache purge && \
-    cd /code && rm -rf /code/directlfq /code/pyDIAUtils
+    cd /code && rm -rf /code/DIA_QC_report
 
-# add python executables
-COPY python/normalize_db.py /code/DIA_QC_report/python/normalize_db.py
-COPY python/parse_data.py /code/DIA_QC_report/python/parse_data.py
-COPY python/generate_qc_qmd.py /code/DIA_QC_report/python/generate_qc_qmd.py
-COPY python/generate_batch_rmd.py /code/DIA_QC_report/python/generate_batch_rmd.py
-COPY python/make_gene_matrix.py /code/DIA_QC_report/python/make_gene_matrix.py
-RUN cd /usr/local/bin && \
-    echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/parse_data.py "$@"' > parse_data && \
-    echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_qc_qmd.py "$@"' > generate_qc_qmd && \
-    echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/normalize_db.py "$@"' > normalize_db && \
-    echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/generate_batch_rmd.py "$@"' > generate_batch_rmd && \
-    echo -e '#!/usr/bin/env bash\npython3 /code/DIA_QC_report/python/make_gene_matrix.py "$@"' > make_gene_matrix && \
-    echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > entrypoint && \
-    chmod 755 parse_data normalize_db entrypoint generate_qc_qmd generate_batch_rmd make_gene_matrix
+# clean things up
+RUN dnf remove -y git wget unzip tar pip
 
 # Git version information
 ARG GIT_BRANCH

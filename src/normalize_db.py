@@ -12,12 +12,12 @@ import directlfq.utils as lfqutils
 from directlfq.normalization import NormalizationManagerSamplesOnSelectedProteins as dlfq_norm
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
-from pyDIAUtils.dia_db_utils import METADATA_TIME_FORMAT
-from pyDIAUtils.dia_db_utils import update_meta_value
-from pyDIAUtils.dia_db_utils import check_schema_version
-from pyDIAUtils.dia_db_utils import update_acquired_ranks
-from pyDIAUtils.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
-from pyDIAUtils.logger import LOGGER
+from .submodules.dia_db_utils import METADATA_TIME_FORMAT
+from .submodules.dia_db_utils import update_meta_value
+from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import update_acquired_ranks
+from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
+from .submodules.logger import LOGGER
 
 
 def median_normalize(df, key_cols, value_col):

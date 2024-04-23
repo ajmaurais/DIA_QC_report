@@ -7,11 +7,11 @@ from inspect import stack
 
 from enum import Enum
 
-from pyDIAUtils.metadata import Dtype
-from pyDIAUtils.logger import LOGGER
-from pyDIAUtils.dia_db_utils import is_normalized
-from pyDIAUtils.dia_db_utils import check_schema_version
-from pyDIAUtils.dia_db_utils import validate_bit_mask, parse_bitmask_options
+from .submodules.metadata import Dtype
+from .submodules.logger import LOGGER
+from .submodules.dia_db_utils import is_normalized
+from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'

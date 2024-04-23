@@ -8,9 +8,9 @@ import sqlite3
 
 import pandas as pd
 
-from pyDIAUtils.dia_db_utils import get_meta_value, is_normalized
-from pyDIAUtils.dia_db_utils import check_schema_version
-from pyDIAUtils.logger import LOGGER
+from .submodules.dia_db_utils import get_meta_value, is_normalized
+from .submodules.dia_db_utils import check_schema_version
+from .submodules.logger import LOGGER
 
 TABLE_TYPES = ('combined', 'split', 'drop')
 

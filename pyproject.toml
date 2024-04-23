@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = 'DIA_QC_report'
+version='1.13'
+authors=[{name='Aaron Maurais', email='maurais@uw.edu'}]
+dependencies = [
+    'matplotlib>=0.1.6',
+    'scikit-learn>=1.3.2',
+    'numpy>=1.26.2',
+    'pandas>=2.1.4',
+    'dask[dataframe]>=2024.4.2',
+    'jsonschema>=3.2.0',
+    'directlfq @ git+https://github.com/ajmaurais/directlfq.git'
+]
+requires-python = '>=3.8'
+
+[tool.setuptools]
+packages = ['DIA_QC_report', 'DIA_QC_report.submodules']
+package-dir = {'DIA_QC_report' = 'src'}
+
+[project.scripts]
+parse_data = 'DIA_QC_report.parse_data:main'
+generate_batch_rmd = 'DIA_QC_report.generate_batch_rmd:main'
+generate_qc_qmd = 'DIA_QC_report.generate_qc_qmd:main'
+make_gene_matrix = 'DIA_QC_report.make_gene_matrix:main'
+normalize_db = 'DIA_QC_report.normalize_db:main'

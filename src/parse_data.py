@@ -13,14 +13,14 @@ from enum import Enum
 import pandas as pd
 from jsonschema import validate, ValidationError
 
-from pyDIAUtils.logger import LOGGER
-from pyDIAUtils.dia_db_utils import SCHEMA, SCHEMA_VERSION
-from pyDIAUtils.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
-from pyDIAUtils.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
-from pyDIAUtils.dia_db_utils import insert_program_metadata_key_pairs as insert_program_metadata
-from pyDIAUtils.dia_db_utils import get_meta_value
-from pyDIAUtils.dia_db_utils import check_schema_version
-from pyDIAUtils.metadata import Dtype
+from .submodules.logger import LOGGER
+from .submodules.dia_db_utils import SCHEMA, SCHEMA_VERSION
+from .submodules.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
+from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
+from .submodules.dia_db_utils import insert_program_metadata_key_pairs as insert_program_metadata
+from .submodules.dia_db_utils import get_meta_value
+from .submodules.dia_db_utils import check_schema_version
+from .submodules.metadata import Dtype
 
 # sample metadata json schema
 METADATA_SCHEMA = {
