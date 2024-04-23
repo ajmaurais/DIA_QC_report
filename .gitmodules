@@ -1,6 +1,3 @@
-[submodule "directlfq"]
-	path = directlfq
-	url = https://github.com/ajmaurais/directlfq
 [submodule "rDIAUtils"]
 	path = rDIAUtils
 	url = https://github.com/ajmaurais/rDIAUtils
