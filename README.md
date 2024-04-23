@@ -35,7 +35,7 @@ normalize_db data.db3
 
 ```
 # Generate qmd file
-generate_qc_qmd data.db3
+generate_qc_qmd --addStdProtein 'sp|P00924|ENO1_YEAST' data.db3
 
 # Render qmd to html
 quarto render qc_report.qmd --to html

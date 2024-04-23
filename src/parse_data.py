@@ -226,7 +226,7 @@ def _add_index_column(col, index, df_name=None, index_name=None):
 
 def write_db(fname, replicates, precursors, protein_quants=None,
              sample_metadata=None, sample_metadata_types=None,
-             projectName=None, overwriteMode='error',
+             project_name=None, overwriteMode='error',
              group_precursors_by='protein'):
     '''
     Write reports to precursor sqlite database.
@@ -245,7 +245,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         Metadata values dataframe (optional)
     sample_metadata_types: dict
         Dict mapping metadata annotationKey to annotationType (optional)
-    projectName: str
+    project_name: str
         The project name to use in the replicates table.
     overwriteMode: str
         Behavior when the output file already exists.
@@ -325,15 +325,15 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         proteins = proteins.rename(columns={'proteinName': 'name', 'proteinAccession': 'accession'})
         proteins['description'] = None
 
-    # if projectName is not specified, set it to project_(n + 1)
-    if projectName is None:
+    # if project_name is not specified, set it to project_(n + 1)
+    if project_name is None:
         projects = pd.read_sql('SELECT DISTINCT project FROM replicates;', conn)
-        projectName = f'project_{len(projects.index) + 1}'
-    replicates['project'] = projectName
+        project_name = f'project_{len(projects.index) + 1}'
+    replicates['project'] = project_name
 
-    # populate some metadata values not that we have the projectName
-    log_metadata[f'Add {projectName} time'] = datetime.now().strftime(METADATA_TIME_FORMAT)
-    log_metadata[f'Add {projectName} command'] = current_command
+    # populate some metadata values not that we have the project_name
+    log_metadata[f'Add {project_name} time'] = datetime.now().strftime(METADATA_TIME_FORMAT)
+    log_metadata[f'Add {project_name} command'] = current_command
     log_metadata['replicates.acquiredRank updated'] = False
     log_metadata[f'is_normalized'] = False # set this to False because we are adding unnormalized data
 
@@ -342,10 +342,10 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         conn = sqlite3.connect(fname)
 
         cur = conn.cursor()
-        cur.execute('SELECT DISTINCT project FROM replicates WHERE project = ?', (projectName,))
+        cur.execute('SELECT DISTINCT project FROM replicates WHERE project = ?', (project_name,))
         existing_project = cur.fetchall()
         if len(existing_project) > 0:
-            LOGGER.error(f'{projectName} already exists in db!')
+            LOGGER.error(f'{project_name} already exists in db!')
             conn.close()
             return False
 
@@ -627,7 +627,7 @@ def main():
     #                           'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',
                         help='Output file name. Default is ./data.db3')
-    parser.add_argument('--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
+    parser.add_argument('-w', '--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
                         help='Behavior if output file already exists. '
                              'By default the script will exit with an error if the file already exists.')
     parser.add_argument('-d', '--duplicatePrecursors', default='e', choices=DUPLICATE_PRECURSOR_CHOICES,
@@ -637,7 +637,8 @@ def main():
                              "and 'i' to interactively choose which peak area to use. 'e' is the default.")
     parser.add_argument('--groupBy', choices=['protein', 'gene'], default='protein', dest='group_precursors_by',
                         help="Choose whether to group precursors by gene or protein. Default is 'protein'")
-    parser.add_argument('--projectName', default=None, help='Project name to use in replicates table.')
+    parser.add_argument('-n', '--projectName', default=None, dest='project_name',
+                        help='Project name to use in replicates table.')
     parser.add_argument('replicates', help='Skyline replicate_report')
     parser.add_argument('precursors', help='Skyline precursor_report')
     args = parser.parse_args()
@@ -733,7 +734,7 @@ def main():
     if not write_db(args.ofname, replicates, precursors,
                     protein_quants=protein_quants,
                     sample_metadata=metadata, sample_metadata_types=metadata_types,
-                    projectName=args.projectName, overwriteMode=args.overwriteMode,
+                    project_name=args.project_name, overwriteMode=args.overwriteMode,
                     group_precursors_by=args.group_precursors_by):
         LOGGER.error(f'Failed to {"create" if args.overwriteMode != "append" else "append to"} database!')
         sys.exit(1)
