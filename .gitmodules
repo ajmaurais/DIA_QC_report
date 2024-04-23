@@ -4,6 +4,3 @@
 [submodule "rDIAUtils"]
 	path = rDIAUtils
 	url = https://github.com/ajmaurais/rDIAUtils
-[submodule "pyDIAUtils"]
-	path = pyDIAUtils
-	url = https://github.com/ajmaurais/pyDIAUtils
