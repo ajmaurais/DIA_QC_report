@@ -245,10 +245,7 @@ def main():
         sys.exit(1)
 
     # check that existing precursors in db were grouped by current method
-    if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
-        LOGGER.error('group_precursors_by key not found in metadata table!')
-        sys.exit(1)
-    if current_group_by != 'gene':
+    if get_meta_value(conn, 'group_precursors_by') != 'gene':
         LOGGER.error('Precursors in database must be grouped by gene!')
         sys.exit(1)
 
