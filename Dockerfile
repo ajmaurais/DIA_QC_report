@@ -46,7 +46,7 @@ RUN pip install setuptools && \
     cd /code && rm -rf /code/DIA_QC_report
 
 # clean things up
-RUN dnf remove -y git wget unzip tar pip
+RUN dnf remove -y git wget tar pip
 
 # Git version information
 ARG GIT_BRANCH
