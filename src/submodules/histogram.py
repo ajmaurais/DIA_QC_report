@@ -68,7 +68,7 @@ def multi_boxplot(dats, data_levels,
     ----------
     dats: dict
         A dict where the key is the data level name and the value is a
-        wide formated pd.DataFrame
+        wide formatted pd.DataFrame
     data_levels: dict
         A dict where the key is the data level name and the value is the
         index of the level.

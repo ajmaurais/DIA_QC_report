@@ -237,7 +237,7 @@ box_plot(data, 'Transition / precursor ratio',
 
 def get_meta_key_types(db_path, keys):
     '''
-    Determine whether each metadata key is discrete or continious.
+    Determine whether each metadata key is discrete or continuous.
     '''
 
     if keys is None or len(keys) == 0:

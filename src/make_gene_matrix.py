@@ -143,7 +143,7 @@ def concat_gene_data(accession_set, gene_data, sep=' / '):
         A data frame with the columns:
         ('accession', 'Gene', 'NCBIGeneID', 'Authority', 'Description', 'Chromosome', 'Locus')
     sep: str
-        A string used to seperate gene group data. Default is ' / '
+        A string used to separate gene group data. Default is ' / '
 
     Returns
     -------
@@ -204,19 +204,19 @@ def main():
 
     gene_group_args = parser.add_argument_group('Gene grouping',
                                                 description="Choose how to display gene groups in output tables. "
-                                                            "'combined': Show all genes in group in the same row seperated by --sep. "
-                                                            "'split': Show each gene in group on a seperate row. "
+                                                            "'combined': Show all genes in group in the same row separated by --sep. "
+                                                            "'split': Show each gene in group on a separate row. "
                                                             "'skip': Don't include gene groups with more than one gene in table.")
     gene_group_args.add_argument('--protein', default='split', type=str,
                                  help=f''' How to display gene groups in protein table.
-                                      Grouping method should unambigiously match one
+                                      Grouping method should unambiguously match one
                                       of ['{"', '".join(TABLE_TYPES)}']''')
     gene_group_args.add_argument('--precursor', default='split', type=str,
                                  help=f''' How to display gene groups in precursor table.
-                                      Grouping method should unambigiously match one
+                                      Grouping method should unambiguously match one
                                       of ['{"', '".join(TABLE_TYPES)}']''')
     gene_group_args.add_argument('-s', '--sep', default='; ', type=str, dest='gene_group_sep',
-                                 help="Gene group seperator. Default is ' / '")
+                                 help="Gene group separator. Default is ' / '")
 
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
     parser.add_argument('--useAliquotId', default=False, action='store_true',
@@ -227,11 +227,11 @@ def main():
     args = parser.parse_args()
 
     if (protein_match := unambigious_match(TABLE_TYPES, args.protein)) is None:
-        LOGGER.error(f"Could not unambigiously determine protein table type: '{args.protein}'\n")
+        LOGGER.error(f"Could not unambiguously determine protein table type: '{args.protein}'\n")
         sys.exit(1)
 
     if (precursor_match := unambigious_match(TABLE_TYPES, args.precursor)) is None:
-        LOGGER.error(f"Could not unambigiously determine precursor table type: '{args.precursor}'\n")
+        LOGGER.error(f"Could not unambiguously determine precursor table type: '{args.precursor}'\n")
         sys.exit(1)
 
     if os.path.isfile(args.database):
