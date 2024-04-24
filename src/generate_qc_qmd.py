@@ -115,10 +115,10 @@ from scipy.stats import zscore
 import numpy as np
 import pandas as pd
 
-from pyDIAUtils.std_peptide_rt_plot import peptide_rt_plot
-from pyDIAUtils.bar_chart import bar_chart
-from pyDIAUtils.histogram import histogram, box_plot, multi_boxplot
-from pyDIAUtils.pca_plot import pc_matrix, pca_plot, convert_string_cols
+from DIA_QC_report.submodules.std_peptide_rt_plot import peptide_rt_plot
+from DIA_QC_report.submodules.bar_chart import bar_chart
+from DIA_QC_report.submodules.histogram import histogram, box_plot, multi_boxplot
+from DIA_QC_report.submodules.pca_plot import pc_matrix, pca_plot, convert_string_cols
 
 conn = sqlite3.connect('%s')
 ```\n\n''' % (python_block_header(stack()[0][3]), db_path)
