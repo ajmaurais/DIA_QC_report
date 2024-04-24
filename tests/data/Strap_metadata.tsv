@@ -1,0 +1,21 @@
+Replicate	cellLine	sample.name	experiment	NCI7.std
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR10-4-pool-01	NCI7 4-pool	4-pool	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR10-4-pool-02	NCI7 4-pool	4-pool	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR05-7-pool-01	NCI7 7-pool	7-pool	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR05-7-pool-02	NCI7 7-pool	7-pool	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR06-A549-02	A549	A549	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR06-A549-01	A549	A549	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR08-CCRF-CEM-01	CCRF-CEM	CCRF-CEM	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR08-CCRF-CEM-02	CCRF-CEM	CCRF-CEM	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR01-COLO-205-02	COLO-205	COLO-205	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR01-COLO-205-01	COLO-205	COLO-205	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-02	H226	H226	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-01	H226	H226	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR09-H23-02	H23	H23	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR09-H23-01	H23	H23	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR04-HeLa-01	HeLa	HeLa	STrap	False
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR04-HeLa-02	HeLa	HeLa	STrap	False
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR02-RPMI-8226-02	RPMI-8228	RPMI-8226	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR02-RPMI-8226-01	RPMI-8228	RPMI-8226	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR07-T47D-02	T47D	T47D	STrap	True
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR07-T47D-01	T47D	T47D	STrap	True
