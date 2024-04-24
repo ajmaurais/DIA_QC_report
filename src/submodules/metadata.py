@@ -39,7 +39,11 @@ class Dtype(Enum):
         if self is Dtype.NULL:
             return None
         if self is Dtype.BOOL:
-            return bool(val)
+            if val.lower() in ('true', '1', 't'):
+                return True
+            if val.lower() in ('false', '0', 'f'):
+                return False
+            raise ValueError(f'Invalid conversion to boolean: "{val}"')
         if self is Dtype.INT:
             return int(val)
         if self is Dtype.FLOAT:
@@ -61,7 +65,7 @@ class Dtype(Enum):
         -------
         Dtype object
         '''
-        if s == '' or NA_RE.search(s):
+        if s == '' or NA_RE.search(s) is not None:
             return Dtype.NULL
         if BOOL_RE.search(s):
             return Dtype.BOOL

@@ -104,6 +104,8 @@ def is_normalized(conn):
         LOGGER.warning("'is_normalized' key not in metadata table!")
         return False
 
+    # convert this way at some point in the future
+    # value = Dtype.convert(Dtype.BOOL, value[0][0])
     value = value[0][0].lower()
     if value in ('true', '1'):
         return True
