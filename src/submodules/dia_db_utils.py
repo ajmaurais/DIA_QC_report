@@ -114,28 +114,6 @@ def is_normalized(conn):
     return False
 
 
-def insert_program_metadata_key_pairs(conn, metadata):
-    '''
-    Insert multiple metadata key, value pairs into the metadata table.
-    If the key already exists it is overwritten.
-
-    Parameters
-    ----------
-    conn: sqlite3.Connection:
-        Database connection.
-    metadata: dict
-        A dict with key, value pairs.
-    '''
-    cur = conn.cursor()
-    for key, value in metadata.items():
-        cur.execute(f'''
-            INSERT INTO metadata
-                (key, value) VALUES ("{key}", "{value}")
-            ON CONFLICT(key) DO UPDATE SET value = "{value}" ''')
-    conn.commit()
-    return conn
-
-
 def get_meta_value(conn, key):
     ''' Get the value for a key from the metadata table '''
     cur = conn.cursor()

@@ -17,7 +17,7 @@ from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import SCHEMA, SCHEMA_VERSION
 from .submodules.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
-from .submodules.dia_db_utils import insert_program_metadata_key_pairs as insert_program_metadata
+from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.metadata import Dtype
@@ -452,7 +452,8 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']] #, 'annotationType']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
-    conn = insert_program_metadata(conn, log_metadata)
+    for key, value in log_metadata.items():
+        conn = update_meta_value(conn, key, value)
     conn = update_acquired_ranks(conn)
 
     conn.close()
