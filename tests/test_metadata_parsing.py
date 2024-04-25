@@ -4,20 +4,20 @@ import unittest
 from DIA_QC_report.submodules.metadata import Dtype
 
 class TestDtype(unittest.TestCase):
+    @classmethod
+    def setUpClass(TestDtype):
+        TestDtype.na_strings = ['NA', 'NULL', '#N/A', 'NaN']
 
-    def setUp(self):
-        self.na_strings = ['NA', 'NULL', '#N/A', 'NaN']
+        TestDtype.bool_strings = ['true', 'True', 'TRUE', 'False', 'false', 'FALSE']
+        TestDtype.bool_bools = [True, True, True, False, False, False]
 
-        self.bool_strings = ['true', 'True', 'TRUE', 'False', 'false', 'FALSE']
-        self.bool_bools = [True, True, True, False, False, False]
+        TestDtype.int_strings = ['1', '01', '+8', '-8', '10029', '-69', '-01747', '+98133']
+        TestDtype.int_ints = [1, 1, 8, -8, 10029, -69, -1747, 98133]
 
-        self.int_strings = ['1', '01', '+8', '-8', '10029', '-69', '-01747', '+98133']
-        self.int_ints = [1, 1, 8, -8, 10029, -69, -1747, 98133]
+        TestDtype.float_strings = ['0.1', '+0.102', '-0.15', '1.', '1.4e5', '3.14E0', '7.5e-2']
+        TestDtype.float_floats = [0.1, 0.102, -0.15, 1.0, 1.4e5, 3.14e0, 7.5e-2]
 
-        self.float_strings = ['0.1', '+0.102', '-0.15', '1.', '1.4e5', '3.14E0', '7.5e-2']
-        self.float_floats = [0.1, 0.102, -0.15, 1.0, 1.4e5, 3.14e0, 7.5e-2]
-
-        self.string_strings = ['0.5r', 'op90']
+        TestDtype.string_strings = ['0.5r', 'op90']
 
 
     def test_infer_type_NA(self):
