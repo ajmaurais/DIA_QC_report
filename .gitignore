@@ -7,6 +7,7 @@ fig/*
 testData/*
 plots/*
 .DS_Store
+tests/work/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
