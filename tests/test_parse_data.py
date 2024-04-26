@@ -67,14 +67,14 @@ def load_metadata():
 
 
 METADATA = load_metadata()
+METADATA_TYPES = {'cellLine': 'STRING',
+                  'sample.name': 'STRING',
+                  'experiment': 'STRING',
+                  'NCI7.std': 'BOOL'}
+
 
 class TestMetadata(unittest.TestCase):
     TEST_PROJECT = 'Sp3'
-
-    METADATA_TYPES = {'cellLine': 'STRING',
-                      'sample.name': 'STRING',
-                      'experiment': 'STRING',
-                      'NCI7.std': 'BOOL'}
 
     @classmethod
     def setUpClass(TestMetadata):
@@ -116,7 +116,7 @@ class TestMetadata(unittest.TestCase):
 
         # test metadata types are correct
         for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], self.METADATA_TYPES[variable])
+            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
 
 
     def test_json(self):
@@ -141,7 +141,7 @@ class TestMetadata(unittest.TestCase):
 
         # test metadata types are correct
         for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], self.METADATA_TYPES[variable])
+            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
 
 
     def test_skyline_csv(self):
@@ -150,6 +150,9 @@ class TestMetadata(unittest.TestCase):
 
         # test command was sucessful
         self.assertEqual(0, result.returncode)
+
+        # Log entry specific for skyline annotations csv
+        self.assertTrue('Found Skyline annotations csv' in result.stderr.decode('utf-8'))
 
         # get metadata from test db
         db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
@@ -166,7 +169,7 @@ class TestMetadata(unittest.TestCase):
 
         # test metadata types are correct
         for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], self.METADATA_TYPES[variable])
+            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
 
 
     def test_nomal_csv(self):
@@ -191,12 +194,48 @@ class TestMetadata(unittest.TestCase):
 
         # test metadata types are correct
         for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], self.METADATA_TYPES[variable])
+            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
 
 
 class TestInferDtypes(unittest.TestCase):
+    TEST_PROJECT = 'Strap'
+
+    METADATA_TYPES = {'string_var': 'STRING',
+                      'bool_var': 'BOOL',
+                      'int_var': 'INT',
+                      'float_var': 'FLOAT',
+                      'na_var': 'BOOL'}
+
+    @classmethod
+    def setUpClass(TestInferDtypes):
+        TestInferDtypes.work_dir = f'{TEST_DIR}/work/test_infer_types'
+        setup_functions.make_work_dir(TestInferDtypes.work_dir, clear_dir=True)
+
+
+    @staticmethod
+    def setup_command(project, ext, meta_suffix='_multi_var_metadata'):
+        db_path = f'test_{ext}{meta_suffix}.db3'
+        command = ['parse_data',
+                   f'--projectName={project}', '--overwriteMode=overwrite',
+                   '-m', f'{TEST_DIR}/data/metadata/{project}{meta_suffix}.{ext}',
+                   '-o', db_path,
+                   f'{TEST_DIR}/data/skyline_reports/{project}_replicate_quality.tsv',
+                   f'{TEST_DIR}/data/skyline_reports/{project}_by_protein_precursor_quality.tsv']
+
+        return command, db_path
+
+
     def test_infer_dtypes(self):
-        pass
+        command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
+        result = setup_functions.run_command(command, TestInferDtypes.work_dir)
+
+        # test command was sucessful
+        self.assertEqual(0, result.returncode)
+
+        # get metadata from test db
+        db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
+
+        self.assertDictEqual(self.METADATA_TYPES, db_metadata_types)
 
 
 class TestMultiProject(unittest.TestCase):
@@ -208,15 +247,42 @@ class TestMultiProject(unittest.TestCase):
         TestMultiProject.results = setup_functions.setup_multi_db(TestMultiProject.data_dir,
                                                                   TestMultiProject.work_dir)
 
+        TestMultiProject.conn = None
+        if any(result.returncode == 0 for result in TestMultiProject.results):
+            if os.path.isfile(TestMultiProject.db_path):
+                TestMultiProject.conn = sqlite3.connect(TestMultiProject.db_path)
 
-    def test_is_sucess(self):
+
+    @classmethod
+    def tearDownClass(TestMultiProject):
+        if TestMultiProject.conn is not None:
+            TestMultiProject.conn.close()
+
+
+    def test_is_successful(self):
         for result in self.results:
             self.assertEqual(0, result.returncode)
 
 
+    def test_replicates(self):
+        self.assertTrue(self.conn is not None)
+
+        cur = self.conn.cursor()
+        cur.execute('SELECT replicate, project FROM replicates;')
+        db_reps = {row[0]: row[1] for row in cur.fetchall()}
+
+        ground_truth_reps = {replicate: data['project'] for replicate, data in METADATA.items()}
+        self.assertDictEqual(ground_truth_reps, db_reps)
+
+
     def test_metadata(self):
-        pass
+        # get metadata from test db
+        db_metadata, db_metadata_types = get_db_metadata(self.db_path)
+
+        self.assertDictEqual(METADATA_TYPES, db_metadata_types)
+        self.assertDictEqual(METADATA, db_metadata)
 
 
 if __name__ == '__main__':
     unittest.main()
+

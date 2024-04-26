@@ -32,8 +32,8 @@ def run_command(command, wd, prefix=None):
     return result
 
 
-def setup_multi_db(data_dir, output_dir, group_by_gene=False):
-    make_work_dir(output_dir)
+def setup_multi_db(data_dir, output_dir, group_by_gene=False, clear_dir=False):
+    make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
 
     commands = [['parse_data', '--projectName=Sp3',
