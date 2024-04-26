@@ -116,6 +116,7 @@ def read_metadata(fname, metadata_format=None):
 
         # check if file is skyline annotations csv
         if rows[0][0] == 'ElementLocator':
+            LOGGER.info('Found Skyline annotations csv.')
             headers = ['Replicate'] + [re.sub(r'^annotation_', '', h) for h in rows[0][1:]]
             new_rows = list()
             for row in rows:
@@ -123,28 +124,32 @@ def read_metadata(fname, metadata_format=None):
                     row[0] = re.sub('^Replicate:/', '', row[0])
                     new_rows.append(row)
             rows = new_rows
+
+            drop_headers = list()
+            for column_i in range(1, len(rows[0])):
+                if all(rows[row_i][column_i] == '' for row_i in range(len(rows))):
+                    drop_headers.append(headers[column_i])
+
+            data = [dict(zip(headers, row)) for row in rows]
+            for i in range(len(data)):
+                for header in drop_headers:
+                    del data[i][header]
+
+            # return None if all annotations are empty
+            if not any(x in data[0] for x in headers[1:]):
+                LOGGER.warning('All replicate annotations are empty!')
+                return None, None
+
         elif rows[0][0] == 'Replicate':
             headers = rows[0]
+            rows = rows[1:]
+            data = [dict(zip(headers, row)) for row in rows]
         else:
             raise ValueError('Invalid metadata format!')
 
         if not all(len(x) == len(rows[0]) for x in rows):
             raise ValueError('Invalid metadata format!')
 
-        drop_headers = list()
-        for column_i in range(1, len(rows[0])):
-            if all(rows[row_i][column_i] == '' for row_i in range(len(rows))):
-                drop_headers.append(headers[column_i])
-
-        data = [dict(zip(headers, row)) for row in rows]
-        for i in range(len(data)):
-            for header in drop_headers:
-                del data[i][header]
-
-        # return None if all annotations are empty
-        if not any(x in data[0] for x in headers[1:]):
-            LOGGER.warning('All replicate annotations are empty!')
-            return None, None
 
     elif _format == 'json':
         with open(fname, 'r') as inF:
