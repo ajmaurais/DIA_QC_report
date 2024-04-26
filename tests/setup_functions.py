@@ -15,19 +15,19 @@ def make_work_dir(work_dir, clear_dir=False):
                 os.remove(f'{work_dir}/{file}')
 
 
-def run_command(command, wd):
+def run_command(command, wd, prefix=None):
     result = subprocess.run(command, cwd=wd,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             shell=False, check=False)
 
-    prefix = f'{wd}/{inspect.stack()[1][3]}'
-    with open(f'{prefix}_command.txt', 'w') as outF:
+    prefix_path = f'{wd}/{prefix if prefix else inspect.stack()[1][3]}'
+    with open(f'{prefix_path}_command.txt', 'w') as outF:
         outF.write(f"{' '.join(command)}\n")
-    with open(f'{prefix}.stdout.txt', 'w') as outF:
+    with open(f'{prefix_path}.stdout.txt', 'w') as outF:
         outF.write(f"{result.stdout.decode('utf-8')}\n")
-    with open(f'{prefix}.stderr.txt', 'w') as outF:
+    with open(f'{prefix_path}.stderr.txt', 'w') as outF:
         outF.write(f"{result.stderr.decode('utf-8')}\n")
-    with open(f'{prefix}.rc.txt', 'w') as outF:
+    with open(f'{prefix_path}.rc.txt', 'w') as outF:
         outF.write(f'{str(result.returncode)}\n')
     return result
 

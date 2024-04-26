@@ -170,7 +170,7 @@ class TestMetadata(unittest.TestCase):
 
 
     def test_nomal_csv(self):
-        command, db_path = self.setup_command(self.TEST_PROJECT, 'json')
+        command, db_path = self.setup_command(self.TEST_PROJECT, 'csv')
         result = setup_functions.run_command(command, TestMetadata.work_dir)
 
         # test command was sucessful
@@ -193,6 +193,8 @@ class TestMetadata(unittest.TestCase):
         for variable in db_metadata_types:
             self.assertEqual(db_metadata_types[variable], self.METADATA_TYPES[variable])
 
+
+class TestInferDtypes(unittest.TestCase):
     def test_infer_dtypes(self):
         pass
 
