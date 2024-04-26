@@ -101,6 +101,9 @@ def read_metadata(fname, metadata_format=None):
         The sample metadata dataframe.
     '''
 
+
+    skyline_csv = False
+
     if metadata_format:
         _format = metadata_format
     else:
@@ -117,6 +120,7 @@ def read_metadata(fname, metadata_format=None):
         # check if file is skyline annotations csv
         if rows[0][0] == 'ElementLocator':
             LOGGER.info('Found Skyline annotations csv.')
+            skyline_csv = True
             headers = ['Replicate'] + [re.sub(r'^annotation_', '', h) for h in rows[0][1:]]
             new_rows = list()
             for row in rows:
@@ -140,14 +144,14 @@ def read_metadata(fname, metadata_format=None):
                 LOGGER.warning('All replicate annotations are empty!')
                 return None, None
 
+            if not all(len(x) == len(rows[0]) for x in rows):
+                raise ValueError('Invalid metadata format!')
+
         elif rows[0][0] == 'Replicate':
             headers = rows[0]
             rows = rows[1:]
             data = [dict(zip(headers, row)) for row in rows]
         else:
-            raise ValueError('Invalid metadata format!')
-
-        if not all(len(x) == len(rows[0]) for x in rows):
             raise ValueError('Invalid metadata format!')
 
 
@@ -183,6 +187,15 @@ def read_metadata(fname, metadata_format=None):
     # set values of Dtype.NULL to NA
     df['annotationValue'] = df.apply(lambda x: pd.NA if types[x.annotationKey] is Dtype.NULL
                                                      else x.annotationValue, axis=1)
+
+    # This is an anoying edge case with metadata annotations exported from Skyline
+    # Boolean annotations are either True or blank instead of False
+    # Therefore we will set all blank boolean annotations to False
+    if skyline_csv:
+        for key, var_type in types.items():
+            if var_type is Dtype.BOOL:
+                sele = df['annotationKey'] == key
+                df.loc[sele, 'annotationValue'] = df[sele]['annotationValue'].apply(lambda x: 'False' if x == '' else x)
 
     types_df = {'annotationKey': [], 'annotationType': []}
     for key in types:
