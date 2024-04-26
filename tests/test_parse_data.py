@@ -77,9 +77,9 @@ class TestMetadata(unittest.TestCase):
     TEST_PROJECT = 'Sp3'
 
     @classmethod
-    def setUpClass(TestMetadata):
-        TestMetadata.work_dir = f'{TEST_DIR}/work/test_metadata'
-        setup_functions.make_work_dir(TestMetadata.work_dir, clear_dir=True)
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_metadata'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
     @staticmethod
@@ -96,7 +96,7 @@ class TestMetadata(unittest.TestCase):
 
     def test_tsv(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
-        result = setup_functions.run_command(command, TestMetadata.work_dir)
+        result = setup_functions.run_command(command, self.work_dir)
 
         # test command was sucessful
         self.assertEqual(0, result.returncode)
@@ -121,7 +121,7 @@ class TestMetadata(unittest.TestCase):
 
     def test_json(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'json')
-        result = setup_functions.run_command(command, TestMetadata.work_dir)
+        result = setup_functions.run_command(command, self.work_dir)
 
         # test command was sucessful
         self.assertEqual(0, result.returncode)
@@ -146,7 +146,7 @@ class TestMetadata(unittest.TestCase):
 
     def test_skyline_csv(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'csv', meta_suffix='_annotations')
-        result = setup_functions.run_command(command, TestMetadata.work_dir)
+        result = setup_functions.run_command(command, self.work_dir)
 
         # test command was sucessful
         self.assertEqual(0, result.returncode)
@@ -174,7 +174,7 @@ class TestMetadata(unittest.TestCase):
 
     def test_nomal_csv(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'csv')
-        result = setup_functions.run_command(command, TestMetadata.work_dir)
+        result = setup_functions.run_command(command, self.work_dir)
 
         # test command was sucessful
         self.assertEqual(0, result.returncode)
@@ -207,9 +207,9 @@ class TestInferDtypes(unittest.TestCase):
                       'na_var': 'BOOL'}
 
     @classmethod
-    def setUpClass(TestInferDtypes):
-        TestInferDtypes.work_dir = f'{TEST_DIR}/work/test_infer_types'
-        setup_functions.make_work_dir(TestInferDtypes.work_dir, clear_dir=True)
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_infer_types'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
     @staticmethod
@@ -227,7 +227,7 @@ class TestInferDtypes(unittest.TestCase):
 
     def test_infer_dtypes(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
-        result = setup_functions.run_command(command, TestInferDtypes.work_dir)
+        result = setup_functions.run_command(command, self.work_dir)
 
         # test command was sucessful
         self.assertEqual(0, result.returncode)
@@ -240,23 +240,22 @@ class TestInferDtypes(unittest.TestCase):
 
 class TestMultiProject(unittest.TestCase):
     @classmethod
-    def setUpClass(TestMultiProject):
-        TestMultiProject.work_dir = f'{TEST_DIR}/work/test_multi_project/'
-        TestMultiProject.db_path = f'{TestMultiProject.work_dir}/data.db3'
-        TestMultiProject.data_dir = f'{TEST_DIR}/data/'
-        TestMultiProject.results = setup_functions.setup_multi_db(TestMultiProject.data_dir,
-                                                                  TestMultiProject.work_dir)
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_multi_project/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.results = setup_functions.setup_multi_db(cls.data_dir, cls.work_dir)
 
-        TestMultiProject.conn = None
-        if any(result.returncode == 0 for result in TestMultiProject.results):
-            if os.path.isfile(TestMultiProject.db_path):
-                TestMultiProject.conn = sqlite3.connect(TestMultiProject.db_path)
+        cls.conn = None
+        if any(result.returncode == 0 for result in cls.results):
+            if os.path.isfile(cls.db_path):
+                cls.conn = sqlite3.connect(cls.db_path)
 
 
     @classmethod
-    def tearDownClass(TestMultiProject):
-        if TestMultiProject.conn is not None:
-            TestMultiProject.conn.close()
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
 
 
     def test_is_successful(self):
