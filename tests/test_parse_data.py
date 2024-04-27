@@ -1,5 +1,6 @@
 
 import unittest
+from unittest import mock
 import sqlite3
 import os
 import json
@@ -7,6 +8,7 @@ import json
 import setup_functions
 
 from DIA_QC_report.submodules.metadata import Dtype
+from DIA_QC_report.submodules.dia_db_utils import is_normalized
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -261,6 +263,12 @@ class TestMultiProject(unittest.TestCase):
     def test_is_successful(self):
         for result in self.results:
             self.assertEqual(0, result.returncode)
+
+
+    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    def test_is_not_normalized(self):
+        self.assertTrue(self.conn is not None)
+        self.assertFalse(is_normalized(self.conn))
 
 
     def test_replicates(self):
