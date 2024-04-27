@@ -93,27 +93,6 @@ CREATE TABLE peptideToProtein (
 )''']
 
 
-def is_normalized(conn):
-    ''' Determine if metadata.is_normalized is True '''
-
-    cur = conn.cursor()
-    cur.execute('SELECT value FROM metadata WHERE key == "is_normalized"')
-    value = cur.fetchall()
-
-    if len(value) == 0:
-        LOGGER.warning("'is_normalized' key not in metadata table!")
-        return False
-
-    # convert this way at some point in the future
-    # value = Dtype.convert(Dtype.BOOL, value[0][0])
-    value = value[0][0].lower()
-    if value in ('true', '1'):
-        return True
-
-    LOGGER.warning('metadata.is_normalized is False. Only using unnormalized values.')
-    return False
-
-
 def get_meta_value(conn, key):
     ''' Get the value for a key from the metadata table '''
     cur = conn.cursor()
@@ -123,6 +102,29 @@ def get_meta_value(conn, key):
         return value[0][0]
     LOGGER.error(f"Could not get key '{key}' from metadata table!")
     return None
+
+
+def get_meta_value_bool(conn, key):
+    ''' Get the value of a boolean variable in metadata table '''
+    value = get_meta_value(conn, key)
+    if value is None:
+        return None
+
+    # convert this way at some point in the future
+    # value = Dtype.convert(Dtype.BOOL, value[0][0])
+    value = value.lower()
+    if value in ('true', '1'):
+        return True
+    return False
+
+
+def is_normalized(conn):
+    ''' Determine if metadata.is_normalized is True '''
+    normalized = get_meta_value_bool(conn, 'is_normalized')
+    if normalized is None or normalized == False:
+        LOGGER.warning('metadata.is_normalized is False. Only using unnormalized values.')
+        return False
+    return True
 
 
 def check_schema_version(conn):
