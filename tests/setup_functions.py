@@ -21,7 +21,7 @@ def run_command(command, wd, prefix=None):
                             shell=False, check=False)
 
     prefix_path = f'{wd}/{prefix if prefix else inspect.stack()[1][3]}'
-    with open(f'{prefix_path}_command.txt', 'w') as outF:
+    with open(f'{prefix_path}.command.txt', 'w') as outF:
         outF.write(f"{' '.join(command)}\n")
     with open(f'{prefix_path}.stdout.txt', 'w') as outF:
         outF.write(f"{result.stdout.decode('utf-8')}\n")
@@ -30,6 +30,26 @@ def run_command(command, wd, prefix=None):
     with open(f'{prefix_path}.rc.txt', 'w') as outF:
         outF.write(f'{str(result.returncode)}\n')
     return result
+
+
+def setup_single_db(data_dir, output_dir, project,
+                    metadata_suffix='_metadata.tsv',
+                    group_by_gene=False, clear_dir=False):
+    make_work_dir(output_dir, clear_dir)
+    grouping = 'by_gene' if group_by_gene else 'by_protein'
+
+    command = ['parse_data', f'--projectName={project}',
+               '-m', f'{data_dir}/metadata/{project}{metadata_suffix}',
+               f'{data_dir}/skyline_reports/{project}_replicate_quality.tsv',
+               f'{data_dir}/skyline_reports/{project}_{grouping}_precursor_quality.tsv']
+
+    if os.path.isfile(f'{output_dir}/data.db3'):
+        command.insert(1, '--overwriteMode=overwrite')
+
+    if group_by_gene:
+        command.insert(1, '--groupBy=gene')
+
+    return run_command(command, output_dir)
 
 
 def setup_multi_db(data_dir, output_dir, group_by_gene=False, clear_dir=False):
