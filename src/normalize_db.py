@@ -71,7 +71,7 @@ def main():
                               help='Exclude project from normalization.')
     exclude_args.add_argument('-a', '--useAll', action='store_true', default=False,
                               help='Use all replicates for normalization and set all '
-                                    'replciates.includeRep values to TRUE.')
+                                    'replicates.includeRep values to TRUE.')
     parser.add_argument('db', help='Path to sqlite batch database.')
 
     args = parser.parse_args()
@@ -125,14 +125,6 @@ def main():
     precursor_ids = {x.ion: (x.modifiedSequence, x.precursorCharge) for x in precursor_ids.itertuples()}
 
     REP_COLUMN_NAME = 'replicateId'
-
-    # set zero areas to lowest non-zero value
-    # def zero_to_min(group):
-    #     min_non_zero = min(group[group > 0])
-    #     group[group == 0] = min_non_zero
-    #     return group
-    # df = df.set_index(keys=[REP_COLUMN_NAME, 'protein', 'ion'])
-    # df['totalAreaFragment'] = df.groupby('replicateId')['totalAreaFragment'].apply(zero_to_min).droplevel(0)
 
     # add 1 to all precursor areas so the log2 of zeros is finite
     df['totalAreaFragment'] = df['totalAreaFragment'] + 1
@@ -227,12 +219,14 @@ def main():
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    conn = update_meta_value(conn, 'Normalization time', datetime.now().strftime(METADATA_TIME_FORMAT))
-    conn = update_meta_value(conn, 'precursor_normalization_method', 'median')
-    conn = update_meta_value(conn, 'protein_normalization_method', 'DirectLFQ')
-    conn = update_meta_value(conn, 'is_normalized', 'True')
-    conn = update_meta_value(conn, 'Normalization command', current_command)
-    conn = update_meta_value(conn, 'command_log', previous_commands + current_command)
+    metadata = {'Normalization time': datetime.now().strftime(METADATA_TIME_FORMAT),
+                'precursor_normalization_method': 'median',
+                'protein_normalization_method': 'DirectLFQ',
+                'is_normalized': 'True',
+                'Normalization command': current_command,
+                'command_log': previous_commands + current_command}
+    for key, value in metadata.items():
+        conn = update_meta_value(conn, key, value)
 
     conn.close()
 
