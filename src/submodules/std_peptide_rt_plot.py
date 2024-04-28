@@ -31,7 +31,7 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
     LEFT JOIN replicates r
         ON p.replicateId = r.replicateId
 	LEFT JOIN peptideToProtein ptp
-		ON p.modifiedSequence == ptp.modifiedSequence
+		ON p.peptideId == ptp.peptideId
 	LEFT JOIN proteins prot
 		ON prot.proteinId == ptp.proteinId
     WHERE prot.name = "%s" AND r.includeRep == TRUE;
