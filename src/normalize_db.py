@@ -110,7 +110,7 @@ def main():
             p.precursorCharge,
             p.totalAreaFragment
         FROM precursors p
-        LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence
+        LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
         LEFT JOIN replicates r ON p.replicateId == r.replicateId
         WHERE r.includeRep == TRUE; ''',
         conn)

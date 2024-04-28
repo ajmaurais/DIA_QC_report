@@ -122,6 +122,24 @@ class TestMultiProject(unittest.TestCase):
                         'DirectLFQ')
 
 
+    def test_no_new_protein_quants(self):
+        '''
+        Check that there aren't any protein quants thare have NA unnormalized abundances,
+        but finite normalized abundances. This should never happen. If it does there is
+        something wrong with the peptideToProtein table.
+        '''
+        self.assertTrue(self.conn is not None)
+
+        cur = self.conn.cursor()
+        cur.execute('''
+            SELECT
+                replicateId, proteinId,
+                abundance, normalizedAbundance
+            FROM proteinQuants
+            WHERE abundance IS NULL and normalizedAbundance is NOT NULL;''')
+        self.assertEqual(0, len(cur.fetchall()))
+
+
     def test_precursor_medians_equal(self):
         self.assertTrue(self.conn is not None)
 
