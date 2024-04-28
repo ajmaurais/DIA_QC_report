@@ -384,15 +384,14 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         proteinIndex = {r: i for i, r in zip(curProteins['proteinId'], curProteins['name'])}
         proteinIndex = {**proteinIndex, **{r: i for i, r in zip(proteins['name'].index, proteins['name'])}}
 
-        # deal with existing protein to peptide pairs
-        curPairs = pd.read_sql('''SELECT
-                                    prot.name as proteinName, p.modifiedSequence
-                                FROM peptideToProtein p
-                                LEFT JOIN proteins prot ON prot.proteinId = p.proteinId;''',
-                                conn)
-        newPairs = pd.merge(curPairs, precursors[['proteinName', 'modifiedSequence']].drop_duplicates(),
-                            how='right', indicator='exists')
-        newPairs = newPairs[newPairs['exists'] == 'right_only']
+        # Get initial peptideId
+        cur = conn.cursor()
+        cur.execute('SELECT MAX(peptideId) FROM peptideToProtein;')
+        initial_peptide_id = cur.fetchall()
+        if len(initial_peptide_id) != 1:
+            LOGGER.error('Could not determine initial peptideId!')
+            return False
+        initial_peptide_id = initial_peptide_id[0][0] + 1
 
     else:
         # make dict for replicateId column which links the replicate and precursor tables
@@ -401,19 +400,23 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         # make dict for proteinId column which links the protein and proteinQuants and precursor tables
         proteinIndex = {r: i for i, r in zip(proteins['name'].index, proteins['name'])}
 
-        newPairs = precursors[['proteinName', 'modifiedSequence']].drop_duplicates()
+        initial_peptide_id = 0
 
     if protein_quants is None:
         protein_quants = precursors.groupby(['replicateName', 'proteinName'])['totalAreaFragment'].sum().reset_index()
         protein_quants = protein_quants.rename(columns={'proteinName': 'name',
                                                         'totalAreaFragment': 'abundance'})
 
-    # add replicateId and proteinId columns to protein_quants
+    peptide_id_index = {s: i + initial_peptide_id for i, s in enumerate(precursors['modifiedSequence'].drop_duplicates())}
+    peptide_to_protein = precursors[['proteinName', 'modifiedSequence']].drop_duplicates()
+
+    # add replicateId column to protein_quants
     if (rep_id_col := _add_index_column(protein_quants['replicateName'], repIndex,
                                         'protein_quants', 'repIndex')) is None:
         return False
     protein_quants['replicateId'] = rep_id_col
 
+    # Add proteinId column to protein_quants
     if (prot_id_col := _add_index_column(protein_quants['name'], proteinIndex,
                                          'protein_quants', 'proteinIndex')) is None:
         return False
@@ -421,31 +424,39 @@ def write_db(fname, replicates, precursors, protein_quants=None,
 
     protein_quants = protein_quants[['replicateId', 'proteinId', 'abundance']]
 
-    # add replicateId and proteinId columns to precursors and drop duplicate sequences
+    # add replicateId column to precursors
     if (rep_id_col := _add_index_column(precursors['replicateName'], repIndex,
                                         'precursors', 'repIndex')) is None:
         return False
     precursors['replicateId'] = rep_id_col
 
-    if (prot_id_col := _add_index_column(precursors['proteinName'], proteinIndex,
-                                         'precursors', 'proteinIndex')) is None:
+    # add peptideId column to precursors
+    if (pep_id_col := _add_index_column(precursors['modifiedSequence'], peptide_id_index,
+                                        'precursors', 'peptideId')) is None:
         return False
-    precursors['proteinId'] = prot_id_col
+    precursors['peptideId'] = pep_id_col
 
+    # Drop duplicate precursors here
     precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
 
-    # add proteinId column and make peptideToProtein df
-    if (prot_id_col := _add_index_column(newPairs['proteinName'], proteinIndex,
-                                         'peptideToProtein', 'proteinIndex')) is None:
+    # add proteinId column to peptide_to_protein
+    if (prot_id_col := _add_index_column(peptide_to_protein['proteinName'], proteinIndex,
+                                        'peptideToProtein', 'proteinId')) is None:
         return False
-    newPairs['proteinId'] = prot_id_col
-    peptideToProtein = newPairs[['proteinId', 'modifiedSequence']]
+    peptide_to_protein['proteinId'] = prot_id_col
+
+    # add peptideId column to peptide_to_protein
+    if (pep_id_col := _add_index_column(peptide_to_protein['modifiedSequence'], peptide_id_index,
+                                        'peptideToProtein', 'peptideId')) is None:
+        return False
+    peptide_to_protein['peptideId'] = pep_id_col
+    peptide_to_protein = peptide_to_protein[['proteinId', 'peptideId']]
 
     replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
     proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
     protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')
-    peptideToProtein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
+    peptide_to_protein.to_sql('peptideToProtein', conn, if_exists='append', index=False)
 
     if sample_metadata is not None:
         missing_metadata = [x for x in sample_metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]

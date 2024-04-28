@@ -2,6 +2,7 @@
 import unittest
 from unittest import mock
 import sqlite3
+import pandas as pd
 import os
 import json
 
@@ -288,6 +289,71 @@ class TestMultiProject(unittest.TestCase):
 
         self.assertDictEqual(METADATA_TYPES, db_metadata_types)
         self.assertDictEqual(METADATA, db_metadata)
+
+
+class TestMultiProjectStepped(unittest.TestCase):
+
+    def test_peptideToProtein(self):
+        '''
+        Test that no new peptide to protein mappings are added
+        when skyline documents have different protein parsimpny settings.
+        '''
+
+        # setup variables
+        project_1 = 'Strap'
+        project_2 = 'Sp3'
+        work_dir = f'{TEST_DIR}/work/test_peptideToProtein'
+        data_dir = f'{TEST_DIR}/data'
+        db_path = f'{work_dir}/data.db3'
+
+        # get report protein mappings
+        def get_report_mappings(path):
+            df = pd.read_csv(path, sep='\t')
+            ret = set()
+            for row in df[['ProteinName', 'ModifiedSequence']].drop_duplicates().itertuples():
+                ret.add((row.ProteinName, row.ModifiedSequence))
+            return ret
+        proj_1_map = get_report_mappings(f'{data_dir}/skyline_reports/{project_1}_by_protein_precursor_quality.tsv')
+        proj_2_map = get_report_mappings(f'{data_dir}/invalid_reports/{project_2}_by_protein_not_minimal_precursor_quality.tsv')
+
+        # add project_1
+        first_result = setup_functions.setup_single_db(data_dir, work_dir, project_1,
+                                                       clear_dir=True)
+
+        # get initial peptide to protein mappings for Strap project
+        self.assertEqual(first_result.returncode, 0)
+        self.assertTrue(os.path.isfile(db_path))
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        query = '''SELECT prot.name, p.modifiedSequence FROM precursors p
+                   LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
+                   LEFT JOIN proteins prot ON ptp.proteinId == prot.proteinId
+                   LEFT JOIN replicates r ON r.replicateId == p.replicateId
+                   WHERE r.project == ?; '''
+        cur.execute(query, (project_1,))
+        db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
+        self.assertTrue(db_proj_1_map == proj_1_map)
+
+        # add project_2
+        command = ['parse_data', '--overwriteMode=append', f'--projectName={project_2}',
+                   '-m', f'{data_dir}/metadata/{project_2}_metadata.tsv',
+                   f'{data_dir}/skyline_reports/{project_2}_replicate_quality.tsv',
+                   f'{data_dir}/invalid_reports/{project_2}_by_protein_not_minimal_precursor_quality.tsv']
+        second_result = setup_functions.run_command(command, work_dir, prefix='add_project_2')
+        self.assertEqual(second_result.returncode, 0)
+
+        cur = conn.cursor()
+        cur.execute(query, (project_1,))
+        new_db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
+        self.assertEqual(db_proj_1_map, new_db_proj_1_map)
+        self.assertEqual(proj_1_map, new_db_proj_1_map)
+
+        cur = conn.cursor()
+        cur.execute(query, (project_2,))
+        db_proj_2_map = {(x[0], x[1]) for x in cur.fetchall()}
+        self.assertEqual(proj_2_map, db_proj_2_map)
+
+        conn.close()
 
 
 if __name__ == '__main__':

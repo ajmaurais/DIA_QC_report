@@ -11,9 +11,9 @@ from .logger import LOGGER
 
 METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
-PRECURSOR_KEY_COLS = ('replicateId', 'modifiedSequence', 'precursorCharge')
+PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'modifiedSequence', 'precursorCharge')
 
-SCHEMA_VERSION = '1.12'
+SCHEMA_VERSION = '1.13'
 
 SCHEMA = ['PRAGMA foreign_keys = ON',
 '''
@@ -30,6 +30,7 @@ CREATE TABLE replicates (
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
+    peptideId INTEGER NOT NULL,             -- Unique for every peptide sequence and replicate
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,
@@ -87,8 +88,8 @@ CREATE TABLE proteinQuants (
 '''
 CREATE TABLE peptideToProtein (
     proteinId INTEGER NOT NULL,
-    modifiedSequence VARCHAR(200) NOT NULL,
-    PRIMARY KEY (modifiedSequence, proteinId),
+    peptideId INTEGER NOT NULL,
+    PRIMARY KEY (peptideId, proteinId),
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId) ON DELETE CASCADE
 )''']
 
