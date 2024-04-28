@@ -1,0 +1,4 @@
+protein,accession,geneid,authid,description,chromosome,locus,organism,short_accession
+O60884,DNAJA2,10294,HGNC:14884,DnaJ heat shock protein family (Hsp40) member A2,16,16q11.2,Homo sapiens,NA
+O95197,RTN3,10313,HGNC:10469,reticulon 3,11,11q13.1,Homo sapiens,NA
+P06733,ENO1,2023,HGNC:3350,enolase 1,1,1p36.23,Homo sapiens,NA
