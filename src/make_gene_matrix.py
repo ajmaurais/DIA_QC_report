@@ -52,7 +52,7 @@ SELECT
 	p.totalAreaFragment as area,
 	p.normalizedArea
 FROM precursors p
-LEFT JOIN peptideToProtein ptp ON ptp.modifiedSequence == p.modifiedSequence
+LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
 LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId
 LEFT JOIN replicates r ON r.replicateId == p.replicateId
 LEFT JOIN (
