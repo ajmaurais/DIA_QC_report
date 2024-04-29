@@ -123,7 +123,6 @@ def is_normalized(conn):
     ''' Determine if metadata.is_normalized is True '''
     normalized = get_meta_value_bool(conn, 'is_normalized')
     if normalized is None or normalized == False:
-        LOGGER.warning('metadata.is_normalized is False. Only using unnormalized values.')
         return False
     return True
 

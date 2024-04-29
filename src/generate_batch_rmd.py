@@ -7,6 +7,7 @@ import sqlite3
 
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
 DEFAULT_OFNAME = 'bc_report.rmd'
@@ -100,17 +101,21 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
         conn = sqlite3.connect(db_path)
     else:
         LOGGER.error(f'Database file ({db_path}) does not exist!')
-        sys.exit(1)
+        return False
 
     # check database version
     if not check_schema_version(conn):
-        sys.exit(1)
+        return False
+
+    if not is_normalized(conn):
+        LOGGER.error('Database file it not normalized!')
+        return False
 
     # If no batch vars, test if we can use replicates.project
     if batch1 is None and batch2 is None:
         LOGGER.info('No batch variables specified. Attempting to use replicates.project as batch variable.')
         cur = conn.cursor()
-        cur.execute('SELECT DISTINCT project FROM replicates;')
+        cur.execute('SELECT DISTINCT project FROM replicates WHERE includeRep == TRUE;')
         n_projects = len([x[0] for x in cur.fetchall()])
         if n_projects <= 1:
             LOGGER.error('Only 1 project in replicates! Cannot perform batch correction with only 1 batch!')

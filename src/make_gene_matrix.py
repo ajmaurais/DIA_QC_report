@@ -249,7 +249,8 @@ def main():
         LOGGER.error('Precursors in database must be grouped by gene!')
         sys.exit(1)
 
-    db_normalized = is_normalized(conn)
+    if not (db_normalized := is_normalized(conn)):
+        LOGGER.warning('metadata.is_normalized is False. Only using unnormalized values.')
 
     # read proteins
     LOGGER.info('Reading protein table from database...')
