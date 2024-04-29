@@ -19,6 +19,12 @@ class TestMakeQCqmd(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{TEST_DIR}/data/'
 
+        # remove tables subdirectory in work_dir if necissary
+        if os.path.isdir(f'{cls.work_dir}/tables'):
+            for file in os.listdir(f'{cls.work_dir}/tables'):
+                os.remove(f'{cls.work_dir}/tables/{file}')
+            os.rmdir(f'{cls.work_dir}/tables')
+
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
                                                            cls.TEST_PROJECT,
@@ -32,16 +38,47 @@ class TestMakeQCqmd(unittest.TestCase):
     def test_is_successful(self):
         self.assertEqual(self.parse_result.returncode, 0)
 
+        qmd_name = 'basic_test.qmd'
         command = ['generate_qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
-                   self.db_path]
+                   '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
+
         self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
-            render_command = ['quarto', 'render', 'qc_report.qmd', '--to', 'html']
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir)
             self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+
+
+    def test_output_tables(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        qmd_name = 'test_tables'
+        command = ['generate_qc_qmd',
+                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
+                   '-o', f'{qmd_name}.qmd',
+                   '--precursorTables=33', '--proteinTables=33', '--metadataTables=11',
+                   self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir)
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+
+            table_names = ['proteins_long.tsv', 'proteins_wide_unnormalized.tsv',
+                           'precursors_long.tsv', 'precursors_wide_unnormalized.tsv',
+                           'metadata_long.tsv', 'metadata_wide.tsv']
+            for table in table_names:
+                self.assertTrue(os.path.isfile(f'{self.work_dir}/tables/{table}'))
 
 
 if __name__ == '__main__':
@@ -53,5 +90,6 @@ if __name__ == '__main__':
 
     TestMakeQCqmd.RENDER_QMD = args.render
 
-    sys.argv[1:] = args.unittest_args
-    unittest.main()
+    unittest_args = args.unittest_args
+    unittest_args.insert(0, sys.argv[0])
+    unittest.main(argv=unittest_args, verbosity=2)
