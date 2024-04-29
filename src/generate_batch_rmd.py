@@ -224,6 +224,7 @@ color.vars <- c('{}')'''.format("', '".join(covariate_vars))
 conn <- DBI::dbConnect(RSQLite::SQLite(), '{db_path}')
 dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       p.replicateId,
+                                      p.peptideId,
                                       p.modifiedSequence,
                                       p.precursorCharge,
                                       p.totalAreaFragment,
@@ -232,9 +233,16 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                    LEFT JOIN replicates r ON r.replicateId == p.replicateId
                                    WHERE r.includeRep == TRUE{precursor_filter};')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
-                                            p.name as protein, ptp.modifiedSequence
-                                            FROM  peptideToProtein ptp
-                                        LEFT JOIN proteins p ON ptp.proteinId == p.proteinId;')
+                                            prot.name as protein,
+                                            p.modifiedSequence,
+                                            p.replicateId
+                                           FROM peptideToProtein ptp
+                                           LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId
+                                           LEFT JOIN (
+                                            SELECT DISTINCT
+                                            peptideId, replicateId, modifiedSequence
+                                            FROM precursors
+                                           ) p ON p.peptideId == ptp.peptideID')
 dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.replicateId,
                                     p.name as protein,
@@ -288,6 +296,10 @@ dat.protein <- dplyr::left_join(dat.protein,
                                 dplyr::select(dat.rep, replicate, replicateId),
                                 by='replicateId')
 dat.metadata <- dplyr::left_join(dat.rep, dat.meta, by='replicateId')
+peptideToProtein <- dplyr::left_join(peptideToProtein,
+                                     dplyr::select(dat.rep, replicate, replicateId),
+                                     by='replicateId') %>%
+    dplyr::select(-replicateId)
 
 dat.metadata[[batch1]] <- factor(dat.metadata[[batch1]])\n'''
 
@@ -502,7 +514,7 @@ def write_tables_section(precursor_tables, protein_tables, metadata_tables):
 
     if any(t for d in precursor_tables.values() for t in d.values()):
         text += '''dat.precursor.j <- dplyr::inner_join(peptideToProtein, dat.precursor,
-                                by='modifiedSequence', relationship='many-to-many')\n'''
+                                by=c('replicate', 'modifiedSequence'), relationship='many-to-many')\n'''
 
     # precursor wide tables
     for (py_name, write), r_name in zip(precursor_tables['wide'].items(), PRECURSOR_METHOD_NAMES):
