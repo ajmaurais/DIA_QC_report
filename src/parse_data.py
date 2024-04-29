@@ -188,7 +188,7 @@ def read_metadata(fname, metadata_format=None):
     df['annotationValue'] = df.apply(lambda x: pd.NA if types[x.annotationKey] is Dtype.NULL
                                                      else x.annotationValue, axis=1)
 
-    # This is an anoying edge case with metadata annotations exported from Skyline
+    # This is an annoying edge case with metadata annotations exported from Skyline
     # Boolean annotations are either True or blank instead of False
     # Therefore we will set all blank boolean annotations to False
     if skyline_csv:

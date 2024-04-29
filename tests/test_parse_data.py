@@ -101,7 +101,7 @@ class TestMetadata(unittest.TestCase):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
         result = setup_functions.run_command(command, self.work_dir)
 
-        # test command was sucessful
+        # test command was successful
         self.assertEqual(0, result.returncode)
 
         # get metadata from test db
@@ -126,7 +126,7 @@ class TestMetadata(unittest.TestCase):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'json')
         result = setup_functions.run_command(command, self.work_dir)
 
-        # test command was sucessful
+        # test command was successful
         self.assertEqual(0, result.returncode)
 
         # get metadata from test db
@@ -151,7 +151,7 @@ class TestMetadata(unittest.TestCase):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'csv', meta_suffix='_annotations')
         result = setup_functions.run_command(command, self.work_dir)
 
-        # test command was sucessful
+        # test command was successful
         self.assertEqual(0, result.returncode)
 
         # Log entry specific for skyline annotations csv
@@ -179,7 +179,7 @@ class TestMetadata(unittest.TestCase):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'csv')
         result = setup_functions.run_command(command, self.work_dir)
 
-        # test command was sucessful
+        # test command was successful
         self.assertEqual(0, result.returncode)
 
         # get metadata from test db
@@ -232,7 +232,7 @@ class TestInferDtypes(unittest.TestCase):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
         result = setup_functions.run_command(command, self.work_dir)
 
-        # test command was sucessful
+        # test command was successful
         self.assertEqual(0, result.returncode)
 
         # get metadata from test db

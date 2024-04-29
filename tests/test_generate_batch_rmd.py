@@ -94,7 +94,7 @@ class TestMakeQCrmd(unittest.TestCase):
         # set 'Strap' project replicates skipped
         self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',)))
 
-        # maks sure generate_batch_rmd fails
+        # make sure generate_batch_rmd fails
         command = ['generate_batch_rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     TestMakeQCrmd.RENDER_RMD = args.render
-    
+
     unittest_args = args.unittest_args
     unittest_args.insert(0, sys.argv[0])
     unittest.main(argv=unittest_args, verbosity=2)
