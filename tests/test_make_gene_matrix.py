@@ -17,7 +17,7 @@ class TestMakeGeneMatrix(unittest.TestCase):
         cls.work_dir = f'{TEST_DIR}/work/test_make_gene_matrix/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{TEST_DIR}/data/'
-        cls.gene_id_path = f'{data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
+        cls.gene_id_path = f'{cls.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
 
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
@@ -33,10 +33,8 @@ class TestMakeGeneMatrix(unittest.TestCase):
         self.assertEqual(self.parse_result.returncode, 0)
 
         command = ['make_gene_matrix', self.db_path]
-        cls.normalize_result = setup_functions.run_command(normalize_command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_single_proj')
-        # self.assertEqual(self.normalize_result.returncode, 0)
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(result.returncode, 0)
 
 
 if __name__ == '__main__':
