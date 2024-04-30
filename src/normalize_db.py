@@ -105,6 +105,7 @@ def main():
     df = pd.read_sql('''
         SELECT
             p.replicateId,
+            p.peptideId,
             ptp.proteinId as protein,
             p.modifiedSequence,
             p.precursorCharge,
@@ -121,8 +122,10 @@ def main():
         sys.exit(1)
 
     df['ion'] = df['modifiedSequence'] + '_' + df['precursorCharge'].astype(str)
-    precursor_ids = df[['ion', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
-    precursor_ids = {x.ion: (x.modifiedSequence, x.precursorCharge) for x in precursor_ids.itertuples()}
+    precursor_ids = df[['ion', 'peptideId', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
+    precursor_ids = {x.ion: (x.peptideId,
+                             x.modifiedSequence,
+                             x.precursorCharge) for x in precursor_ids.itertuples()}
 
     REP_COLUMN_NAME = 'replicateId'
 
@@ -167,8 +170,9 @@ def main():
     # median normalize precursor quants
     ion_df = median_normalize(df[[REP_COLUMN_NAME, 'ion', 'totalAreaFragment']].drop_duplicates(),
                               [REP_COLUMN_NAME], 'totalAreaFragment')
-    ion_df['modifiedSequence'] = ion_df['ion'].apply(lambda x: precursor_ids[x][0])
-    ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
+    ion_df['peptideId'] = ion_df['ion'].apply(lambda x: precursor_ids[x][0])
+    ion_df['modifiedSequence'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
+    ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][2])
 
     # delete existing normalized values
     cur = conn.cursor()
@@ -183,12 +187,14 @@ def main():
     cur = conn.cursor()
     ion_data = [(row.normalizedArea,
                  getattr(row, REP_COLUMN_NAME),
-                 row.modifiedSequence,
+                 row.peptideId,
                  row.precursorCharge) for row in ion_df.itertuples()]
     cur.executemany('''
                     UPDATE precursors
                         SET normalizedArea = ?
-                    WHERE replicateId = ? AND modifiedSequence = ? AND precursorCharge = ? ''',
+                    WHERE replicateId = ? AND
+                          peptideId = ? AND
+                          precursorCharge = ? ;''',
                     ion_data)
     conn.commit()
     LOGGER.info('Done updating precursor normalizedArea values.')

@@ -11,7 +11,7 @@ from .logger import LOGGER
 
 METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
-PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'modifiedSequence', 'precursorCharge')
+PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'precursorCharge')
 
 SCHEMA_VERSION = '1.13'
 

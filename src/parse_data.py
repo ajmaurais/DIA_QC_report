@@ -56,7 +56,7 @@ PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'tota
                                      'totalAreaMs1', 'normalizedArea', 'rt', 'minStartTime',
                                      'maxEndTime', 'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
 
-PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + PRECURSOR_QUALITY_NUMERIC_COLUMNS
+PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['modifiedSequence'] + PRECURSOR_QUALITY_NUMERIC_COLUMNS
 
 REPLICATE_QUALITY_REQUIRED_COLUMNS = {'Replicate': 'replicate',
                                       'AcquiredTime': 'acquiredTime',
