@@ -7,17 +7,15 @@ import os
 import setup_functions
 
 
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-
 class TestMakeQCqmd(unittest.TestCase):
     TEST_PROJECT = 'Strap'
     RENDER_QMD = False
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{TEST_DIR}/work/test_generate_qc_qmd/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_qc_qmd/'
         cls.db_path = f'{cls.work_dir}/data.db3'
-        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         # remove tables subdirectory in work_dir if necissary
         if os.path.isdir(f'{cls.work_dir}/tables'):

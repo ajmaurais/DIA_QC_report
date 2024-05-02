@@ -10,16 +10,14 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-
 class TestSingleProject(unittest.TestCase):
     TEST_PROJECT = 'Sp3'
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{TEST_DIR}/work/test_normalize_single_project/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_single_project/'
         cls.db_path = f'{cls.work_dir}/data.db3'
-        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
@@ -83,9 +81,9 @@ class TestSingleProject(unittest.TestCase):
 class TestMultiProject(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{TEST_DIR}/work/test_normalize_multi_project/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_multi_project/'
         cls.db_path = f'{cls.work_dir}/data.db3'
-        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir, cls.work_dir)
         
         if any(result.returncode != 0 for result in cls.parse_results):

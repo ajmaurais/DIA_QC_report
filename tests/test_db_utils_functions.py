@@ -12,8 +12,6 @@ import setup_functions
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 from DIA_QC_report.submodules.metadata import Dtype
 
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-
 
 class TestDBHelperFunctions(unittest.TestCase):
     TEST_PROJECT = 'Strap'
@@ -21,9 +19,9 @@ class TestDBHelperFunctions(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{TEST_DIR}/work/test_metadata_fxns/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_metadata_fxns/'
         cls.db_path = f'{cls.work_dir}/data.db3'
-        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,

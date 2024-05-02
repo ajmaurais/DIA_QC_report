@@ -10,16 +10,14 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-
 class TestMakeQCrmd(unittest.TestCase):
     RENDER_RMD = False
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{TEST_DIR}/work/test_generate_batch_rmd/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_batch_rmd/'
         cls.db_path = f'{cls.work_dir}/data.db3'
-        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         # remove tables subdirectory in work_dir if necissary
         if os.path.isdir(f'{cls.work_dir}/tables'):

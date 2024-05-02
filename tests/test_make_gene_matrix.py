@@ -6,16 +6,14 @@ import pandas as pd
 
 import setup_functions
 
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-
 class TestMakeGeneMatrix(unittest.TestCase):
     TEST_PROJECT = 'Strap'
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{TEST_DIR}/work/test_make_gene_matrix/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_make_gene_matrix/'
         cls.db_path = f'{cls.work_dir}/data.db3'
-        cls.data_dir = f'{TEST_DIR}/data/'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.gene_id_path = f'{cls.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
 
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,

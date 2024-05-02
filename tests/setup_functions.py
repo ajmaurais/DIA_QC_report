@@ -3,6 +3,7 @@ import os
 import subprocess
 import inspect
 
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def make_work_dir(work_dir, clear_dir=False):
     if not os.path.isdir(work_dir):

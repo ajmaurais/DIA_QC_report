@@ -9,12 +9,11 @@ from collections import Counter
 import pandas as pd
 
 import setup_functions
+from setup_functions import TEST_DIR
 
 from DIA_QC_report.submodules.metadata import Dtype
 from DIA_QC_report.submodules.dia_db_utils import is_normalized
 from DIA_QC_report.submodules.dia_db_utils import update_meta_value, get_meta_value
-
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_db_metadata(db_path):
