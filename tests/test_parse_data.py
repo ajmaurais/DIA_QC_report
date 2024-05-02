@@ -4,7 +4,8 @@ from unittest import mock
 import os
 import sqlite3
 import json
-from collections import Counter, namedtuple
+import re
+from collections import Counter
 import pandas as pd
 
 import setup_functions
@@ -461,7 +462,6 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
     DB_PATH = f'{WORK_DIR}/data.db3'
     PRECURSOR_REPPRT=f'{TEST_DIR}/data/invalid_reports/Sp3_by_protein_duplicate_precursor_quality.tsv'
 
-
     @classmethod
     def setUpClass(cls):
         setup_functions.make_work_dir(cls.WORK_DIR, clear_dir=True)
@@ -536,7 +536,16 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_no_user_set')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(1, result.returncode)
-        self.assertTrue('precursor groups have no user set peak boundaries!' in result.stderr)
+        self.assertTrue(re.search(r'ERROR: [0-9]+ precursor groups have no user set peak boundaries!',
+                                  result.stderr))
+
+
+    def test_invalid_other_diff_report_fails(self):
+        command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_other_diff')
+        result = setup_functions.run_command(command, self.WORK_DIR)
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(re.search(r'ERROR: There are [0-9]+ non-unique precursor areas!',
+                                  result.stderr))
 
 
     def test_use_user_set_total_option(self):
