@@ -180,7 +180,7 @@ class TestDBHelperFunctions(unittest.TestCase):
         command = ['make_gene_matrix', gene_id_path, self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr.decode('utf-8'))
+        self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr)
 
 
     # Not sure if I am going to include this one

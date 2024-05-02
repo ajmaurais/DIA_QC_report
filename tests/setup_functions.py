@@ -21,12 +21,16 @@ def run_command(command, wd, prefix=None):
                             shell=False, check=False)
 
     prefix_path = f'{wd}/{prefix if prefix else inspect.stack()[1][3]}'
+
+    result.stderr = result.stderr.decode('utf-8')
+    result.stdout = result.stdout.decode('utf-8')
+
     with open(f'{prefix_path}.command.txt', 'w') as outF:
         outF.write(f"{' '.join(command)}\n")
     with open(f'{prefix_path}.stdout.txt', 'w') as outF:
-        outF.write(f"{result.stdout.decode('utf-8')}\n")
+        outF.write(f"{result}\n")
     with open(f'{prefix_path}.stderr.txt', 'w') as outF:
-        outF.write(f"{result.stderr.decode('utf-8')}\n")
+        outF.write(f"{result}\n")
     with open(f'{prefix_path}.rc.txt', 'w') as outF:
         outF.write(f'{str(result.returncode)}\n')
     return result

@@ -157,7 +157,7 @@ class TestMetadata(unittest.TestCase):
         self.assertEqual(0, result.returncode)
 
         # Log entry specific for skyline annotations csv
-        self.assertTrue('Found Skyline annotations csv' in result.stderr.decode('utf-8'))
+        self.assertTrue('Found Skyline annotations csv' in result.stderr)
 
         # get metadata from test db
         db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
@@ -451,7 +451,7 @@ class TestMultiProjectStepped(unittest.TestCase):
         bad_matrix_result = setup_functions.run_command(['make_gene_matrix', gene_id_path, db_path],
                                                         work_dir, prefix='failed_matrix')
         self.assertEqual(bad_matrix_result.returncode, 1)
-        self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr.decode('utf-8'))
+        self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)
         conn = update_meta_value(conn, 'group_precursors_by', 'gene')
 
 
@@ -542,8 +542,8 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue('There are 9 non-unique precursors!' in result.stderr.decode('utf-8'))
-        self.assertTrue('After selecting precursors with user set peak boundaries, ' in result.stderr.decode('utf-8'))
+        self.assertTrue('There are 9 non-unique precursors!' in result.stderr)
+        self.assertTrue('After selecting precursors with user set peak boundaries, ' in result.stderr)
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, True)
 
@@ -564,7 +564,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue('There are 9 non-unique precursors!' in result.stderr.decode('utf-8'))
+        self.assertTrue('There are 9 non-unique precursors!' in result.stderr)
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
 

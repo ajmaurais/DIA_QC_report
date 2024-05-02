@@ -81,7 +81,7 @@ class TestMakeQCrmd(unittest.TestCase):
         command = ['generate_batch_rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('Database file it not normalized!' in result.stderr.decode('utf-8'))
+        self.assertTrue('Database file it not normalized!' in result.stderr)
 
         # reset is_normalized metadata entry to True
         self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'True')
@@ -98,7 +98,7 @@ class TestMakeQCrmd(unittest.TestCase):
         command = ['generate_batch_rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('Only 1 project in replicates!' in result.stderr.decode('utf-8'))
+        self.assertTrue('Only 1 project in replicates!' in result.stderr)
 
         # reset is_normalized metadata entry to True
         self.conn = db_utils.mark_all_reps_includced(self.conn)
