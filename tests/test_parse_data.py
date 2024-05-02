@@ -532,10 +532,11 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         self.assertEqual(1, result.returncode)
 
 
-    # def test_invalid_report_fails(self):
-    #     command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid')
-    #     result = setup_functions.run_command(command, self.WORK_DIR)
-    #     self.assertEqual(1, result.returncode)
+    def test_invalid_no_user_set_report_fails(self):
+        command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_no_user_set')
+        result = setup_functions.run_command(command, self.WORK_DIR)
+        self.assertEqual(1, result.returncode)
+        self.assertTrue('precursor groups have no user set peak boundaries!' in result.stderr)
 
 
     def test_use_user_set_total_option(self):
