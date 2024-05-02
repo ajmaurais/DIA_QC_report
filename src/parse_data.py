@@ -528,7 +528,7 @@ def check_duplicate_precursors(precursors, mode):
     n_unique_rows = len(precursors[all_cols].drop_duplicates().index)
 
     if n_unique_areas != n_unique_rows:
-        LOGGER.error(f'There are {n_unique_rows - n_unique} precursor rows which are not unique!')
+        LOGGER.error(f'There are {n_unique_rows - n_unique_areas} precursor rows which are not unique!')
         return None
 
     if n_unique == n_unique_areas:
@@ -536,10 +536,10 @@ def check_duplicate_precursors(precursors, mode):
 
     # If there duplicate precursors return None
     if mode == 'e':
-        LOGGER.error(f'There are {n_unique_areas - n_unique} non-unique precursors!')
+        LOGGER.error(f'There are {n_unique_areas - n_unique} non-unique precursor areas!')
         return None
 
-    LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursors!')
+    LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursor areas!')
 
     precursors = precursors.set_index(keys=key_cols)
     keep_cols = [x for x in precursors.columns if x not in PRECURSOR_QUALITY_NUMERIC_COLUMNS]

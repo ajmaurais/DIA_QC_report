@@ -530,6 +530,8 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'e', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(1, result.returncode)
+        self.assertTrue(re.search(r'ERROR: There are [0-9]+ non-unique precursor areas!',
+                                  result.stderr))
 
 
     def test_invalid_no_user_set_report_fails(self):
@@ -544,7 +546,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_other_diff')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(1, result.returncode)
-        self.assertTrue(re.search(r'ERROR: There are [0-9]+ non-unique precursor areas!',
+        self.assertTrue(re.search(r'ERROR: There are [0-9]+ precursor rows which are not unique!',
                                   result.stderr))
 
 
@@ -552,10 +554,34 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue('There are 9 non-unique precursors!' in result.stderr)
-        self.assertTrue('After selecting precursors with user set peak boundaries, ' in result.stderr)
+        self.assertTrue(re.search(r'WARNING: There are [0-9]+ non-unique precursor areas!',
+                                  result.stderr))
+        self.assertTrue(re.search(r'After selecting precursors with user set peak boundaries, [0-9]+',
+                                  result.stderr))
+        self.assertTrue('Found "UserSetTotal" column.' in result.stderr)
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, True)
+
+        # read db precursors
+        self.assertTrue(os.path.isfile(f'{self.WORK_DIR}/{db_name}'))
+        conn = sqlite3.connect(f'{self.WORK_DIR}/{db_name}')
+        db_data = self.read_db_precursos(conn)
+        conn.close()
+
+        self.assertEqual(len(data), len(db_data))
+        for precursor in data:
+            self.assertEqual(len(data[precursor]), len(db_data[precursor]))
+            for rep in data[precursor]:
+                self.assertAlmostEqual(data[precursor][rep], db_data[precursor][rep])
+
+
+    def test_first_option_no_user_set(self):
+        command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'invalid_no_user_set')
+        result = setup_functions.run_command(command, self.WORK_DIR)
+        self.assertEqual(0, result.returncode)
+        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stderr))
+
+        data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
 
         # read db precursors
         self.assertTrue(os.path.isfile(f'{self.WORK_DIR}/{db_name}'))
@@ -574,7 +600,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue('There are 9 non-unique precursors!' in result.stderr)
+        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stderr))
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
 

@@ -28,9 +28,9 @@ def run_command(command, wd, prefix=None):
     with open(f'{prefix_path}.command.txt', 'w') as outF:
         outF.write(f"{' '.join(command)}\n")
     with open(f'{prefix_path}.stdout.txt', 'w') as outF:
-        outF.write(f"{result}\n")
+        outF.write(f"{result.stdout}\n")
     with open(f'{prefix_path}.stderr.txt', 'w') as outF:
-        outF.write(f"{result}\n")
+        outF.write(f"{result.stderr}\n")
     with open(f'{prefix_path}.rc.txt', 'w') as outF:
         outF.write(f'{str(result.returncode)}\n')
     return result
