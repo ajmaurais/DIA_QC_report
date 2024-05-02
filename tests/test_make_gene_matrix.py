@@ -6,7 +6,6 @@ import pandas as pd
 
 import setup_functions
 
-
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class TestMakeGeneMatrix(unittest.TestCase):
@@ -28,11 +27,10 @@ class TestMakeGeneMatrix(unittest.TestCase):
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-
     def test_is_successful(self):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        command = ['make_gene_matrix', self.db_path]
+        command = ['make_gene_matrix', self.gene_id_path, self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 0)
 

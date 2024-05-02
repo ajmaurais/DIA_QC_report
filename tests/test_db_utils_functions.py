@@ -171,6 +171,18 @@ class TestDBHelperFunctions(unittest.TestCase):
         self.assertDictEqual(result_types, db_new_types)
 
 
+    def test_make_gene_matrix_by_protein_fails(self):
+        self.assertTrue(self.conn is not None)
+
+        self.assertEqual('protein', db_utils.get_meta_value(self.conn, 'group_precursors_by'))
+
+        gene_id_path = f'{self.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
+        command = ['make_gene_matrix', gene_id_path, self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr.decode('utf-8'))
+
+
     # Not sure if I am going to include this one
     # def test_update_acquired_ranks(self):
     #     pass

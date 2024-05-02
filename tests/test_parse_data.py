@@ -1,15 +1,17 @@
 
 import unittest
 from unittest import mock
-import sqlite3
-import pandas as pd
 import os
+import sqlite3
 import json
+from collections import Counter, namedtuple
+import pandas as pd
 
 import setup_functions
 
 from DIA_QC_report.submodules.metadata import Dtype
 from DIA_QC_report.submodules.dia_db_utils import is_normalized
+from DIA_QC_report.submodules.dia_db_utils import update_meta_value, get_meta_value
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -292,6 +294,9 @@ class TestMultiProject(unittest.TestCase):
 
 
 class TestMultiProjectStepped(unittest.TestCase):
+    PROJECT_1 = 'Strap'
+    PROJECT_2 = 'Sp3'
+    DATA_DIR = f'{TEST_DIR}/data'
 
     def test_peptideToProtein(self):
         '''
@@ -300,10 +305,7 @@ class TestMultiProjectStepped(unittest.TestCase):
         '''
 
         # setup variables
-        project_1 = 'Strap'
-        project_2 = 'Sp3'
         work_dir = f'{TEST_DIR}/work/test_peptideToProtein'
-        data_dir = f'{TEST_DIR}/data'
         db_path = f'{work_dir}/data.db3'
 
         # get report protein mappings
@@ -313,12 +315,14 @@ class TestMultiProjectStepped(unittest.TestCase):
             for row in df[['ProteinName', 'ModifiedSequence']].drop_duplicates().itertuples():
                 ret.add((row.ProteinName, row.ModifiedSequence))
             return ret
-        proj_1_map = get_report_mappings(f'{data_dir}/skyline_reports/{project_1}_by_protein_precursor_quality.tsv')
-        proj_2_map = get_report_mappings(f'{data_dir}/invalid_reports/{project_2}_by_protein_not_minimal_precursor_quality.tsv')
+        proj_1_map = get_report_mappings(f'{self.DATA_DIR}/skyline_reports/{self.PROJECT_1}'
+                                          '_by_protein_precursor_quality.tsv')
+        proj_2_map = get_report_mappings(f'{self.DATA_DIR}/invalid_reports/{self.PROJECT_2}'
+                                          '_by_protein_not_minimal_precursor_quality.tsv')
 
-        # add project_1
-        first_result = setup_functions.setup_single_db(data_dir, work_dir, project_1,
-                                                       clear_dir=True)
+        # add PROJECT_1
+        first_result = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_1,
+                                                       clear_dir=True, output_prefix='add_project_1')
 
         # get initial peptide to protein mappings for Strap project
         self.assertEqual(first_result.returncode, 0)
@@ -330,30 +334,222 @@ class TestMultiProjectStepped(unittest.TestCase):
                    LEFT JOIN proteins prot ON ptp.proteinId == prot.proteinId
                    LEFT JOIN replicates r ON r.replicateId == p.replicateId
                    WHERE r.project == ?; '''
-        cur.execute(query, (project_1,))
+        cur.execute(query, (self.PROJECT_1,))
         db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
         self.assertTrue(db_proj_1_map == proj_1_map)
 
-        # add project_2
-        command = ['parse_data', '--overwriteMode=append', f'--projectName={project_2}',
-                   '-m', f'{data_dir}/metadata/{project_2}_metadata.tsv',
-                   f'{data_dir}/skyline_reports/{project_2}_replicate_quality.tsv',
-                   f'{data_dir}/invalid_reports/{project_2}_by_protein_not_minimal_precursor_quality.tsv']
+        command = ['parse_data', '--overwriteMode=append', f'--projectName={self.PROJECT_2}',
+                   '-m', f'{self.DATA_DIR}/metadata/{self.PROJECT_2}_metadata.tsv',
+                   f'{self.DATA_DIR}/skyline_reports/{self.PROJECT_2}_replicate_quality.tsv',
+                   f'{self.DATA_DIR}/invalid_reports/{self.PROJECT_2}_by_protein_not_minimal_precursor_quality.tsv']
         second_result = setup_functions.run_command(command, work_dir, prefix='add_project_2')
         self.assertEqual(second_result.returncode, 0)
 
         cur = conn.cursor()
-        cur.execute(query, (project_1,))
+        cur.execute(query, (self.PROJECT_1,))
         new_db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
         self.assertEqual(db_proj_1_map, new_db_proj_1_map)
         self.assertEqual(proj_1_map, new_db_proj_1_map)
 
         cur = conn.cursor()
-        cur.execute(query, (project_2,))
+        cur.execute(query, (self.PROJECT_2,))
         db_proj_2_map = {(x[0], x[1]) for x in cur.fetchall()}
         self.assertEqual(proj_2_map, db_proj_2_map)
 
         conn.close()
+
+
+    def test_group_by_gene(self):
+        ''' Test --groupBy=gene option '''
+
+        # setup variables
+        work_dir = f'{TEST_DIR}/work/test_group_by_gene'
+        db_path = f'{work_dir}/data.db3'
+        gene_id_path = f'{self.DATA_DIR}/metadata/prhuman2gene_2023_05_24_subset.csv'
+
+        # read protein genes in precursor reports
+        gene_groups = dict()
+        for project in [self.PROJECT_1, self.PROJECT_2]:
+            report_file = f'{self.DATA_DIR}/skyline_reports/{project}_by_gene_precursor_quality.tsv'
+            gene_groups[project] = []
+            for row in pd.read_csv(report_file, sep='\t').itertuples():
+                if pd.isna(row.ProteinGene):
+                    gene_groups[project].append(row.ProteinName)
+                else:
+                    gene_groups[project].append(row.ProteinGene)
+
+            gene_groups[project] = Counter(gene_groups[project])
+
+        # add PROJECT_1
+        first_result = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_1,
+                                                       output_prefix='add_project_1',
+                                                       clear_dir=True, group_by_gene=True)
+        self.assertEqual(first_result.returncode, 0)
+
+        # initialize db connection
+        self.assertTrue(os.path.isfile(db_path))
+        conn = sqlite3.connect(db_path)
+        self.assertEqual('gene', get_meta_value(conn, 'group_precursors_by'))
+
+        # Test adding PROJECT_2 with by_protein grouping fails
+        second_result_by_protein = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_2,
+                                                                   output_prefix='add_project_2_by_protein',
+                                                                   overwrite_mode='append',
+                                                                   clear_dir=False, group_by_gene=False)
+        self.assertEqual(second_result_by_protein.returncode, 1)
+
+        # add PROJECT_2
+        second_result = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_2,
+                                                        output_prefix='add_project_2',
+                                                        overwrite_mode='append',
+                                                        clear_dir=False, group_by_gene=True)
+        self.assertEqual(second_result.returncode, 0)
+
+        # check that gene groups in reports match groups in database
+        for project in [self.PROJECT_1, self.PROJECT_2]:
+            cur = conn.cursor()
+            query = '''SELECT prot.name FROM precursors p
+                       LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
+                       LEFT JOIN proteins prot ON ptp.proteinId == prot.proteinId
+                       LEFT JOIN replicates r ON r.replicateId == p.replicateId
+                       WHERE r.project == ?; '''
+            cur.execute(query, (project,))
+            db_gene_groups = Counter([x[0] for x in cur.fetchall()])
+            self.assertDictEqual(gene_groups[project], db_gene_groups)
+
+        # make sure make_gene_matrix fails if grouped by protein
+        conn = update_meta_value(conn, 'group_precursors_by', 'protein')
+        bad_matrix_result = setup_functions.run_command(['make_gene_matrix', gene_id_path, db_path],
+                                                        work_dir, prefix='failed_matrix')
+        self.assertEqual(bad_matrix_result.returncode, 1)
+        self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr.decode('utf-8'))
+        conn = update_meta_value(conn, 'group_precursors_by', 'gene')
+
+
+class TestDuplicatePrecursorsOption(unittest.TestCase):
+    TEST_PROJECT = 'Sp3'
+    WORK_DIR = f'{TEST_DIR}/work/test_duplicate_precursors'
+    DB_PATH = f'{WORK_DIR}/data.db3'
+    PRECURSOR_REPPRT=f'{TEST_DIR}/data/invalid_reports/Sp3_by_protein_duplicate_precursor_quality.tsv'
+
+
+    @classmethod
+    def setUpClass(cls):
+        setup_functions.make_work_dir(cls.WORK_DIR, clear_dir=True)
+
+    @staticmethod
+    def setup_command(project, option, precursor_rep):
+        db_name = f'test_{option}_option.db3'
+        command = ['parse_data',
+                   f'--projectName={project}', '--overwriteMode=overwrite',
+                   '-m', f'{TEST_DIR}/data/metadata/{project}_metadata.tsv',
+                   '-o', db_name,
+                   '--duplicatePrecursors', option,
+                   f'{TEST_DIR}/data/skyline_reports/{project}_replicate_quality.tsv',
+                   f'{TEST_DIR}/data/invalid_reports/{project}_by_protein_{precursor_rep}_precursor_quality.tsv']
+        return command, db_name
+
+
+    @staticmethod
+    def read_precursor_report(path, use_user_set_total):
+        df = pd.read_csv(path, sep='\t')
+
+        data = dict()
+        for (rep, seq, charge), group in df.groupby(['ReplicateName',
+                                                     'ModifiedSequence',
+                                                     'PrecursorCharge']):
+            precursor = f'{seq}_{charge}'
+            if precursor not in data:
+                data[precursor] = dict()
+
+            areas = group['TotalAreaFragment'].to_list()
+            if all(areas[0] == area for area in areas):
+                data[precursor][rep] = areas[0]
+                continue
+
+            for row in group.itertuples():
+                if not use_user_set_total:
+                    assert rep not in data[precursor]
+                    data[precursor][rep] = row.TotalAreaFragment
+                    break
+
+                if row.UserSetTotal:
+                    assert rep not in data[precursor]
+                    data[precursor][rep] = row.TotalAreaFragment
+                    break
+
+        return data
+
+
+    @staticmethod
+    def read_db_precursos(conn):
+        query = ''' SELECT r.replicate, p.modifiedSequence, p.precursorCharge, p.totalAreaFragment
+                    FROM precursors p
+                    LEFT JOIN replicates r ON r.replicateId == p.replicateId; '''
+        df = pd.read_sql(query, conn)
+        data = dict()
+        for row in df.itertuples():
+            precursor = f'{row.modifiedSequence}_{row.precursorCharge}'
+            if precursor not in data:
+                data[precursor] = {}
+            data[precursor][row.replicate] = row.totalAreaFragment
+
+        return data
+
+
+    def test_error_option_fails(self):
+        command, db_name = self.setup_command(self.TEST_PROJECT, 'e', 'duplicate')
+        result = setup_functions.run_command(command, self.WORK_DIR)
+        self.assertEqual(1, result.returncode)
+
+
+    # def test_invalid_report_fails(self):
+    #     command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid')
+    #     result = setup_functions.run_command(command, self.WORK_DIR)
+    #     self.assertEqual(1, result.returncode)
+
+
+    def test_use_user_set_total_option(self):
+        command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'duplicate')
+        result = setup_functions.run_command(command, self.WORK_DIR)
+        self.assertEqual(0, result.returncode)
+        self.assertTrue('There are 9 non-unique precursors!' in result.stderr.decode('utf-8'))
+        self.assertTrue('After selecting precursors with user set peak boundaries, ' in result.stderr.decode('utf-8'))
+
+        data = self.read_precursor_report(self.PRECURSOR_REPPRT, True)
+
+        # read db precursors
+        self.assertTrue(os.path.isfile(f'{self.WORK_DIR}/{db_name}'))
+        conn = sqlite3.connect(f'{self.WORK_DIR}/{db_name}')
+        db_data = self.read_db_precursos(conn)
+        conn.close()
+
+        self.assertEqual(len(data), len(db_data))
+        for precursor in data:
+            self.assertEqual(len(data[precursor]), len(db_data[precursor]))
+            for rep in data[precursor]:
+                self.assertAlmostEqual(data[precursor][rep], db_data[precursor][rep])
+
+
+    def test_first_option(self):
+        command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'duplicate')
+        result = setup_functions.run_command(command, self.WORK_DIR)
+        self.assertEqual(0, result.returncode)
+        self.assertTrue('There are 9 non-unique precursors!' in result.stderr.decode('utf-8'))
+
+        data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
+
+        # read db precursors
+        self.assertTrue(os.path.isfile(f'{self.WORK_DIR}/{db_name}'))
+        conn = sqlite3.connect(f'{self.WORK_DIR}/{db_name}')
+        db_data = self.read_db_precursos(conn)
+        conn.close()
+
+        self.assertEqual(len(data), len(db_data))
+        for precursor in data:
+            self.assertEqual(len(data[precursor]), len(db_data[precursor]))
+            for rep in data[precursor]:
+                self.assertAlmostEqual(data[precursor][rep], db_data[precursor][rep])
 
 
 if __name__ == '__main__':
