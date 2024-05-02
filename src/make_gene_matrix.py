@@ -207,14 +207,10 @@ def main():
                                                             "'combined': Show all genes in group in the same row separated by --sep. "
                                                             "'split': Show each gene in group on a separate row. "
                                                             "'skip': Don't include gene groups with more than one gene in table.")
-    gene_group_args.add_argument('--protein', default='split', type=str,
-                                 help=f''' How to display gene groups in protein table.
+    gene_group_args.add_argument('-g', '--groupMethod', default='split', type=str,
+                                 help=f''' How to display gene groups in tables.
                                       Grouping method should unambiguously match one
-                                      of ['{"', '".join(TABLE_TYPES)}']''')
-    gene_group_args.add_argument('--precursor', default='split', type=str,
-                                 help=f''' How to display gene groups in precursor table.
-                                      Grouping method should unambiguously match one
-                                      of ['{"', '".join(TABLE_TYPES)}']''')
+                                      of ['{"', '".join(TABLE_TYPES)}']''', dest='group_method')
     gene_group_args.add_argument('-s', '--sep', default='; ', type=str, dest='gene_group_sep',
                                  help="Gene group separator. Default is ' / '")
 
@@ -226,12 +222,8 @@ def main():
 
     args = parser.parse_args()
 
-    if (protein_match := unambigious_match(TABLE_TYPES, args.protein)) is None:
-        LOGGER.error(f"Could not unambiguously determine protein table type: '{args.protein}'\n")
-        sys.exit(1)
-
-    if (precursor_match := unambigious_match(TABLE_TYPES, args.precursor)) is None:
-        LOGGER.error(f"Could not unambiguously determine precursor table type: '{args.precursor}'\n")
+    if (gene_group_method := unambigious_match(TABLE_TYPES, args.group_method)) is None:
+        LOGGER.error(f"Could not unambiguously determine protein table type: '{args.group_method}'\n")
         sys.exit(1)
 
     if os.path.isfile(args.database):
@@ -289,14 +281,14 @@ def main():
     accessions = set()
     for method in proteins:
         proteins[method] = pivot_data_wider(dat_protein, proteins[method], 'accession',
-                                            group_method=protein_match, rep_id_col=rep_id_col)
+                                            group_method=gene_group_method, rep_id_col=rep_id_col)
         accessions = accessions | set(proteins[method]['accession'].drop_duplicates().to_list())
 
     # pivot precursors wider
     for method in precursors:
         precursors[method] = pivot_data_wider(dat_precursor, precursors[method],
                                               ['accession', 'modifiedSequence', 'precursorCharge'],
-                                              group_method=precursor_match, rep_id_col=rep_id_col)
+                                              group_method=gene_group_method, rep_id_col=rep_id_col)
         accessions = accessions | set(precursors[method]['accession'].drop_duplicates().to_list())
 
     data = proteins | precursors
@@ -315,7 +307,8 @@ def main():
     for group in data['proteins_unnormalized']['gene_group'].drop_duplicates().to_list():
         gene_id_group = set()
         for prot_id in group:
-            gene_id_group.add(gene_id_lookup[prot_id])
+            if prot_id in gene_id_lookup:
+                gene_id_group.add(gene_id_lookup[prot_id])
         gene_groups[group] = args.gene_group_sep.join(gene_id_group)
 
     # join gene data to tables

@@ -9,7 +9,7 @@ import setup_functions
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class TestMakeGeneMatrix(unittest.TestCase):
-    TEST_PROJECT = 'Sp3'
+    TEST_PROJECT = 'Strap'
 
     @classmethod
     def setUpClass(cls):

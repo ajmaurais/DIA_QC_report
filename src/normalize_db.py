@@ -208,7 +208,8 @@ def main():
     LOGGER.info('Updating protein normalizedAbundance values...')
     cur = conn.cursor()
     for row in protein_df.itertuples():
-        cur.execute(protein_query, (row.replicateId, row.protein, row.normalizedArea, row.normalizedArea))
+        cur.execute(protein_query, (row.replicateId, row.protein, row.normalizedArea,
+                                    row.normalizedArea))
     conn.commit()
     LOGGER.info('Done updating protein normalizedAbundance values.')
 
