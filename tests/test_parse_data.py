@@ -293,6 +293,35 @@ class TestMultiProject(unittest.TestCase):
         self.assertDictEqual(METADATA, db_metadata)
 
 
+    def test_protein_names(self):
+        self.assertTrue(self.conn is not None)
+
+        # read ground truth proteins
+        df_combined = None
+        for project in ('Sp3', 'Strap'):
+            df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/{project}_by_protein_precursor_quality.tsv',
+                             sep='\t')
+            df['project'] = project
+            df = df[['ProteinName', 'project']].drop_duplicates()
+            if df_combined is None:
+                df_combined = df
+            else:
+                df_combined = pd.concat([df_combined, df])
+        proteins = {(row.ProteinName, row.project) for row in df_combined.itertuples()}
+
+        query = '''
+            SELECT DISTINCT prot.name, r.project FROM proteinQuants q
+            LEFT JOIN proteins prot ON prot.proteinID == q.proteinId
+            LEFT JOIN replicates r ON r.replicateId == q.replicateId;
+        '''
+
+        cur = self.conn.cursor()
+        cur.execute(query)
+        db_proteins = {(row[0], row[1]) for row in cur.fetchall()}
+
+        self.assertEqual(proteins, db_proteins)
+
+
 class TestMultiProjectStepped(unittest.TestCase):
     PROJECT_1 = 'Strap'
     PROJECT_2 = 'Sp3'
