@@ -2,10 +2,10 @@
 import unittest
 import random
 from unittest import mock
-import sys
 import os
+import random
 import sqlite3
-from itertools import product
+import pandas as pd
 
 import setup_functions
 
@@ -181,9 +181,144 @@ class TestDBHelperFunctions(unittest.TestCase):
         self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr)
 
 
-    # Not sure if I am going to include this one
-    # def test_update_acquired_ranks(self):
-    #     pass
+class TestUpdateAcquiredRanks(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        dfs = []
+        for project in ('Sp3', 'Strap'):
+            fname = f'{setup_functions.TEST_DIR}/data/skyline_reports/{project}_replicate_quality.tsv'
+            dfs.append(pd.read_csv(fname, sep='\t'))
+            dfs[-1]['project'] = project
+
+        # import pudb
+        # pudb.set_trace()
+
+        cls.replicates = pd.concat(dfs, ignore_index=True)
+        cls.replicates = cls.replicates.rename(columns={'Replicate': 'replicate',
+                                                        'AcquiredTime': 'acquiredTime',
+                                                        'TicArea': 'ticArea'})
+        cls.replicates['acquiredRank'] = -1
+        cls.replicates = cls.replicates[['replicate', 'project',
+                                         'acquiredTime', 'acquiredRank',
+                                         'ticArea']]
+
+        cls.acquired_ranks = pd.read_csv(f'{setup_functions.TEST_DIR}/data/metadata/acquired_ranks.tsv',
+                                         sep='\t')
+        cls.acquired_ranks = {row.replicate: row.acquiredRank for row in cls.acquired_ranks.itertuples()}
+
+
+    def setUp(self):
+        self.conn = sqlite3.connect('file::memory:?cache=shared', uri=True)
+
+        cur = self.conn.cursor()
+        cur.execute('''
+            CREATE TABLE replicates (
+                replicateId INTEGER PRIMARY KEY,
+                replicate TEXT NOT NULL,
+                project TEXT NOT NULL,
+                includeRep BOOL NOT NULL DEFAULT TRUE,
+                acquiredTime BLOB NOT NULL,
+                acquiredRank INTEGER NOT NULL,
+                ticArea REAL NOT NULL,
+                UNIQUE(replicate, project) ON CONFLICT FAIL
+            );''')
+        cur.execute('''
+            CREATE TABLE metadata (
+                key TEXT NOT NULL,
+                value TEXT,
+                PRIMARY KEY (key)
+            ); ''')
+        self.conn.commit()
+
+
+    def tearDown(self):
+        self.conn.close()
+
+
+    @staticmethod
+    def get_db_ranks(conn):
+        cur = conn.cursor()
+        cur.execute(''' SELECT replicate, acquiredRank FROM replicates
+                        WHERE includeRep == TRUE; ''')
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
+    @staticmethod
+    def update_ground_truth_ranks(reps):
+        proj_ranks = {rep: TestUpdateAcquiredRanks.acquired_ranks[rep] for rep in reps}
+        return {k: i for i, (k, v) in enumerate(sorted(proj_ranks.items(), key=lambda x: x[1]))}
+
+
+    def test_update_acquired_ranks(self):
+        self.replicates.to_sql('replicates', self.conn, if_exists='append',
+                                index=True, index_label='replicateId')
+        db_utils.update_acquired_ranks(self.conn)
+
+        db_ranks = self.get_db_ranks(self.conn)
+        self.assertDictEqual(self.acquired_ranks, db_ranks)
+
+
+    def test_add_project(self):
+
+        # add first project
+        self.replicates[self.replicates['project'] == 'Sp3'].to_sql('replicates', self.conn,
+                                                                    if_exists='append', index=True,
+                                                                    index_label='replicateId')
+        db_utils.update_acquired_ranks(self.conn)
+
+        db_ranks = self.get_db_ranks(self.conn)
+        proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
+        self.assertDictEqual(proj_ranks, db_ranks)
+
+        # add second project
+        self.replicates[self.replicates['project'] == 'Strap'].to_sql('replicates', self.conn,
+                                                                      if_exists='append', index=True,
+                                                                      index_label='replicateId')
+
+        db_utils.update_acquired_ranks(self.conn)
+        db_ranks = self.get_db_ranks(self.conn)
+        self.assertDictEqual(self.acquired_ranks, db_ranks)
+
+
+    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    def test_mark_project_skipped(self):
+        self.replicates.to_sql('replicates', self.conn, if_exists='append',
+                                index=True, index_label='replicateId')
+        db_utils.update_acquired_ranks(self.conn)
+
+        db_ranks = self.get_db_ranks(self.conn)
+        self.assertDictEqual(self.acquired_ranks, db_ranks)
+
+        db_utils.mark_reps_skipped(self.conn, projects=('Strap',))
+        db_utils.update_acquired_ranks(self.conn)
+
+        db_ranks = self.get_db_ranks(self.conn)
+        proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
+        self.assertDictEqual(proj_ranks, db_ranks)
+
+
+    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    def test_mark_replicates_skipped(self):
+        self.replicates.to_sql('replicates', self.conn, if_exists='append',
+                                index=True, index_label='replicateId')
+        db_utils.update_acquired_ranks(self.conn)
+        random.seed(1)
+        max_rep_index = len(self.replicates.index) - 1
+        max_subset_len = 15
+
+        for _ in range(50):
+            skip_reps = list()
+            for i in random.sample(range(max_rep_index), random.randint(1, max_subset_len)):
+                skip_reps.append(self.replicates.loc[i, 'replicate'])
+
+            self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=skip_reps))
+            db_utils.update_acquired_ranks(self.conn)
+
+            db_ranks = self.get_db_ranks(self.conn)
+            proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
+            self.assertDictEqual(proj_ranks, db_ranks)
+            db_utils.mark_all_reps_includced(self.conn)
 
 
 if __name__ == '__main__':
