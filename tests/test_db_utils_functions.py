@@ -191,9 +191,6 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
             dfs.append(pd.read_csv(fname, sep='\t'))
             dfs[-1]['project'] = project
 
-        # import pudb
-        # pudb.set_trace()
-
         cls.replicates = pd.concat(dfs, ignore_index=True)
         cls.replicates = cls.replicates.rename(columns={'Replicate': 'replicate',
                                                         'AcquiredTime': 'acquiredTime',
