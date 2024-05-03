@@ -122,7 +122,7 @@ class TestMultiProject(unittest.TestCase):
 
     def test_no_new_protein_quants(self):
         '''
-        Check that there aren't any protein quants thare have NA unnormalized abundances,
+        Check that there aren't any protein quants that have NA unnormalized abundances,
         but finite normalized abundances. This should never happen. If it does there is
         something wrong with the peptideToProtein table.
         '''
