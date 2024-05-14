@@ -52,6 +52,21 @@ class Dtype(Enum):
 
 
     @staticmethod
+    def var_to_type(v):
+        if v is None:
+            return Dtype.NULL
+        if isinstance(v, bool):
+            return Dtype.BOOL
+        if isinstance(v, int):
+            return Dtype.INT
+        if isinstance(v, float):
+            return Dtype.FLOAT
+        if isinstance(v, str):
+            return Dtype.STRING
+        raise ValueError(f'Unknown type: {str(v)}')
+
+
+    @staticmethod
     def infer_type(s):
         '''
         Infer datatype for string.
