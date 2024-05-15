@@ -6,8 +6,8 @@ from jsonschema import validate, ValidationError
 
 import setup_functions
 
-import DIA_QC_report.submodules.dia_db_utils as db_utils
-from DIA_QC_report.submodules.metadata import Dtype
+from DIA_QC_report.submodules.metadata.read import METADATA_SCHEMA, read_metadata
+from DIA_QC_report.submodules.metadata.dtype import Dtype
 
 
 def df_to_dict(df, types):
@@ -36,7 +36,7 @@ class TestReadMetadataBase(unittest.TestCase):
 
         with open(f'{cls.metadata_dir}/HeLa_metadata.json') as inF:
             cls.gt_data = json.load(inF)
-            validate(cls.gt_data, db_utils.METADATA_SCHEMA)
+            validate(cls.gt_data, METADATA_SCHEMA)
 
 
     @staticmethod
@@ -111,7 +111,7 @@ class TestCustomAssertion(TestReadMetadataBase):
 
 class TestParseMetadata(TestReadMetadataBase, unittest.TestCase):
     def test_json(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_metadata.json')
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.json')
 
         test_df = df_to_dict(data, self.META_TYPES)
 
@@ -120,7 +120,7 @@ class TestParseMetadata(TestReadMetadataBase, unittest.TestCase):
 
 
     def test_csv(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_metadata.csv')
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.csv')
 
         test_df = df_to_dict(data, self.META_TYPES)
 
@@ -129,7 +129,7 @@ class TestParseMetadata(TestReadMetadataBase, unittest.TestCase):
 
 
     def test_tsv(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_metadata.tsv')
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.tsv')
 
         test_df = df_to_dict(data, self.META_TYPES)
 
@@ -148,9 +148,9 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
                       'string_var': Dtype.STRING}
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
     def test_skyline_csv(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv')
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv')
 
         test_df = df_to_dict(data, self.META_TYPES)
 
@@ -161,9 +161,9 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(gt_types, types)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
     def test_full_skyline_csv(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv')
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv')
 
         test_df = df_to_dict(data, self.ALL_META_TYPES)
 
@@ -174,9 +174,9 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(gt_types, types)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
     def test_full_skyline_csv_include_null(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv',
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv',
                                              exclude_null_from_skyline=False)
 
         test_df = df_to_dict(data, self.ALL_META_TYPES)
@@ -186,9 +186,9 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(self.ALL_META_TYPES, types)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
     def test_skyline_csv_includ_null(self):
-        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv',
+        data, types = read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv',
                                              exclude_null_from_skyline=False)
 
         test_df = df_to_dict(data, self.META_TYPES)

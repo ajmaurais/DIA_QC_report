@@ -1,7 +1,7 @@
 
 import unittest
 
-from DIA_QC_report.submodules.metadata import Dtype
+from DIA_QC_report.submodules.metadata.dtype import Dtype
 
 class TestDtype(unittest.TestCase):
     @classmethod

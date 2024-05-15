@@ -2,8 +2,8 @@
 import argparse
 from csv import DictReader
 
-from .submodules.metadata import Dtype
-from .submodules.dia_db_utils import read_metadata
+from .submodules.metadata.dtype import Dtype
+from .submodules.metadata.read import read_metadata
 
 def write_csv_row(elems, out):
     out.write('"{}"\n'.format('","'.join(elems)))
