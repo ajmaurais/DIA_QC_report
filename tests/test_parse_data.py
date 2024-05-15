@@ -66,7 +66,7 @@ def load_metadata():
         for replicate, annotations in replicates.items():
             metadata_table[replicate] = {'project': project}
             for variable, value in annotations.items():
-                metadata_table[replicate][variable] = value
+                metadata_table[replicate][variable] = str(value)
 
     return metadata_table
 

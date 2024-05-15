@@ -103,7 +103,10 @@ METADATA_SCHEMA = {
     'additionalProperties': {
         'type': 'object',
         'additionalProperties': {
-            'oneOf': [ {'type': 'string'}, {'type': 'number'} ]
+            'oneOf': [ {'type': 'null'},
+                       {'type': 'boolean'},
+                       {'type': 'number'},
+                       {'type': 'string'} ]
         },
         'minProperties': 1
     },
@@ -155,7 +158,7 @@ def check_schema_version(conn):
 def update_meta_value(conn, key, value):
     '''
     Add or update value in metadata table.
-    
+
     Parameters
     ----------
     conn: sqlite3.Connection:
@@ -401,6 +404,16 @@ def read_metadata(fname, metadata_format=None):
         The sample metadata dataframe.
     '''
 
+    def data_to_df(data):
+        df = pd.DataFrame(data)
+        df['Replicate'] = df['Replicate'].apply(lambda x: splitext(x)[0])
+
+        # pivot longer
+        df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
+                     value_vars=[x for x in list(df.columns) if x != 'Replicate'])
+        df['annotationValue'] = df['annotationValue'].astype(str)
+        return df
+
 
     skyline_csv = False
 
@@ -422,27 +435,53 @@ def read_metadata(fname, metadata_format=None):
             LOGGER.info('Found Skyline annotations csv.')
             skyline_csv = True
             headers = ['Replicate'] + [re.sub(r'^annotation_', '', h) for h in rows[0][1:]]
+            rows = rows[1:]
+            remove_empty = False
+            annotation_objects = set()
             new_rows = list()
             for row in rows:
-                if row[0].startswith('Replicate:/'):
+                annotation_match = re.search(f'^([A-Z][A-Za-z]+):/', row[0])
+                if annotation_match is None:
+                    LOGGER.warning(f'Found unknown annotation object: {row[0]}')
+                    remove_empty = True
+                    continue
+
+                annotation_object = annotation_match.group(1)
+                annotation_objects.add(annotation_object)
+
+                if annotation_object == 'Replicate':
                     row[0] = re.sub('^Replicate:/', '', row[0])
                     new_rows.append(row)
             rows = new_rows
 
-            drop_headers = list()
-            for column_i in range(1, len(rows[0])):
-                if all(rows[row_i][column_i] == '' for row_i in range(len(rows))):
-                    drop_headers.append(headers[column_i])
+            if 'Replicate' not in annotation_objects:
+                LOGGER.warning('No Replicate annotations in csv!')
+                return None, None
+
+            for obj in annotation_objects:
+                if obj != 'Replicate':
+                    remove_empty = True
+                    LOGGER.warning(f'Found annotations for: {obj} in csv!')
 
             data = [dict(zip(headers, row)) for row in rows]
-            for i in range(len(data)):
-                for header in drop_headers:
-                    del data[i][header]
 
-            # return None if all annotations are empty
-            if not any(x in data[0] for x in headers[1:]):
-                LOGGER.warning('All replicate annotations are empty!')
-                return None, None
+            # remove metadata variables which are empty for all replicates.
+            # This should only happen if a skyline annotation csv has annotations for objects other than Replicates.
+            if remove_empty:
+                LOGGER.warning('Removing empty replicate annotations.')
+                drop_headers = list()
+                for column_i in range(1, len(rows[0])):
+                    if all(rows[row_i][column_i] == '' for row_i in range(len(rows))):
+                        drop_headers.append(headers[column_i])
+
+                for i in range(len(data)):
+                    for header in drop_headers:
+                        del data[i][header]
+
+                # return None if all annotations are empty
+                if not any(x in data[0] for x in headers[1:]):
+                    LOGGER.warning('All replicate annotations are empty!')
+                    return None, None
 
             if not all(len(x) == len(rows[0]) for x in rows):
                 raise ValueError('Invalid metadata format!')
@@ -454,7 +493,6 @@ def read_metadata(fname, metadata_format=None):
         else:
             raise ValueError('Invalid metadata format!')
 
-
     elif _format == 'json':
         with open(fname, 'r') as inF:
             data = json.load(inF)
@@ -463,17 +501,25 @@ def read_metadata(fname, metadata_format=None):
             except ValidationError as e:
                 raise ValidationError(f'Invalid metadata format:\n{e.message}')
 
-            # reshape data to so it can be converted into a DataFrame
-            data = [{'Replicate':k} | v for k, v in data.items()]
+        # determine metadata types
+        types = dict()
+        for row in data.values():
+            for k, v in row.items():
+                if k in types:
+                    types[k] = max(Dtype.var_to_type(v), types[k])
+                else:
+                    types[k] = Dtype.var_to_type(v)
+
+        # reshape data to so it can be converted into a DataFrame
+        data = [{'Replicate':k} | v for k, v in data.items()]
+        df = data_to_df(data)
+
+        return df, types
+
     else:
         raise ValueError(f'Unknown metadata file format: {_format}')
 
-    df = pd.DataFrame(data)
-    df['Replicate'] = df['Replicate'].apply(lambda x: splitext(x)[0])
-
-    # pivot longer
-    df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
-                 value_vars=[x for x in list(df.columns) if x != 'Replicate'])
+    df = data_to_df(data)
 
     # determine annotationValue types
     types = dict()
