@@ -28,7 +28,7 @@ PROTEIN_QUERY = '''
 SELECT
     prot.accession,
 	r.replicate,
-    a.aliquot_id,
+    	a.aliquot_id,
 	q.abundance,
 	q.normalizedAbundance
 FROM proteinQuants q
@@ -45,7 +45,7 @@ WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;'''
 PRECURSOR_QUERY = '''
 SELECT
 	r.replicate,
-    a.aliquot_id,
+    	a.aliquot_id,
 	prot.accession as accession,
 	p.modifiedSequence,
 	p.precursorCharge,
@@ -85,7 +85,6 @@ def check_aliquot_id(df, df_name):
         return False
 
     return True
-
 
 
 def unambigious_match(choices, substr):
