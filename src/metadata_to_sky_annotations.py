@@ -3,7 +3,7 @@ import argparse
 from csv import DictReader
 
 from .submodules.metadata import Dtype
-
+from .submodules.dia_db_utils import read_metadata
 
 def write_csv_row(elems, out):
     out.write('"{}"\n'.format('","'.join(elems)))
@@ -21,27 +21,34 @@ def main():
     parser = argparse.ArgumentParser(description='Convert metadata annotation tsv to skyline '
                                                  'annotation csv and batch file to add annotation '
                                                  'definition to a skyline document.')
-    parser.add_argument('annotation_tsv')
+    parser.add_argument('-f', '--metadataFormat', default=None,
+                        choices=('json', 'csv', 'tsv'), dest='metadata_format',
+                        help='Specify metadata file format. '
+                             'By default the format is inferred from the file extension.')
+    parser.add_argument('metadata')
 
     args = parser.parse_args()
 
-    with open(args.annotation_tsv, 'r') as inF:
-        data = list(DictReader(inF, delimiter='\t'))
+    data, types = read_metadata(args.metadata, args.metadata_format)
+    data = data.pivot(index='Replicate',
+                      columns='annotationKey',
+                      values='annotationValue').reset_index()
 
-    annotation_headers = [x for x in data[0].keys() if x != 'Replicate']
+    # convert NULL columns to empty string
+    for col, col_type in types.items():
+        if col_type is Dtype.NULL:
+            data[col] = ''
+
+    annotation_headers = [x for x in data.columns if x != 'Replicate']
     with open('sky_annotations.csv', 'w') as outF:
         # write header
         write_csv_row(['ElementLocator'] + [f'annotation_{x}' for x in annotation_headers], outF)
 
-        for line in data:
-            row = [f'Replicate:/{line["Replicate"]}']
+        for row in data.itertuples():
+            line = [f'Replicate:/{row.Replicate}']
             for header in annotation_headers:
-                row.append(line[header])
-            write_csv_row(row, outF)
-
-    types = dict()
-    for header in annotation_headers:
-        types[header] = max(Dtype.infer_type(row[header]) for row in data)
+                line.append(getattr(row, header))
+            write_csv_row(line, outF)
 
     # write commands to add annotationd definitions to skyline file
     with open('sky_annotation_definitions.bat', 'w') as outF:

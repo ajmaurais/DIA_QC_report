@@ -404,6 +404,8 @@ def read_metadata(fname, metadata_format=None):
     -------
     df: pd.DataFrame
         The sample metadata dataframe.
+    types: dict
+        A dictionary of metadata keys and Dtypes
     '''
 
     def data_to_df(data):
