@@ -33,9 +33,7 @@ class Dtype(Enum):
         raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
     def convert(self, val):
-        '''
-        Convert val to the same type as self.
-        '''
+        ''' Convert val to the same type as self. '''
         if self is Dtype.NULL:
             return None
         if self is Dtype.BOOL:
@@ -53,6 +51,7 @@ class Dtype(Enum):
 
     @staticmethod
     def var_to_type(v):
+        ''' Convert variable with compatable type to Dtype. '''
         if v is None:
             return Dtype.NULL
         if isinstance(v, bool):

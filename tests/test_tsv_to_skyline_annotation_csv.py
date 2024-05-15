@@ -1,5 +1,6 @@
 
 import unittest
+from unittest import mock
 import os
 import pandas as pd
 import re
@@ -39,12 +40,10 @@ class TestTsvToSkylineCsv(unittest.TestCase):
         self.assertEqual(0, self.result.returncode)
 
 
+    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_annotation_csv(self):
         annotation_csv = f'{self.work_dir}/sky_annotations.csv'
         self.assertTrue(os.path.isfile(annotation_csv))
-        
-        import pudb
-        # pudb.set_trace()
         
         metadata_in, types_in = read_metadata(self.metadata_tsv)
         metadata_out, types_out = read_metadata(annotation_csv)
@@ -60,16 +59,11 @@ class TestTsvToSkylineCsv(unittest.TestCase):
 
         command_re = re.compile(r'^--annotation-name="(\w+)" --annotation-targets=replicate --annotation-type=([a-z_]+)$')
 
-        import pudb
-        # pudb.set_trace()
-
         with open(annotation_bat, 'r') as inF:
             lines = inF.readlines()
 
         for line in lines:
             self.assertTrue((match := command_re.search(line)) is not None)
             self.assertTrue(match[1] in self.SKY_TYPES)
-            if self.SKY_TYPES[match[1]] != match[2]:
-                print('FUCK!')
             self.assertEqual(self.SKY_TYPES[match[1]], match[2])
 

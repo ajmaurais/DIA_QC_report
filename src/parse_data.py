@@ -16,7 +16,7 @@ from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.metadata import Dtype
-from .submodules.dia_db_utils import read_metadata
+from .submodules.dia_db_utils import read_metadata, ValidationError
 
 
 PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
