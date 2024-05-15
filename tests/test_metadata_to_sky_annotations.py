@@ -27,9 +27,9 @@ class TestFileTypeBase(ABC):
 
 
     def __init__(self):
-        work_dir = None
-        metadata_file = None
-        result = None
+        self.work_dir = None
+        self.metadata_file = None
+        self.result = None
 
 
     @classmethod
@@ -62,8 +62,8 @@ class TestFileTypeBase(ABC):
         annotation_csv = f'{self.work_dir}/sky_annotations.csv'
         self.assertTrue(os.path.isfile(annotation_csv))
 
-        metadata_in, types_in = read_metadata(self.metadata_file)
-        metadata_out, types_out = read_metadata(annotation_csv)
+        _, types_in = read_metadata(self.metadata_file, exclude_null_from_skyline=True)
+        _, types_out = read_metadata(annotation_csv, exclude_null_from_skyline=False)
 
         # check that data types are correct
         self.assertDictEqual(self.META_TYPES, types_in)
