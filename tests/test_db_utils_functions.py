@@ -6,6 +6,8 @@ import os
 import random
 import sqlite3
 import pandas as pd
+import json
+from jsonschema import validate, ValidationError
 
 import setup_functions
 
@@ -191,9 +193,6 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
             dfs.append(pd.read_csv(fname, sep='\t'))
             dfs[-1]['project'] = project
 
-        # import pudb
-        # pudb.set_trace()
-
         cls.replicates = pd.concat(dfs, ignore_index=True)
         cls.replicates = cls.replicates.rename(columns={'Replicate': 'replicate',
                                                         'AcquiredTime': 'acquiredTime',
@@ -319,6 +318,76 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
             proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
             self.assertDictEqual(proj_ranks, db_ranks)
             db_utils.mark_all_reps_includced(self.conn)
+
+
+class TestParseMetadata(unittest.TestCase):
+
+    META_TYPES = {'string_var': Dtype.STRING,
+                  'bool_var': Dtype.BOOL,
+                  'int_var': Dtype.INT,
+                  'float_var': Dtype.FLOAT,
+                  'na_var': Dtype.NULL}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.metadata_dir = f'{setup_functions.TEST_DIR}/data/metadata'
+
+        with open(f'{cls.metadata_dir}/HeLa_metadata.json') as inF:
+            cls.gt_data = json.load(inF)
+            validate(cls.gt_data, db_utils.METADATA_SCHEMA)
+
+        # for rep in cls.gt_data:
+        #     cls.gt_data[rep]['na_var'] = None
+
+
+    @staticmethod
+    def df_to_dict(df, convert=True):
+        ret = dict()
+        for row in df.itertuples():
+            if row.Replicate not in ret:
+                ret[row.Replicate] = {}
+
+            new_value = TestParseMetadata.META_TYPES[row.annotationKey].convert(row.annotationValue)
+            ret[row.Replicate][row.annotationKey] = new_value
+
+        return ret
+
+
+    def test_json(self):
+        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_metadata.json')
+
+        test_df = self.df_to_dict(data)
+
+        self.assertEqual(self.gt_data, test_df)
+        self.assertEqual(self.META_TYPES, types)
+
+
+    def test_csv(self):
+        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_metadata.csv')
+
+        test_df = self.df_to_dict(data)
+
+        self.assertEqual(self.gt_data, test_df)
+        self.assertEqual(self.META_TYPES, types)
+
+
+    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
+    def test_skyline_csv(self):
+        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv')
+
+        test_df = self.df_to_dict(data)
+
+        self.assertEqual(self.gt_data, test_df)
+        self.assertEqual(self.META_TYPES, types)
+
+
+    def test_tsv(self):
+        data, types = db_utils.read_metadata(f'{self.metadata_dir}/HeLa_metadata.tsv')
+
+        test_df = self.df_to_dict(data)
+
+        self.assertEqual(self.gt_data, test_df)
+        self.assertEqual(self.META_TYPES, types)
 
 
 if __name__ == '__main__':

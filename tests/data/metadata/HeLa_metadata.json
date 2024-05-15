@@ -1,0 +1,23 @@
+{
+	"Dora_10152022_DIA_HeLa_100pct_A02_27": {
+		"string_var": "HeLa",
+		"bool_var": true,
+		"int_var": 1,
+		"na_var": null,
+		"float_var": -478416513.4428206
+	},
+	"Dora_10152022_DIA_HeLa_100pct_A03_36": {
+		"string_var": "HeLa",
+		"bool_var": false,
+		"int_var": 2,
+		"na_var": null,
+		"float_var": -767805057.1704992
+	},
+	"Dora_10152022_DIA_HeLa_100pct_A04_44": {
+		"string_var": "HeLa",
+		"bool_var": true,
+		"int_var": 3,
+		"na_var": null,
+		"float_var": 493406569.9391259
+	}
+}
