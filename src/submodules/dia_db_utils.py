@@ -16,7 +16,7 @@ METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
 PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'precursorCharge')
 
-SCHEMA_VERSION = '1.13'
+SCHEMA_VERSION = '1.15'
 
 SCHEMA = ['PRAGMA foreign_keys = ON',
 '''
@@ -33,7 +33,7 @@ CREATE TABLE replicates (
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
-    peptideId INTEGER NOT NULL,             -- Unique for every peptide sequence and replicate
+    peptideId INTEGER NOT NULL,             -- Unique for every peptide sequence and project
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,
@@ -53,7 +53,9 @@ CREATE TABLE precursors (
 '''
 CREATE TABLE sampleMetadataTypes (
     annotationKey TEXT NOT NULL,
-    annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
+    annotationType VARCHAR(6) CHECK(
+        annotationType IN ('NULL', 'BOOL', 'INT', 'FLOAT', 'STRING')
+    ) NOT NULL DEFAULT 'STRING',
     PRIMARY KEY (annotationKey)
 )''',
 '''
@@ -542,9 +544,5 @@ def read_metadata(fname, metadata_format=None):
             if var_type is Dtype.BOOL:
                 sele = df['annotationKey'] == key
                 df.loc[sele, 'annotationValue'] = df[sele]['annotationValue'].apply(lambda x: 'False' if x == '' else x)
-
-    types_df = {'annotationKey': [], 'annotationType': []}
-    for key in types:
-        types[key] = Dtype.BOOL if types[key] is Dtype.NULL else types[key]
 
     return df, types

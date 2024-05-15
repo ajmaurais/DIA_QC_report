@@ -209,7 +209,7 @@ class TestInferDtypes(unittest.TestCase):
                       'bool_var': 'BOOL',
                       'int_var': 'INT',
                       'float_var': 'FLOAT',
-                      'na_var': 'BOOL'}
+                      'na_var': 'NULL'}
 
     @classmethod
     def setUpClass(cls):

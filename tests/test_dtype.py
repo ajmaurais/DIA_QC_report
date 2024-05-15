@@ -105,7 +105,7 @@ class TestDtype(unittest.TestCase):
         self.assertRaises(ValueError, Dtype.var_to_type, {'a': 'dict'})
         self.assertRaises(ValueError, Dtype.var_to_type, {'a', 'set'})
 
-        self.assertIs(Dtype.var_to_type(None), Dtype.BOOL)
+        self.assertIs(Dtype.var_to_type(None), Dtype.NULL)
         self.assertIs(Dtype.var_to_type(True), Dtype.BOOL)
         self.assertIs(Dtype.var_to_type(False), Dtype.BOOL)
         self.assertIs(Dtype.var_to_type(69), Dtype.INT)

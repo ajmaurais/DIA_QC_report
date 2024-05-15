@@ -151,7 +151,7 @@ class TestDBHelperFunctions(unittest.TestCase):
                          'bool_var': 'BOOL',
                          'int_var': 'INT',
                          'float_var': 'FLOAT',
-                         'na_var': 'BOOL'}
+                         'na_var': 'NULL'}
         db_current_types = get_dtypes()
         self.assertDictEqual(current_types, db_current_types)
 
@@ -166,7 +166,7 @@ class TestDBHelperFunctions(unittest.TestCase):
                         'bool_var': 'STRING',
                         'int_var': 'FLOAT',
                         'float_var': 'FLOAT',
-                        'na_var': 'BOOL'}
+                        'na_var': 'NULL'}
         db_new_types = get_dtypes()
         self.assertDictEqual(result_types, db_new_types)
 

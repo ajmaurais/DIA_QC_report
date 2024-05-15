@@ -18,7 +18,7 @@ class TestTsvToSkylineCsv(unittest.TestCase):
                   'bool_var': Dtype.BOOL,
                   'int_var': Dtype.INT,
                   'float_var': Dtype.FLOAT,
-                  'na_var': Dtype.BOOL}
+                  'na_var': Dtype.NULL}
 
     SKY_TYPES = {'string_var': 'text',
                  'bool_var': 'true_false',
