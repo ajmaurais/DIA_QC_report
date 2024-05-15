@@ -39,7 +39,7 @@ class TestFileTypeBase(ABC):
 
 
     @abstractmethod
-    def assertDictEqual(self, rhs, lhs):
+    def assertDictEqual(self, lhs, rhs):
         pass
 
 
@@ -49,7 +49,7 @@ class TestFileTypeBase(ABC):
 
 
     @abstractmethod
-    def assertEqual(self, rhs, lhs):
+    def assertEqual(self, lhs, rhs):
         pass
 
 

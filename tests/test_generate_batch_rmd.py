@@ -10,7 +10,7 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 
-class TestMakeQCrmd(unittest.TestCase):
+class TestMakeBatchRmd(unittest.TestCase):
     RENDER_RMD = False
 
     @classmethod
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('unittest_args', nargs='*')
     args = parser.parse_args()
 
-    TestMakeQCrmd.RENDER_RMD = args.render
+    TestMakeBatchRmd.RENDER_RMD = args.render
 
     unittest_args = args.unittest_args
     unittest_args.insert(0, sys.argv[0])
