@@ -8,8 +8,8 @@ import re
 import setup_functions
 from setup_functions import TEST_DIR
 
-from DIA_QC_report.submodules.metadata.read import read_metadata
-from DIA_QC_report.submodules.metadata.dtype import Dtype
+from DIA_QC_report.submodules.read_metadata import read_metadata
+from DIA_QC_report.submodules.dtype import Dtype
 
 
 class TestFileTypeBase(ABC):
@@ -57,7 +57,7 @@ class TestFileTypeBase(ABC):
         self.assertEqual(0, self.result.returncode)
 
 
-    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_annotation_csv(self):
         annotation_csv = f'{self.work_dir}/sky_annotations.csv'
         self.assertTrue(os.path.isfile(annotation_csv))

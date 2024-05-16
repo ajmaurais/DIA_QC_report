@@ -5,5 +5,6 @@ from . import pca_plot
 from . import std_peptide_rt_plot
 from . import logger
 from . import dia_db_utils
-from . import metadata
+from . import dtype
+from . import read_metadata
 

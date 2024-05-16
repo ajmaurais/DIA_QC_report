@@ -9,7 +9,7 @@ import pandas as pd
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-from DIA_QC_report.submodules.metadata.dtype import Dtype
+from DIA_QC_report.submodules.dtype import Dtype
 
 
 class TestDBHelperFunctions(unittest.TestCase):

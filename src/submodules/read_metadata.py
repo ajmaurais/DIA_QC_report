@@ -8,7 +8,7 @@ from jsonschema import validate, ValidationError
 import pandas as pd
 
 from .dtype import Dtype
-from ..logger import LOGGER
+from .logger import LOGGER
 
 
 # sample metadata json schema
