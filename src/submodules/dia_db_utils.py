@@ -5,7 +5,7 @@ from collections import Counter
 
 import pandas as pd
 
-from .metadata.dtype import Dtype
+from .dtype import Dtype
 from .logger import LOGGER
 
 METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'

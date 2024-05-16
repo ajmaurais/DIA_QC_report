@@ -6,8 +6,8 @@ from jsonschema import validate, ValidationError
 
 import setup_functions
 
-from DIA_QC_report.submodules.metadata.read import METADATA_SCHEMA, read_metadata
-from DIA_QC_report.submodules.metadata.dtype import Dtype
+from DIA_QC_report.submodules.read_metadata import METADATA_SCHEMA, read_metadata
+from DIA_QC_report.submodules.dtype import Dtype
 
 
 def df_to_dict(df, types):
@@ -148,7 +148,7 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
                       'string_var': Dtype.STRING}
 
 
-    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_skyline_csv(self):
         data, types = read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv')
 
@@ -161,7 +161,7 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(gt_types, types)
 
 
-    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_full_skyline_csv(self):
         data, types = read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv')
 
@@ -174,7 +174,7 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(gt_types, types)
 
 
-    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_full_skyline_csv_include_null(self):
         data, types = read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv',
                                              exclude_null_from_skyline=False)
@@ -186,7 +186,7 @@ class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(self.ALL_META_TYPES, types)
 
 
-    @mock.patch('DIA_QC_report.submodules.metadata.read.LOGGER', mock.Mock())
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_skyline_csv_includ_null(self):
         data, types = read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv',
                                              exclude_null_from_skyline=False)
