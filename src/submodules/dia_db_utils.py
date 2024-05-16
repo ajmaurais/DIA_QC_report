@@ -1,19 +1,18 @@
 
-import sqlite3
 import re
 from datetime import datetime
 from collections import Counter
 
 import pandas as pd
 
-from .metadata import Dtype
+from .metadata.dtype import Dtype
 from .logger import LOGGER
 
 METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
 PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'precursorCharge')
 
-SCHEMA_VERSION = '1.13'
+SCHEMA_VERSION = '1.15'
 
 SCHEMA = ['PRAGMA foreign_keys = ON',
 '''
@@ -30,7 +29,7 @@ CREATE TABLE replicates (
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
-    peptideId INTEGER NOT NULL,             -- Unique for every peptide sequence and replicate
+    peptideId INTEGER NOT NULL,             -- Unique for every peptide sequence and project
     modifiedSequence VARCHAR(200) NOT NULL,
     precursorCharge INTEGER NOT NULL,
     precursorMz REAL,
@@ -50,7 +49,9 @@ CREATE TABLE precursors (
 '''
 CREATE TABLE sampleMetadataTypes (
     annotationKey TEXT NOT NULL,
-    annotationType VARCHAR(6) CHECK( annotationType IN ('BOOL', 'INT', 'FLOAT', 'STRING')) NOT NULL DEFAULT 'STRING',
+    annotationType VARCHAR(6) CHECK(
+        annotationType IN ('NULL', 'BOOL', 'INT', 'FLOAT', 'STRING')
+    ) NOT NULL DEFAULT 'STRING',
     PRIMARY KEY (annotationKey)
 )''',
 '''
@@ -138,7 +139,7 @@ def check_schema_version(conn):
 def update_meta_value(conn, key, value):
     '''
     Add or update value in metadata table.
-    
+
     Parameters
     ----------
     conn: sqlite3.Connection:
@@ -365,4 +366,5 @@ def parse_bitmask_options(mask, digit_names, options):
     for key, value in zip(digit_names, _parse_bitmask(mask)):
         ret[key] = dict(zip(options, value))
     return ret
+
 

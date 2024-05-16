@@ -1,7 +1,7 @@
 
 import unittest
 
-from DIA_QC_report.submodules.metadata import Dtype
+from DIA_QC_report.submodules.metadata.dtype import Dtype
 
 class TestDtype(unittest.TestCase):
     @classmethod
@@ -98,6 +98,19 @@ class TestDtype(unittest.TestCase):
 
         self.assertRaises(ValueError, Dtype.FLOAT.__lt__, (Dtype.FLOAT, 0.1))
         self.assertRaises(ValueError, Dtype.FLOAT.__ge__, (Dtype.FLOAT, 0.1))
+
+
+    def test_var_to_type(self):
+        self.assertRaises(ValueError, Dtype.var_to_type, ['a', 'list'])
+        self.assertRaises(ValueError, Dtype.var_to_type, {'a': 'dict'})
+        self.assertRaises(ValueError, Dtype.var_to_type, {'a', 'set'})
+
+        self.assertIs(Dtype.var_to_type(None), Dtype.NULL)
+        self.assertIs(Dtype.var_to_type(True), Dtype.BOOL)
+        self.assertIs(Dtype.var_to_type(False), Dtype.BOOL)
+        self.assertIs(Dtype.var_to_type(69), Dtype.INT)
+        self.assertIs(Dtype.var_to_type(3.14), Dtype.FLOAT)
+        self.assertIs(Dtype.var_to_type('Hello there General Kenobi'), Dtype.STRING)
 
 
 if __name__ == '__main__':

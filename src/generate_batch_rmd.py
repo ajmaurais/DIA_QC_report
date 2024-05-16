@@ -252,52 +252,20 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                 LEFT JOIN proteins p ON p.proteinId = q.proteinId
                                 LEFT JOIN replicates r ON r.replicateId == q.replicateId
                                 WHERE r.includeRep == TRUE{protein_filter};')
-dat.rep <- DBI::dbGetQuery(conn, 'SELECT
-                                r.replicate,
-                                r.replicateId,
-                                r.acquiredRank,
-                                r.project
-                             FROM replicates r
-                             WHERE r.includeRep == TRUE;')
-dat.meta.l <- DBI::dbGetQuery(conn, 'SELECT * FROM sampleMetadata;')
-meta.types <- DBI::dbGetQuery(conn, 'SELECT * from sampleMetadataTypes;')
+dat.metadata <- rDIAUtils::readWideMetadata(conn)
 DBI::dbDisconnect(conn)\n'''
 
-    if filter_metadata:
-        filter_vars = list()
-        for py_var, r_var in zip([batch1, batch2, color_vars, covariate_vars, control_key],
-                                 ['batch1', 'batch2', 'color.vars', 'covariate.vars', 'control.key']):
-            if py_var is not None:
-                filter_vars.append(r_var)
-
-        filter_vars = ', '.join(filter_vars)
-
-        text += f'''\n# filter metadata to only include batch, covariate, and color variables
-dat.meta.l <- dat.meta.l[dat.meta.l$annotationKey %in% c({filter_vars}),]\n'''
-
     text += '''
-# generate wide formatted dat.meta from long formatted dat.meta.l
-dat.meta <- dat.meta.l %>% dplyr::select(replicateId, annotationKey, annotationValue) %>%
-    tidyr::pivot_wider(names_from='annotationKey', values_from='annotationValue')
-
-# convert columns in wide metadata df to the type specified by annotationType
-meta.types <- setNames(meta.types$annotationType, meta.types$annotationKey)
-converters <- list(BOOL=as.logical, INT=as.integer, FLOAT=as.double, STRING=function(x){x})
-for(column in names(meta.types)) {
-    dat.meta[[column]] <- converters[[meta.types[column]]](dat.meta[[column]])
-}
-
 # fix special characters in replicate names so they can be R headers
-dat.rep$replicate <- make.names(dat.rep$replicate)
+dat.metadata$replicate <- make.names(dat.metadata$replicate)
 dat.precursor <- dplyr::left_join(dat.precursor,
-                                  dplyr::select(dat.rep, replicate, replicateId),
+                                  dplyr::select(dat.metadata, replicate, replicateId),
                                   by='replicateId')
 dat.protein <- dplyr::left_join(dat.protein,
-                                dplyr::select(dat.rep, replicate, replicateId),
+                                dplyr::select(dat.metadata, replicate, replicateId),
                                 by='replicateId')
-dat.metadata <- dplyr::left_join(dat.rep, dat.meta, by='replicateId')
 peptideToProtein <- dplyr::left_join(peptideToProtein,
-                                     dplyr::select(dat.rep, replicate, replicateId),
+                                     dplyr::select(dat.metadata, replicate, replicateId),
                                      by='replicateId') %>%
     dplyr::select(-replicateId)
 

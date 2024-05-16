@@ -6,7 +6,7 @@ from matplotlib.ticker import MaxNLocator
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from .metadata import Dtype
+from .metadata.dtype import Dtype
 
 def pc_matrix(df):
     df_s = StandardScaler().fit_transform(df.transpose())

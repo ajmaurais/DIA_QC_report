@@ -122,10 +122,6 @@ def main():
         sys.exit(1)
 
     df['ion'] = df['modifiedSequence'] + '_' + df['precursorCharge'].astype(str)
-    precursor_ids = df[['ion', 'peptideId', 'modifiedSequence', 'precursorCharge']].drop_duplicates()
-    precursor_ids = {x.ion: (x.peptideId,
-                             x.modifiedSequence,
-                             x.precursorCharge) for x in precursor_ids.itertuples()}
 
     REP_COLUMN_NAME = 'replicateId'
 
@@ -168,11 +164,8 @@ def main():
     df = df[df['ion'].apply(lambda x: x in keep_precursors)]
 
     # median normalize precursor quants
-    ion_df = median_normalize(df[[REP_COLUMN_NAME, 'ion', 'totalAreaFragment']].drop_duplicates(),
+    ion_df = median_normalize(df[[REP_COLUMN_NAME, 'peptideId', 'precursorCharge', 'totalAreaFragment']].drop_duplicates(),
                               [REP_COLUMN_NAME], 'totalAreaFragment')
-    ion_df['peptideId'] = ion_df['ion'].apply(lambda x: precursor_ids[x][0])
-    ion_df['modifiedSequence'] = ion_df['ion'].apply(lambda x: precursor_ids[x][1])
-    ion_df['precursorCharge'] = ion_df['ion'].apply(lambda x: precursor_ids[x][2])
 
     # delete existing normalized values
     cur = conn.cursor()

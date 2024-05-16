@@ -3,14 +3,13 @@ import unittest
 import random
 from unittest import mock
 import os
-import random
 import sqlite3
 import pandas as pd
 
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-from DIA_QC_report.submodules.metadata import Dtype
+from DIA_QC_report.submodules.metadata.dtype import Dtype
 
 
 class TestDBHelperFunctions(unittest.TestCase):
@@ -149,7 +148,7 @@ class TestDBHelperFunctions(unittest.TestCase):
                          'bool_var': 'BOOL',
                          'int_var': 'INT',
                          'float_var': 'FLOAT',
-                         'na_var': 'BOOL'}
+                         'na_var': 'NULL'}
         db_current_types = get_dtypes()
         self.assertDictEqual(current_types, db_current_types)
 
@@ -164,7 +163,7 @@ class TestDBHelperFunctions(unittest.TestCase):
                         'bool_var': 'STRING',
                         'int_var': 'FLOAT',
                         'float_var': 'FLOAT',
-                        'na_var': 'BOOL'}
+                        'na_var': 'NULL'}
         db_new_types = get_dtypes()
         self.assertDictEqual(result_types, db_new_types)
 

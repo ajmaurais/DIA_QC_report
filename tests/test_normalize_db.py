@@ -159,5 +159,47 @@ class TestMultiProject(unittest.TestCase):
         self.assertTrue(all(medians.iloc[0] == medians))
 
 
+    def test_precursor_db_update_sucessful(self):
+        self.assertTrue(self.conn is not None)
+
+        keep_cols = ['replicateId', 'ion', 'normalizedArea']
+
+        def df_to_dict(df):
+            ret = dict()
+            for row in df.itertuples():
+                key = f'{row.replicateId}_{row.ion}'
+                ret[key] = row.normalizedArea
+
+            return ret
+
+        query = ''' SELECT
+                replicateId,
+                peptideId,
+                modifiedSequence,
+                precursorCharge,
+                normalizedArea
+            FROM precursors; '''
+        db_df = pd.read_sql(query, self.conn)
+        db_df['ion'] = db_df.apply(lambda x: f"{x['modifiedSequence']}_{x['precursorCharge']}", axis=1)
+        db_df = db_df[keep_cols]
+
+        gt_df = pd.read_csv(f'{self.data_dir}/intermediate_files/multi_project_ion_df.tsv', sep='\t')
+        gt_df = gt_df[keep_cols]
+
+        df_norm_area = df_to_dict(gt_df)
+        db_norm_area = df_to_dict(db_df)
+
+        df_keys = set(df_norm_area.keys())
+        db_keys = set(db_norm_area.keys())
+
+        self.assertTrue(df_keys <= db_keys)
+
+        for ion in df_norm_area:
+            if pd.isna(df_norm_area[ion]):
+                self.assertTrue(pd.isna(db_norm_area[ion]))
+            else:
+                self.assertAlmostEqual(df_norm_area[ion], db_norm_area[ion], places=5)
+
+
 if __name__ == '__main__':
     unittest.main()

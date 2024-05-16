@@ -4,7 +4,7 @@ qmd/*.html
 rmd/*.html
 rmd/*.tsv
 fig/*
-testData/*
+data/*
 plots/*
 .DS_Store
 tests/work/*

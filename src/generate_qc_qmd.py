@@ -5,9 +5,7 @@ import re
 import sqlite3
 from inspect import stack
 
-from enum import Enum
-
-from .submodules.metadata import Dtype
+from .submodules.metadata.dtype import Dtype
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version

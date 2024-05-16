@@ -11,7 +11,6 @@ import pandas as pd
 import setup_functions
 from setup_functions import TEST_DIR
 
-from DIA_QC_report.submodules.metadata import Dtype
 from DIA_QC_report.submodules.dia_db_utils import is_normalized
 from DIA_QC_report.submodules.dia_db_utils import update_meta_value, get_meta_value
 
@@ -66,7 +65,7 @@ def load_metadata():
         for replicate, annotations in replicates.items():
             metadata_table[replicate] = {'project': project}
             for variable, value in annotations.items():
-                metadata_table[replicate][variable] = value
+                metadata_table[replicate][variable] = str(value)
 
     return metadata_table
 
@@ -209,7 +208,7 @@ class TestInferDtypes(unittest.TestCase):
                       'bool_var': 'BOOL',
                       'int_var': 'INT',
                       'float_var': 'FLOAT',
-                      'na_var': 'BOOL'}
+                      'na_var': 'NULL'}
 
     @classmethod
     def setUpClass(cls):
