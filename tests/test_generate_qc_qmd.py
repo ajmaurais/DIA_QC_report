@@ -79,6 +79,30 @@ class TestMakeQCqmd(unittest.TestCase):
                 self.assertTrue(os.path.isfile(f'{self.work_dir}/tables/{table}'))
 
 
+    def test_missing_std_protein_fails(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        qmd_name = 'failing_test.qmd'
+        command = ['generate_qc_qmd', '-a', 'NOT_A_PROTEIN',
+                   '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('ERROR: Missing standard protein: "NOT_A_PROTEIN"' in result.stderr)
+        self.assertFalse(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+
+    def test_missing_color_var_fails(self):
+        qmd_name = 'failing_test.qmd'
+        command = ['generate_qc_qmd', '-c', 'NOT_A_VAR',
+                   '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('Missing annotationKey: "NOT_A_VAR"' in result.stderr)
+        self.assertFalse(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_qc_qmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,

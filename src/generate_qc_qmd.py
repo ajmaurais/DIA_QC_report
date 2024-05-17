@@ -506,13 +506,31 @@ def check_meta_keys_exist(conn, keys):
     return all_good
 
 
+def check_std_proteins_exist(conn, proteins):
+    '''
+    Check that each standard protein exists in database.
+    '''
+    all_good = True
+
+    cur = conn.cursor()
+    cur.execute('SELECT name FROM proteins;')
+    db_proteins = {x[0] for x in cur.fetchall()}
+
+    for protein in proteins:
+        if protein not in db_proteins:
+            all_good = False
+            LOGGER.error(f'Missing standard protein: "{protein}"')
+
+    return all_good
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate qmd report.')
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
     parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
                         help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
-    parser.add_argument('-a', '--addStdProtein', action='append', default=[],
+    parser.add_argument('-a', '--addStdProtein', action='append', default=None, dest='std_proteins',
                         help='Add standard protein name for retention time plot.')
     parser.add_argument('-c', '--addColorVar', action='append', default=None, dest='color_vars',
                         help='Add a annotationKey to color PCA plots.')
@@ -560,7 +578,13 @@ def main():
 
     # check that metadata annotatioKeys exist
     if args.color_vars:
-        check_meta_keys_exist(conn, args.color_vars)
+        if not check_meta_keys_exist(conn, args.color_vars):
+            sys.exit(1)
+
+    # check that metadata annotatioKeys exist
+    if args.std_proteins:
+        if not check_std_proteins_exist(conn, args.std_proteins):
+            sys.exit(1)
 
     # Check if metadata.is_normalized is set to True
     db_is_normalized = is_normalized(conn)
@@ -587,8 +611,10 @@ def main():
         outF.write(replicate_tic_areas(dpi=args.dpi))
 
         outF.write(add_header('Peptide dependent metrics\n', level=1))
-        outF.write(add_header('Standard retention times across replicates', level=2))
-        outF.write(std_rt_dist(args.addStdProtein, dpi=args.dpi))
+
+        if args.std_proteins:
+            outF.write(add_header('Standard retention times across replicates', level=2))
+            outF.write(std_rt_dist(args.std_proteins, dpi=args.dpi))
 
         outF.write(add_header('Number of missed cleavages', level=2))
         outF.write(missed_cleavages(do_query=True, dpi=args.dpi))
