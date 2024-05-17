@@ -387,10 +387,6 @@ for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
     return text
 
 
-def wide_table():
-    pass
-
-
 def write_tables_section(precursor_tables, protein_tables, metadata_tables):
 
     def any_tables(table_opts):
