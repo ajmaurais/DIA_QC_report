@@ -51,7 +51,7 @@ class Dtype(Enum):
 
     @staticmethod
     def var_to_type(v):
-        ''' Convert variable with compatable type to Dtype. '''
+        ''' Convert variable with compatible type to Dtype. '''
         if v is None:
             return Dtype.NULL
         if isinstance(v, bool):
