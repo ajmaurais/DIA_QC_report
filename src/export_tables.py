@@ -172,13 +172,17 @@ def main():
     # create output directory if applicable
     if args.output_dir:
         if not os.path.isdir(args.output_dir):
+            output_dir = args.output_dir
             try:
                 os.mkdir(args.output_dir)
             except (FileExistsError, FileNotFoundError) as e:
-                LOGGER.error(f'Could not create output directory:{e}')
+                LOGGER.error(f'Could not create output directory: {e}')
                 sys.exit(1)
+            LOGGER.info(f'Created tables output directory: {output_dir}')
+        LOGGER.info(f'Output directory already exists.')
     else:
         output_dir = os.getcwd()
+        print(output_dir)
 
     # parse table_args
     protein_tables = parse_bitmask_options(args.proteinTables, TABLE_TYPES, METHOD_NAMES)
@@ -187,7 +191,7 @@ def main():
 
     for table_type, table, in [['protein', protein_tables], ['precursor', precursor_tables]]:
         if any(table[direction]['normalized'] for direction in TABLE_TYPES) and not db_is_normalized:
-            LOGGER.warning(f'Database is not normalized. Skipping {table_type}')
+            LOGGER.warning(f'Database is not normalized. Skipping normalized {table_type} table(s).')
             for direction in TABLE_TYPES:
                 table[direction]['normalized'] = False
 
@@ -196,9 +200,9 @@ def main():
         write_precusor_tables(conn, output_dir, precursor_tables)
         LOGGER.info('Done writing precursor tables.')
 
-    if _any_tables(precursor_tables):
+    if _any_tables(protein_tables):
         LOGGER.info('Writing protein tables..')
-        write_protein_tables(conn, output_dir, precursor_tables)
+        write_protein_tables(conn, output_dir, protein_tables)
         LOGGER.info('Done writing protein tables.')
 
     if _any_tables(metadata_tables):
