@@ -9,7 +9,6 @@ from .submodules.dtype import Dtype
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
-from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
@@ -387,104 +386,6 @@ for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
     return text
 
 
-def write_tables_section(precursor_tables, protein_tables, metadata_tables):
-
-    def any_tables(table_opts):
-        return any(table_opts[d][m] for d in table_opts for m in table_opts[d])
-
-    def my_join(sep, fstr, l):
-        return sep.join(fstr.format(i) for i in l)
-
-    text = f"""\n{python_block_header(stack()[0][3])}
-
-if not os.path.isdir('tables'):
-    os.mkdir('tables')\n"""
-
-    # precursor tables
-    if any_tables(precursor_tables):
-        text += """
-# precursor tables
-df_prec = pd.read_sql('''
-SELECT
-    r.replicate,
-    prot.name as protein,
-    p.modifiedSequence,
-    p.precursorCharge,
-    p.totalAreaFragment,
-    p.normalizedArea
-FROM precursors p
-LEFT JOIN replicates r ON r.replicateId == p.replicateId
-LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
-LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId;''', conn)
-"""
-
-        # long tables, if any
-        long_methods = [PRECURSOR_METHOD_NAMES[k] for k, v in precursor_tables['long'].items() if v]
-        if len(long_methods) > 0:
-            text += """\ndf_prec[['replicate',\n\t'protein',\n\t'modifiedSequence',\n\t'precursorCharge',
-{}]].to_csv('tables/precursors_long.tsv', sep='\\t', index=False)
-""".format(my_join(',\n', "\t'{}'", long_methods))
-
-        # wide tables, if any
-        for method, write in precursor_tables['wide'].items():
-            if write:
-                text += f'''\ndf_prec.pivot(index=['protein', 'modifiedSequence', 'precursorCharge'],
-              columns='replicate',
-              values='{PRECURSOR_METHOD_NAMES[method]}').to_csv('tables/precursors_wide_{method}.tsv', sep='\\t', index=True)\n'''
-
-    # protein tables
-    if any_tables(protein_tables):
-        text += """
-# protein tables
-df_prot = pd.read_sql('''
-SELECT
-    r.replicate,
-    prot.name as protein,
-    q.abundance,
-    q.normalizedAbundance
-FROM proteinQuants q
-LEFT JOIN replicates r ON r.replicateId == q.replicateId
-LEFT JOIN proteins prot ON prot.proteinId == q.proteinId;''', conn)
-"""
-
-        # long tables, if any
-        long_methods = [PROTEIN_METHOD_NAMES[k] for k, v in protein_tables['long'].items() if v]
-        if len(long_methods) > 0:
-            text += """\ndf_prot[['replicate',\n\t'protein',
-{}]].to_csv('tables/proteins_long.tsv', sep='\\t', index=False)\n
-""".format(my_join(',\n', "\t'{}'", long_methods))
-
-        # wide tables, if any
-        for method, write in protein_tables['wide'].items():
-            if write:
-                text += f'''\ndf_prot.pivot(index='protein',
-              columns='replicate',
-              values='{PROTEIN_METHOD_NAMES[method]}').to_csv('tables/proteins_wide_{method}.tsv', sep='\\t', index=True)\n'''
-
-    # metadata tables
-    if any_tables(metadata_tables):
-        text += """
-df_meta = pd.read_sql('''
-SELECT
-    r.replicate,
-    m.annotationKey as key,
-    m.annotationValue as value
-FROM sampleMetadata m
-LEFT JOIN replicates r ON r.replicateId == m.replicateId;''', conn)
-"""
-
-        if metadata_tables['long']['write'] == True:
-            text += "\ndf_meta.to_csv('tables/metadata_long.tsv', sep='\\t', index=False)\n"
-
-        if metadata_tables['wide']['write'] == True:
-            text += """\ndf_meta.pivot(index='replicate',
-              columns='key',
-              values='value').to_csv('tables/metadata_wide.tsv', sep='\\t', index=False)\n"""
-
-    text += '```\n\n'
-    return text
-
-
 def check_meta_keys_exist(conn, keys):
     '''
     Check that each metadata key exists in sampleMetadata table.
@@ -533,35 +434,10 @@ def main():
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 
-    table_args = parser.add_argument_group('Output tables',
-                     'The tsv files to write are specified by a 2 digit bit mask. '
-                     'The first digit is for the wide formatted report, and the second digit is for '
-                     'the long formatted report. An integer between 0 and 2 is assigned for each stage in '
-                     'the normalization process. 0 for no report, 1 is for unnormalized, '
-                     'and 2 is for normalized.')
-
-    table_args.add_argument('-p', '--precursorTables', default='00',
-                        help='Tables to write for precursors. 00 is the default')
-    table_args.add_argument('-r', '--proteinTables', default='00',
-                            help='Tables to write for proteins. 00 is the default')
-    table_args.add_argument('--metadataTables', default='00',
-                            help='Tables to write for metadata. Only 0 or 1 are supported. '
-                                 '0 for false, 1 for true. 10 is the default')
-
     parser.add_argument('db', help='Path to precursor quality database.')
     args = parser.parse_args()
 
     # check args
-    if not validate_bit_mask(args.precursorTables, 2, 2):
-        LOGGER.error('Error parsing --precursorTables')
-        sys.exit(1)
-    if not validate_bit_mask(args.proteinTables, 2, 2):
-        LOGGER.error('Error parsing --proteinTables')
-        sys.exit(1)
-    if not validate_bit_mask(args.metadataTables, 1, 2):
-        LOGGER.error('Error parsing --metadataTables')
-        sys.exit(1)
-
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)
     else:
@@ -585,17 +461,6 @@ def main():
     # Check if metadata.is_normalized is set to True
     db_is_normalized = is_normalized(conn)
     conn.close()
-
-    # parse table_args
-    protein_tables = parse_bitmask_options(args.proteinTables, TABLE_TYPES, METHOD_NAMES)
-    precursor_tables = parse_bitmask_options(args.precursorTables, TABLE_TYPES, METHOD_NAMES)
-    metadata_tables = parse_bitmask_options(args.metadataTables, TABLE_TYPES, ('write',))
-
-    for table_type, table, in [['protein', protein_tables], ['precursor', precursor_tables]]:
-        if any(table[direction]['normalized'] for direction in TABLE_TYPES) and not db_is_normalized:
-            LOGGER.warning(f'Database is not normalized. Skipping {table_type}')
-            for direction in TABLE_TYPES:
-                table[direction]['normalized'] = False
 
     with open(args.ofname, 'w') as outF:
         outF.write(doc_header('{} {}'.format(os.path.abspath(__file__),
@@ -661,11 +526,6 @@ def main():
                                    have_color_vars=args.color_vars is not None))
 
         outF.write(close_pannel_tabset())
-
-        # Optional output tables
-        # Check if there is at least 1 table to be written.
-        if sum(int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)) > 0:
-            outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
 
         outF.write(doc_finalize())
 
