@@ -74,7 +74,7 @@ class TestFileTypeBase(ABC):
         annotation_bat = f'{self.work_dir}/sky_annotation_definitions.bat'
         self.assertTrue(os.path.isfile(annotation_bat))
 
-        command_re = re.compile(r'^--annotation-name="(\w+)" --annotation-targets=replicate --annotation-type=([a-z_]+)$')
+        command_re = re.compile(r'^--annotation-name="([\w\.\-]+)" --annotation-targets=replicate --annotation-type=([a-z_]+)$')
 
         with open(annotation_bat, 'r') as inF:
             lines = inF.readlines()
@@ -93,7 +93,7 @@ class TestTsvToSkylineCsv(unittest.TestCase, TestFileTypeBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
 
         commands = ['metadata_to_sky_annotations', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir)
+        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
 class TestCsvToSkylineCsv(unittest.TestCase, TestFileTypeBase):
@@ -104,7 +104,7 @@ class TestCsvToSkylineCsv(unittest.TestCase, TestFileTypeBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.csv'
 
         commands = ['metadata_to_sky_annotations', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir)
+        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
 class TestJsonToSkylineCsv(unittest.TestCase, TestFileTypeBase):
@@ -115,4 +115,26 @@ class TestJsonToSkylineCsv(unittest.TestCase, TestFileTypeBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.json'
 
         commands = ['metadata_to_sky_annotations', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir)
+        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+
+
+class TestProblamaticHeaders(unittest.TestCase, TestFileTypeBase):
+
+    META_TYPES = {'cellLine': Dtype.STRING,
+                  'sample.name': Dtype.STRING,
+                  'experiment': Dtype.STRING,
+                  'NCI7.std': Dtype.BOOL}
+
+    SKY_TYPES = {'cellLine': 'text',
+                 'sample.name': 'text',
+                 'experiment': 'text',
+                 'NCI7.std': 'true_false'}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_bad_header_tsv_to_skyline_csv'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+        cls.metadata_file = f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
+
+        commands = ['metadata_to_sky_annotations', cls.metadata_file]
+        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)

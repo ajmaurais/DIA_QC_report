@@ -44,10 +44,10 @@ def main():
         # write header
         write_csv_row(['ElementLocator'] + [f'annotation_{x}' for x in annotation_headers], outF)
 
-        for row in data.itertuples():
+        for _, row in data.iterrows():
             line = [f'Replicate:/{row.Replicate}']
             for header in annotation_headers:
-                line.append(getattr(row, header))
+                line.append(row[header])
             write_csv_row(line, outF)
 
     # write commands to add annotationd definitions to skyline file
