@@ -109,7 +109,7 @@ class TestCustomAssertion(TestReadMetadataBase):
         self.assertDataDictEqual(self.gt_data, test_data)
 
 
-class TestParseMetadata(TestReadMetadataBase, unittest.TestCase):
+class TestParseMetadata(TestReadMetadataBase):
     def test_json(self):
         data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.json')
 
@@ -137,7 +137,7 @@ class TestParseMetadata(TestReadMetadataBase, unittest.TestCase):
         self.assertDictEqual(self.META_TYPES, types)
 
 
-class TestParseSkylineAnnotations(TestReadMetadataBase, unittest.TestCase):
+class TestParseSkylineAnnotations(TestReadMetadataBase):
 
     ALL_META_TYPES = {'BioReplicate': Dtype.NULL,
                       'bool_var': Dtype.BOOL,
