@@ -7,6 +7,7 @@ from datetime import datetime
 import re
 
 import pandas as pd
+from numpy import float64, int8
 
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import SCHEMA, SCHEMA_VERSION
@@ -554,8 +555,17 @@ def main():
         sys.exit(1)
     LOGGER.info('Done reading replicates table...')
 
+    # create dict of precursor report column types
+    precursor_types = dict()
+    for sky_col, my_col in PRECURSOR_QUALITY_REQUIRED_COLUMNS.items():
+        precursor_types[sky_col] = float64 if my_col in PRECURSOR_QUALITY_NUMERIC_COLUMNS else str
+    precursor_types['PrecursorCharge'] = int8
+    precursor_types['UserSetTotal'] = bool
+    for col in ['ProteinGene', 'Precursor', 'Peptide']:
+        precursor_types[col] = str
+
     # read precursor quality report
-    precursors = pd.read_csv(args.precursors, sep='\t')
+    precursors = pd.read_csv(args.precursors, sep='\t', dtype=precursor_types)
     LOGGER.info('Done reading precursors table...')
 
     # rename columns
