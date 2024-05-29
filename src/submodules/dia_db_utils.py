@@ -12,12 +12,12 @@ METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
 PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'precursorCharge')
 
-SCHEMA_VERSION = '1.15'
+SCHEMA_VERSION = '1.18'
 
 SCHEMA = ['PRAGMA foreign_keys = ON',
 '''
 CREATE TABLE replicates (
-    replicateId INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY,
     replicate TEXT NOT NULL,
     project TEXT NOT NULL,
     includeRep BOOL NOT NULL DEFAULT TRUE,
@@ -44,7 +44,7 @@ CREATE TABLE precursors (
     libraryDotProduct REAL,
     isotopeDotProduct REAL,
     PRIMARY KEY ({', '.join(PRECURSOR_KEY_COLS)}),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId) ON DELETE CASCADE
+    FOREIGN KEY (replicateId) REFERENCES replicates(id) ON DELETE CASCADE
 )''',
 '''
 CREATE TABLE sampleMetadataTypes (
@@ -60,7 +60,7 @@ CREATE TABLE sampleMetadata (
     annotationKey TEXT NOT NULL,
     annotationValue TEXT,
     PRIMARY KEY (replicateId, annotationKey),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId) ON DELETE CASCADE,
+    FOREIGN KEY (replicateId) REFERENCES replicates(id) ON DELETE CASCADE,
     FOREIGN KEY (annotationKey) REFERENCES sampleMetadataTypes(annotationKey) ON DELETE CASCADE
 )''',
 '''
@@ -83,7 +83,7 @@ CREATE TABLE proteinQuants (
     abundance REAL,
     normalizedAbundance REAL,
     PRIMARY KEY (replicateId, proteinId),
-    FOREIGN KEY (replicateId) REFERENCES replicates(replicateId) ON DELETE CASCADE,
+    FOREIGN KEY (replicateId) REFERENCES replicates(id) ON DELETE CASCADE,
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId) ON DELETE CASCADE
 )''',
 '''
@@ -170,16 +170,16 @@ def update_acquired_ranks(conn):
         Database connection.
     '''
 
-    replicates = pd.read_sql('SELECT replicateId, acquiredTime FROM replicates WHERE includeRep == TRUE;', conn)
+    replicates = pd.read_sql('SELECT id, acquiredTime FROM replicates WHERE includeRep == TRUE;', conn)
 
     # parse acquired times and add acquiredRank
     replicates['acquiredTime'] = replicates['acquiredTime'].apply(lambda x: datetime.strptime(x, METADATA_TIME_FORMAT))
     ranks = list(enumerate(replicates['acquiredTime'].sort_values().index))
     replicates['acquiredRank'] = [x[0] for x in sorted(ranks, key=lambda x: x[1])]
 
-    acquired_ranks = [(row.acquiredRank, row.replicateId) for row in replicates.itertuples()]
+    acquired_ranks = [(row.acquiredRank, row.id) for row in replicates.itertuples()]
     cur = conn.cursor()
-    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE replicateId = ?', acquired_ranks)
+    cur.executemany('UPDATE replicates SET acquiredRank = ? WHERE id = ?', acquired_ranks)
     conn.commit()
 
     return update_meta_value(conn, 'replicates.acquiredRank updated', True)
@@ -237,7 +237,7 @@ def mark_reps_skipped(conn, reps=None, projects=None):
 
     # retrieve data from replicates table
     cur = conn.cursor()
-    cur.execute('SELECT replicateId, replicate, project, includeRep FROM replicates;')
+    cur.execute('SELECT id, replicate, project, includeRep FROM replicates;')
     db_reps = cur.fetchall()
 
     db_rep_index = dict()
@@ -278,7 +278,7 @@ def mark_reps_skipped(conn, reps=None, projects=None):
 
     LOGGER.info(f'Excluding {len(rep_index_to_false)} replicates.')
     cur = conn.cursor()
-    cur.executemany('UPDATE replicates SET includeRep = FALSE WHERE replicateId = ?;',
+    cur.executemany('UPDATE replicates SET includeRep = FALSE WHERE id = ?;',
                     [(db_reps[rep_i][0],) for rep_i in rep_index_to_false])
     conn.commit()
     conn = update_acquired_ranks(conn)

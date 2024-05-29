@@ -41,7 +41,7 @@ def write_precusor_tables(conn, dest, tables):
         p.totalAreaFragment,
         p.normalizedArea
     FROM precursors p
-    LEFT JOIN replicates r ON r.replicateId == p.replicateId
+    LEFT JOIN replicates r ON r.id == p.replicateId
     LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
     LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId;''', conn)
 
@@ -83,7 +83,7 @@ def write_protein_tables(conn, dest, tables):
         q.abundance,
         q.normalizedAbundance
     FROM proteinQuants q
-    LEFT JOIN replicates r ON r.replicateId == q.replicateId
+    LEFT JOIN replicates r ON r.id == q.replicateId
     LEFT JOIN proteins prot ON prot.proteinId == q.proteinId;''', conn)
 
     # long tables
@@ -108,7 +108,7 @@ def write_metadata_tables(conn, dest, tables):
         m.annotationKey as key,
         m.annotationValue as value
     FROM sampleMetadata m
-    LEFT JOIN replicates r ON r.replicateId == m.replicateId;''', conn)
+    LEFT JOIN replicates r ON r.id == m.replicateId;''', conn)
 
     if tables['long']['write']:
         df.to_csv(f'{dest}/metadata_long.tsv', sep='\t', index=False)

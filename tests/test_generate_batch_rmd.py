@@ -65,7 +65,12 @@ class TestMakeBatchRmd(unittest.TestCase):
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir)
             self.assertEqual(render_result.returncode, 0)
-            self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.html'))
+
+            for file in [f'{rmd_name}.html',
+                         'proteins_batch_corrected_wide.tsv',
+                         'precursors_batch_corrected_wide.tsv',
+                         'metadata_wide.tsv']:
+                self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
 
 
     def test_is_normalized_check(self):

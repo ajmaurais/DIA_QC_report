@@ -317,7 +317,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     peptide_to_protein['peptideId'] = pep_id_col
     peptide_to_protein = peptide_to_protein[['proteinId', 'peptideId']]
 
-    replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='replicateId')
+    replicates.to_sql('replicates', conn, if_exists='append', index=True, index_label='id')
     precursors.to_sql('precursors', conn, index=False, if_exists='append')
     proteins.to_sql('proteins', conn, if_exists='append', index=True, index_label='proteinId')
     protein_quants.to_sql('proteinQuants', conn, index=False, if_exists='append')

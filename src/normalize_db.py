@@ -112,7 +112,7 @@ def main():
             p.totalAreaFragment
         FROM precursors p
         LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
-        LEFT JOIN replicates r ON p.replicateId == r.replicateId
+        LEFT JOIN replicates r ON p.replicateId == r.id
         WHERE r.includeRep == TRUE; ''',
         conn)
     LOGGER.info('Finished reading precursors.')

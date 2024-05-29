@@ -27,7 +27,7 @@ query = \'\'\'SELECT
     p.precursorCharge
 FROM precursors p
 LEFT JOIN replicates r
-    ON p.replicateId = r.replicateId
+    ON p.replicateId = r.id
 WHERE p.totalAreaFragment > 0 AND r.includeRep == TRUE;\'\'\'
 
 df = pd.read_sql(query, conn)
@@ -49,7 +49,7 @@ query = \'\'\'SELECT
     p.isotopeDotProduct
 FROM precursors p
 LEFT JOIN replicates r
-    ON p.replicateId = r.replicateId
+    ON p.replicateId = r.id
 WHERE r.includeRep == TRUE;\'\'\'
 
 df = pd.read_sql(query, conn)
@@ -269,7 +269,7 @@ query = '''SELECT
     p.precursorCharge,
     {quant_col_query}
 FROM precursors p
-LEFT JOIN replicates r ON p.replicateId = r.replicateId
+LEFT JOIN replicates r ON p.replicateId = r.id
 WHERE r.includeRep == TRUE;'''
 
 df_areas = pd.read_sql(query, conn)\n"""

@@ -22,7 +22,7 @@ def get_db_metadata(db_path):
     conn = sqlite3.connect(db_path)
 
     # get replicates
-    query = 'SELECT replicateId, replicate, project FROM replicates;'
+    query = 'SELECT id as replicateId, replicate, project FROM replicates;'
     cur = conn.cursor()
     cur.execute(query)
     replicates = {row[0]: {'replicate': row[1], 'project': row[2]} for row in cur.fetchall()}
@@ -311,7 +311,7 @@ class TestMultiProject(unittest.TestCase):
         query = '''
             SELECT DISTINCT prot.name, r.project FROM proteinQuants q
             LEFT JOIN proteins prot ON prot.proteinID == q.proteinId
-            LEFT JOIN replicates r ON r.replicateId == q.replicateId;
+            LEFT JOIN replicates r ON r.id == q.replicateId;
         '''
 
         cur = self.conn.cursor()
@@ -360,7 +360,7 @@ class TestMultiProjectStepped(unittest.TestCase):
         query = '''SELECT prot.name, p.modifiedSequence FROM precursors p
                    LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
                    LEFT JOIN proteins prot ON ptp.proteinId == prot.proteinId
-                   LEFT JOIN replicates r ON r.replicateId == p.replicateId
+                   LEFT JOIN replicates r ON r.id == p.replicateId
                    WHERE r.project == ?; '''
         cur.execute(query, (self.PROJECT_1,))
         db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
@@ -439,7 +439,7 @@ class TestMultiProjectStepped(unittest.TestCase):
             query = '''SELECT prot.name FROM precursors p
                        LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
                        LEFT JOIN proteins prot ON ptp.proteinId == prot.proteinId
-                       LEFT JOIN replicates r ON r.replicateId == p.replicateId
+                       LEFT JOIN replicates r ON r.id == p.replicateId
                        WHERE r.project == ?; '''
             cur.execute(query, (project,))
             db_gene_groups = Counter([x[0] for x in cur.fetchall()])
@@ -512,7 +512,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
     def read_db_precursos(conn):
         query = ''' SELECT r.replicate, p.modifiedSequence, p.precursorCharge, p.totalAreaFragment
                     FROM precursors p
-                    LEFT JOIN replicates r ON r.replicateId == p.replicateId; '''
+                    LEFT JOIN replicates r ON r.id == p.replicateId; '''
         df = pd.read_sql(query, conn)
         data = dict()
         for row in df.itertuples():

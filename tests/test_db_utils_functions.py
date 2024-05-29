@@ -210,7 +210,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         cur = self.conn.cursor()
         cur.execute('''
             CREATE TABLE replicates (
-                replicateId INTEGER PRIMARY KEY,
+                id INTEGER PRIMARY KEY,
                 replicate TEXT NOT NULL,
                 project TEXT NOT NULL,
                 includeRep BOOL NOT NULL DEFAULT TRUE,
@@ -248,7 +248,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
 
     def test_update_acquired_ranks(self):
         self.replicates.to_sql('replicates', self.conn, if_exists='append',
-                                index=True, index_label='replicateId')
+                                index=True, index_label='id')
         db_utils.update_acquired_ranks(self.conn)
 
         db_ranks = self.get_db_ranks(self.conn)
@@ -260,7 +260,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         # add first project
         self.replicates[self.replicates['project'] == 'Sp3'].to_sql('replicates', self.conn,
                                                                     if_exists='append', index=True,
-                                                                    index_label='replicateId')
+                                                                    index_label='id')
         db_utils.update_acquired_ranks(self.conn)
 
         db_ranks = self.get_db_ranks(self.conn)
@@ -270,7 +270,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         # add second project
         self.replicates[self.replicates['project'] == 'Strap'].to_sql('replicates', self.conn,
                                                                       if_exists='append', index=True,
-                                                                      index_label='replicateId')
+                                                                      index_label='id')
 
         db_utils.update_acquired_ranks(self.conn)
         db_ranks = self.get_db_ranks(self.conn)
@@ -280,7 +280,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_mark_project_skipped(self):
         self.replicates.to_sql('replicates', self.conn, if_exists='append',
-                                index=True, index_label='replicateId')
+                                index=True, index_label='id')
         db_utils.update_acquired_ranks(self.conn)
 
         db_ranks = self.get_db_ranks(self.conn)
@@ -297,7 +297,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_mark_replicates_skipped(self):
         self.replicates.to_sql('replicates', self.conn, if_exists='append',
-                                index=True, index_label='replicateId')
+                                index=True, index_label='id')
         db_utils.update_acquired_ranks(self.conn)
         random.seed(1)
         max_rep_index = len(self.replicates.index) - 1

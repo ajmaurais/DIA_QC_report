@@ -67,7 +67,7 @@ class TestSingleProject(unittest.TestCase):
                 p.precursorCharge,
                 p.normalizedArea
             FROM precursors p
-            LEFT JOIN replicates r ON r.replicateId == p.replicateId; '''
+            LEFT JOIN replicates r ON r.id == p.replicateId; '''
         df = pd.read_sql(query, self.conn)
 
         self.assertTrue(not any(df['normalizedArea'] == 0))
@@ -147,7 +147,7 @@ class TestMultiProject(unittest.TestCase):
                 p.precursorCharge,
                 p.normalizedArea
             FROM precursors p
-            LEFT JOIN replicates r ON r.replicateId == p.replicateId
+            LEFT JOIN replicates r ON r.id == p.replicateId
             WHERE p.normalizedArea IS NOT NULL; '''
         df = pd.read_sql(query, self.conn)
 

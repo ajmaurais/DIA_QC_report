@@ -230,7 +230,7 @@ dat.precursor <- DBI::dbGetQuery(conn, 'SELECT
                                       p.totalAreaFragment,
                                       p.normalizedArea
                                    FROM precursors p
-                                   LEFT JOIN replicates r ON r.replicateId == p.replicateId
+                                   LEFT JOIN replicates r ON r.id == p.replicateId
                                    WHERE r.includeRep == TRUE{precursor_filter};')
 peptideToProtein <- DBI::dbGetQuery(conn, 'SELECT
                                             prot.name as protein,
@@ -250,7 +250,7 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                     q.normalizedAbundance
                                 FROM proteinQuants q
                                 LEFT JOIN proteins p ON p.proteinId = q.proteinId
-                                LEFT JOIN replicates r ON r.replicateId == q.replicateId
+                                LEFT JOIN replicates r ON r.id == q.replicateId
                                 WHERE r.includeRep == TRUE{protein_filter};')
 dat.metadata <- rDIAUtils::readWideMetadata(conn)
 DBI::dbDisconnect(conn)\n'''

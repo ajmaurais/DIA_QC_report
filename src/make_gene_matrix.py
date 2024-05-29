@@ -28,12 +28,12 @@ PROTEIN_QUERY = '''
 SELECT
     prot.accession,
 	r.replicate,
-    	a.aliquot_id,
+    a.aliquot_id,
 	q.abundance,
 	q.normalizedAbundance
 FROM proteinQuants q
 LEFT JOIN proteins prot ON prot.proteinId == q.proteinId
-LEFT JOIN replicates r ON r.replicateId == q.replicateId
+LEFT JOIN replicates r ON r.id == q.replicateId
 LEFT JOIN (
     SELECT
         replicateId, annotationValue as aliquot_id
@@ -54,7 +54,7 @@ SELECT
 FROM precursors p
 LEFT JOIN peptideToProtein ptp ON ptp.peptideId == p.peptideId
 LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId
-LEFT JOIN replicates r ON r.replicateId == p.replicateId
+LEFT JOIN replicates r ON r.id == p.replicateId
 LEFT JOIN (
     SELECT
         replicateId, annotationValue as aliquot_id

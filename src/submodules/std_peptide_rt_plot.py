@@ -29,7 +29,7 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
         p.maxEndTime
     FROM precursors p
     LEFT JOIN replicates r
-        ON p.replicateId = r.replicateId
+        ON p.replicateId = r.id
 	LEFT JOIN peptideToProtein ptp
 		ON p.peptideId == ptp.peptideId
 	LEFT JOIN proteins prot
