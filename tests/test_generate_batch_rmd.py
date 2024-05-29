@@ -102,6 +102,24 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.conn = db_utils.mark_all_reps_includced(self.conn)
 
 
+    def test_controlKey_check(self):
+        self.assertTrue(self.conn is not None)
+
+        command = ['generate_batch_rmd', '--addControlValue=A549', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('No control key specified!' in result.stderr)
+
+
+    def test_addControlValue_check(self):
+        self.assertTrue(self.conn is not None)
+
+        command = ['generate_batch_rmd', '--controlKey=cellLine', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('No control value(s) specified!' in result.stderr)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_batch_rmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,

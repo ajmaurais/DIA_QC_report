@@ -608,7 +608,7 @@ def main():
     string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key']
     string_args = {x: getattr(args, x) for x in string_args}
 
-    # check args
+    # check table_args
     if not validate_bit_mask(args.precursorTables, 3, 2):
         LOGGER.error('Error parsing --precursorTables')
         sys.exit(1)
@@ -617,6 +617,14 @@ def main():
         sys.exit(1)
     if not validate_bit_mask(args.metadataTables, 1, 2):
         LOGGER.error('Error parsing --metadataTables')
+        sys.exit(1)
+
+    # check control_vars args
+    if args.control_key is None and args.control_values is not None:
+        LOGGER.error('No control key specified!')
+        sys.exit(1)
+    if args.control_key is not None and args.control_values is None:
+        LOGGER.error('No control value(s) specified!')
         sys.exit(1)
 
     if not args.skipTests:
