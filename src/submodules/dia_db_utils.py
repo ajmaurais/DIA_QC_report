@@ -46,6 +46,7 @@ CREATE TABLE precursors (
     PRIMARY KEY ({', '.join(PRECURSOR_KEY_COLS)}),
     FOREIGN KEY (replicateId) REFERENCES replicates(id) ON DELETE CASCADE
 )''',
+'CREATE INDEX precProjId ON precursors (peptideId, replicateId, modifiedSequence)',
 '''
 CREATE TABLE sampleMetadataTypes (
     annotationKey TEXT NOT NULL,
