@@ -26,8 +26,8 @@ class TestMakeBatchRmd(unittest.TestCase):
             os.rmdir(f'{cls.work_dir}/tables')
 
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
-                                                          cls.work_dir,
-                                                          clear_dir=True)
+                                                           cls.work_dir,
+                                                           clear_dir=True)
 
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
@@ -103,6 +103,11 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertTrue('Only 1 project in replicates!' in result.stderr)
 
+        # make sure --skipTests option works
+        command = ['generate_batch_rmd', '--skipTests', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(result.returncode, 0)
+
         # reset is_normalized metadata entry to True
         self.conn = db_utils.mark_all_reps_includced(self.conn)
 
@@ -115,6 +120,12 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertTrue('No control key specified!' in result.stderr)
 
+        # make sure --skipTests option works
+        command.insert(1, '--skipTests')
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='test_controlKey_check_skipTests')
+        self.assertEqual(result.returncode, 0)
+
 
     def test_addControlValue_check(self):
         self.assertTrue(self.conn is not None)
@@ -123,6 +134,12 @@ class TestMakeBatchRmd(unittest.TestCase):
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
         self.assertTrue('No control value(s) specified!' in result.stderr)
+
+        # make sure --skipTests option works
+        command.insert(1, '--skipTests')
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='test_addControlValue_check_skipTests')
+        self.assertEqual(result.returncode, 0)
 
 
 if __name__ == '__main__':

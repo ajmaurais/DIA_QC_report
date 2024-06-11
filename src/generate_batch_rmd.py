@@ -619,15 +619,16 @@ def main():
         LOGGER.error('Error parsing --metadataTables')
         sys.exit(1)
 
-    # check control_vars args
-    if args.control_key is None and args.control_values is not None:
-        LOGGER.error('No control key specified!')
-        sys.exit(1)
-    if args.control_key is not None and args.control_values is None:
-        LOGGER.error('No control value(s) specified!')
-        sys.exit(1)
 
     if not args.skipTests:
+        # check control_vars args
+        if args.control_key is None and args.control_values is not None:
+            LOGGER.error('No control key specified!')
+            sys.exit(1)
+        if args.control_key is not None and args.control_values is None:
+            LOGGER.error('No control value(s) specified!')
+            sys.exit(1)
+
         if not test_metadata_variables(args.db, **string_args,
                                        control_values=args.control_values):
             sys.exit(1)
