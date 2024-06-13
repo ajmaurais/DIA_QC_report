@@ -65,39 +65,43 @@ class TestDBHelperFunctions(unittest.TestCase):
         included = included_reps()
         self.assertTrue(len(included), self.N_REPS)
 
-        # Select single rep to exclude
-        random.seed(1)
-        single_rep = included.pop(random.randint(0, self.N_REPS - 1))
-        self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=[single_rep]))
-        self.assertEqual(len(excluded_reps()), 1)
-        self.assertEqual(len(included_reps()), self.N_REPS - 1)
-        self.assertTrue(single_rep in excluded_reps())
+        try:
+            # Select single rep to exclude
+            random.seed(1)
+            single_rep = included.pop(random.randint(0, self.N_REPS - 1))
+            self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=[single_rep]))
+            self.assertEqual(len(excluded_reps()), 1)
+            self.assertEqual(len(included_reps()), self.N_REPS - 1)
+            self.assertTrue(single_rep in excluded_reps())
 
-        # Select multiple reps to exclude
-        excluded = [included[i] for i in {random.randint(0, self.N_REPS - 2) for _ in range(10)}]
-        included = [x for x in included if x not in excluded]
-        self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=excluded))
-        excluded.append(single_rep)
-        db_excluded = excluded_reps()
-        self.assertEqual(len(db_excluded), len(excluded))
-        self.assertEqual(len(included_reps()), len(included))
-        self.assertTrue(all(rep in db_excluded for rep in excluded + [single_rep]))
+            # Select multiple reps to exclude
+            excluded = [included[i] for i in {random.randint(0, self.N_REPS - 2) for _ in range(10)}]
+            included = [x for x in included if x not in excluded]
+            self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=excluded))
+            excluded.append(single_rep)
+            db_excluded = excluded_reps()
+            self.assertEqual(len(db_excluded), len(excluded))
+            self.assertEqual(len(included_reps()), len(included))
+            self.assertTrue(all(rep in db_excluded for rep in excluded + [single_rep]))
 
-        # Set all reps included
-        db_utils.mark_all_reps_includced(self.conn)
-        included = included_reps()
-        self.assertEqual(len(included), self.N_REPS)
-        self.assertEqual(len(excluded_reps()), 0)
+            # Set all reps included
+            db_utils.mark_all_reps_includced(self.conn)
+            included = included_reps()
+            self.assertEqual(len(included), self.N_REPS)
+            self.assertEqual(len(excluded_reps()), 0)
 
-        # Exclude project
-        self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=[self.TEST_PROJECT]))
-        self.assertEqual(len(excluded_reps()), self.N_REPS)
-        self.assertEqual(len(included_reps()), 0)
+            # Exclude project
+            self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=[self.TEST_PROJECT]))
+            self.assertEqual(len(excluded_reps()), self.N_REPS)
+            self.assertEqual(len(included_reps()), 0)
 
-        # Set all reps included again
-        db_utils.mark_all_reps_includced(self.conn)
-        self.assertEqual(len(included_reps()), self.N_REPS)
-        self.assertEqual(len(excluded_reps()), 0)
+            # Set all reps included again
+            db_utils.mark_all_reps_includced(self.conn)
+            self.assertEqual(len(included_reps()), self.N_REPS)
+            self.assertEqual(len(excluded_reps()), 0)
+
+        finally:
+            db_utils.mark_all_reps_includced(self.conn)
 
 
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
