@@ -5,10 +5,36 @@ import argparse
 import sys
 import os
 import sqlite3
+import re
 
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
+import DIA_QC_report.generate_batch_rmd as generate_batch_rmd
+
+
+class TestMainFxns(unittest.TestCase):
+    def test_remove_bc_tables(self):
+        directions = ('wide', 'long')
+        tests = [(directions, option) for option in  ('44', '55', '66', '77')]
+        tests += [(('wide',), f'{option}0') for option in range(4, 8)]
+        tests += [(('long',), f'0{option}') for option in range(4, 8)]
+
+        for test_directions, option in tests:
+            tables = db_utils.parse_bitmask_options(option, directions,
+                                                    generate_batch_rmd.PYTHON_METHOD_NAMES)
+
+            for direction in test_directions:
+                self.assertTrue(tables[direction]['batch_corrected'])
+
+            with self.assertLogs(generate_batch_rmd.LOGGER) as cm:
+                tables = generate_batch_rmd.remove_bc_tables(tables)
+
+            self.assertTrue(len(test_directions) == len(cm.output))
+
+            for direction, out in zip(test_directions, cm.output):
+                self.assertEqual(out, f'WARNING:root:Batch corrected {direction} table not available when batch correction is skipped!')
+
 
 class TestMakeBatchRmd(unittest.TestCase):
     RENDER_RMD = False
@@ -111,13 +137,15 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
             self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
 
-            for option in ['40', '04']:
-                for flag in ['precursorTables', 'proteinTables']:
-                    command = ['generate_batch_rmd', f'--{flag}={option}', self.db_path]
-                    result = setup_functions.run_command(command, self.work_dir,
-                                                         prefix='invalid_table_options')
-                    self.assertEqual(result.returncode, 1)
-                    self.assertTrue('ERROR: Can not write batch corrected tables when batch correction is skipped' in result.stderr)
+            for flag in ['precursorTables', 'proteinTables']:
+                command = ['generate_batch_rmd', f'--{flag}=44', self.db_path]
+                result = setup_functions.run_command(command, self.work_dir,
+                                                     prefix='invalid_table_options')
+                self.assertEqual(result.returncode, 0)
+
+                name = re.sub('^p', 'P', flag.replace('Tables', ''))
+                for d in ('long', 'wide'):
+                    self.assertTrue(f'WARNING: {name} batch corrected {d} table not available when batch correction is skipped!' in result.stderr)
 
             if self.RENDER_RMD:
                 render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]

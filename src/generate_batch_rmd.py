@@ -2,7 +2,6 @@
 import sys
 import os
 import argparse
-import re
 import sqlite3
 
 from .submodules.logger import LOGGER
@@ -523,6 +522,15 @@ write.table(dplyr::select(dat.metadata, -replicateId),
     return text
 
 
+def remove_bc_tables(table, name=None):
+    for direction in ('wide', 'long'):
+        if table[direction]['batch_corrected']:
+            LOGGER.warning(f"{name + ' b' if name else 'B'}atch corrected {direction} table not available when batch correction is skipped!")
+            table[direction]['batch_corrected'] = False
+
+    return table
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate batch correction rmd report.')
 
@@ -653,13 +661,6 @@ def main():
                                            control_values=args.control_values):
                 raise RuntimeError
 
-            # make sure batch corrected tables aren't written when batch correction is skipped.
-            if skip_bc:
-                for level in [precursor_tables, protein_tables]:
-                    for direction in ('wide', 'long'):
-                        if level[direction]['batch_corrected']:
-                            raise RuntimeError('Can not write batch corrected tables when batch correction is skipped.')
-
     except (RuntimeError, FileNotFoundError) as e:
         message = str(e)
         if message != '':
@@ -669,6 +670,11 @@ def main():
     finally:
         if conn is not None:
             conn.close()
+
+    # make sure batch corrected tables aren't written when batch correction is skipped.
+    if skip_bc:
+        protein_tables = remove_bc_tables(protein_tables, name='Protein')
+        precursor_tables = remove_bc_tables(precursor_tables, name='Precursor')
 
     # set batch1 to default if it is None
     if string_args['batch1'] is None:
