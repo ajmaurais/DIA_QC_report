@@ -632,7 +632,7 @@ def main():
         else:
             raise FileNotFoundError(f'Database file ({args.db}) does not exist!')
 
-        # Determine if batch correcion should be skipped
+        # Determine if batch correction should be skipped
         skip_bc = skip_batch_correction(conn, args.batch1, args.batch2)
 
         if not args.skipTests:
