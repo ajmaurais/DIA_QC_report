@@ -14,7 +14,7 @@ import DIA_QC_report.generate_batch_rmd as generate_batch_rmd
 
 
 class TestMainFxns(unittest.TestCase):
-    def test_remove_bc_tables(self):
+    def test_remove_bc_tables_bc_options(self):
         directions = ('wide', 'long')
         tests = [(directions, option) for option in  ('44', '55', '66', '77')]
         tests += [(('wide',), f'{option}0') for option in range(4, 8)]
@@ -34,6 +34,23 @@ class TestMainFxns(unittest.TestCase):
 
             for direction, out in zip(test_directions, cm.output):
                 self.assertEqual(out, f'WARNING:root:Batch corrected {direction} table not available when batch correction is skipped!')
+
+
+    def test_remove_bc_tables_no_bc_options(self):
+        directions = ('wide', 'long')
+        tests = [(directions, option) for option in  ('00', '11', '22', '33')]
+        tests += [(('wide',), f'{option}0') for option in range(4)]
+        tests += [(('long',), f'0{option}') for option in range(4)]
+
+        for test_directions, option in tests:
+            tables = db_utils.parse_bitmask_options(option, directions,
+                                                    generate_batch_rmd.PYTHON_METHOD_NAMES)
+
+            for direction in test_directions:
+                self.assertFalse(tables[direction]['batch_corrected'])
+
+            with self.assertNoLogs(generate_batch_rmd.LOGGER) as cm:
+                tables = generate_batch_rmd.remove_bc_tables(tables)
 
 
 class TestMakeBatchRmd(unittest.TestCase):
