@@ -100,7 +100,7 @@ def check_df_columns(df, required_cols, df_name=None):
     df_cols = set(df.columns.to_list())
     for col in required_cols:
         if col not in df_cols:
-            LOGGER.error(f'Missing required column: "{col}"' + f' in {df_name}' if df_name else '')
+            LOGGER.error(f'Missing required column: "{col}"' + (f' in {df_name}' if df_name else ''))
             all_good = False
     return all_good
 
@@ -129,7 +129,7 @@ def pivot_data_wider(dat, quant_col, index,
     return ret
 
 
-def concat_gene_data(accession_set, gene_data, sep=' / '):
+def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
     '''
     Make a lookup table for gene data for each unique protein accession group.
 
@@ -143,6 +143,8 @@ def concat_gene_data(accession_set, gene_data, sep=' / '):
         ('accession', 'Gene', 'NCBIGeneID', 'Authority', 'Description', 'Chromosome', 'Locus')
     sep: str
         A string used to separate gene group data. Default is ' / '
+    gene_uuid: bool
+        Also include gene_uuid column?
 
     Returns
     -------
@@ -155,13 +157,22 @@ def concat_gene_data(accession_set, gene_data, sep=' / '):
     '''
 
     gene_data_sets = {}
-    gene_data_keys = ('Gene', 'NCBIGeneID', 'Authority', 'Description', 'Chromosome', 'Locus')
+    gene_data_keys = ['Gene', 'NCBIGeneID', 'Authority', 'Description', 'Chromosome', 'Locus']
+    
+    if gene_uuid:
+        gene_data_keys.append('gene_uuid')
+
 
     Gene = namedtuple('Gene', ' '.join(gene_data_keys))
     gene_data_dict = {}
     for row in gene_data.itertuples():
-        gene_data_dict[row.accession] = Gene(row.Gene, row.NCBIGeneID, row.Authority,
-                                             row.Description, row.Chromosome, row.Locus)
+        gene_data = [row.Gene, row.NCBIGeneID, row.Authority,
+                     row.Description, row.Chromosome, row.Locus]
+
+        if gene_uuid:
+            gene_data.append(row.gene_uuid)
+
+        gene_data_dict[row.accession] = Gene(*gene_data)
 
     def iter_accession_group(group):
         if isinstance(group, (list, tuple)):
@@ -216,6 +227,8 @@ def main():
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
     parser.add_argument('--useAliquotId', default=False, action='store_true',
                         help='Use aliquot_id as column headers instead of replicate name.')
+    parser.add_argument('--addGeneUuid', default=False, action='store_true',
+                        dest='add_gene_uuid', help='Add column for gene id hash.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
     parser.add_argument('database', help='The precursor database.')
 
@@ -262,11 +275,15 @@ def main():
             sys.exit(1)
         rep_id_col = 'aliquot_id'
 
+    gene_id_table_cols = GENE_ID_TABLE_COLS
+    if args.add_gene_uuid:
+        gene_id_table_cols['gene_uuid'] = 'gene_uuid'
+
     # read gene ID lookup table
     gene_ids = pd.read_csv(args.gene_table)
-    if not check_df_columns(gene_ids, GENE_ID_TABLE_COLS):
+    if not check_df_columns(gene_ids, gene_id_table_cols):
         sys.exit(1)
-    gene_ids = gene_ids[list(GENE_ID_TABLE_COLS.keys())].rename(columns=GENE_ID_TABLE_COLS)
+    gene_ids = gene_ids[list(gene_id_table_cols.keys())].rename(columns=gene_id_table_cols)
 
     proteins = {'proteins_unnormalized': 'abundance'}
     precursors = {'precursors_unnormalized': 'area'}
@@ -295,7 +312,9 @@ def main():
     # make accession gene data lookup
     gene_ids = gene_ids.drop_duplicates(subset='accession')
     LOGGER.info('Looking up gene data for protein accessions.')
-    gene_data_lookup, missing_accessions = concat_gene_data(accessions, gene_ids, sep=args.gene_group_sep)
+    gene_data_lookup, missing_accessions = concat_gene_data(accessions, gene_ids,
+                                                            sep=args.gene_group_sep,
+                                                            gene_uuid=args.add_gene_uuid)
     LOGGER.info(f'Found gene data for {len(gene_data_lookup)} protein accessions.')
     if len(missing_accessions) > 0:
         LOGGER.warning(f'Missing gene data for {len(missing_accessions)} protein accessions!')

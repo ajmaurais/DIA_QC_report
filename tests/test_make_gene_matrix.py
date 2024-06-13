@@ -25,10 +25,23 @@ class TestMakeGeneMatrix(unittest.TestCase):
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-    def test_is_successful(self):
-        self.assertEqual(self.parse_result.returncode, 0)
 
+    def test_is_successful(self):
         command = ['make_gene_matrix', self.gene_id_path, self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(result.returncode, 0)
+
+
+    def test_use_gene_hash_option(self):
+        # make sure id table without hash fails
+        command = ['make_gene_matrix', '--addGeneUuid', self.gene_id_path, self.db_path]
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='failed_gene_id_hash_table')
+        self.assertEqual(result.returncode, 1)
+
+        # make sure correct table succedes
+        gene_id_hash_path = f'{self.data_dir}/metadata/prhuman2gene_gene_uuid_2023_05_24_subset.csv'
+        command = ['make_gene_matrix', '--addGeneUuid', gene_id_hash_path, self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 0)
 
