@@ -157,6 +157,17 @@ def test_metadata_variables(conn, batch1=None, batch2=None,
     return all_good
 
 
+def pivot_df_longer(p):
+    text = f'''
+# pivot dat.{p} longer
+dat.{p}.l <- dat.{p} %>%
+    tidyr::pivot_longer(dplyr::all_of({p}.methods),
+                        names_to='method', values_to='value') %>%
+    dplyr::select(replicate, {p}, method, value)\n'''
+
+    return text
+
+
 def doc_initialize(db_path, batch1, batch2=None,
                    skip_bc=False, remove_missing=True,
                    color_vars=None, covariate_vars=None,
@@ -176,8 +187,8 @@ library(tidyr)
 library(DBI)
 
 # names for columns at different stages in analysis
-precursor.methods <- c('{"', '".join(PRECURSOR_METHOD_NAMES)}')
-protein.methods <- c('{"', '".join(PROTEIN_METHOD_NAMES)}')
+precursor.methods <- c('{"', '".join(PRECURSOR_METHOD_NAMES[:2] if skip_bc else PRECURSOR_METHOD_NAMES)}')
+protein.methods <- c('{"', '".join(PROTEIN_METHOD_NAMES[:2] if skip_bc else PROTEIN_METHOD_NAMES)}')
 '''
 
     if batch1:
@@ -265,7 +276,12 @@ dat.precursor$precursor <- with(dat.precursor, paste(modifiedSequence, precursor
 dat.precursor$totalAreaFragment <- log2(dat.precursor$totalAreaFragment + 1)
 dat.precursor$normalizedArea <- log2(dat.precursor$normalizedArea + 1)
 dat.protein$abundance <- log2(dat.protein$abundance + 1)
-dat.protein$normalizedAbundance <- log2(dat.protein$normalizedAbundance + 1)\n```\n\n\n'''
+dat.protein$normalizedAbundance <- log2(dat.protein$normalizedAbundance + 1)\n'''
+
+    if skip_bc:
+        text += f"\n{pivot_df_longer('precursor')}\n{pivot_df_longer('protein')}\n"
+
+    text += '```\n\n\n'
 
     return text
 
@@ -295,16 +311,12 @@ dat.{p} <- dat.{p} %>%
                      normalized{a}.bc=normalized{a}),
                      by=c('replicate', '{p}'))
 
-# pivot longer
-dat.{p}.l <- dat.{p} %>%
-    tidyr::pivot_longer(dplyr::all_of({p}.methods),
-                        names_to='method', values_to='value') %>%
-    dplyr::select(replicate, {p}, method, value)\n```\n\n\n'''
+    {pivot_df_longer(p)}```\n\n\n'''
 
     return text
 
 
-def precursor_norm_plot(plot_file_path=None):
+def precursor_norm_plot(plot_file_path=None, skip_bc=False):
     '''
     Generate precursor normalization box plot.
     '''
@@ -313,17 +325,22 @@ def precursor_norm_plot(plot_file_path=None):
     fig_height = 10
 
     text = '\n' + r_block_header('area_dist_plot', fig_width=fig_width, fig_height=fig_height)
-    text += '''\n
+    text += f'''\n
 dat.p <- dat.precursor.l %>%
     dplyr::left_join(dplyr::select(dat.metadata, replicate, acquiredRank, all_of(batch1)))
 dat.p$method <- factor(dat.p$method, levels=precursor.methods,
-                       labels=c('Unnormalized', 'Median Normalized', 'Normalized, Batch Corrected'))
+                       labels=c('Unnormalized', 'Median Normalized'{'' if skip_bc else ", 'Normalized, Batch Corrected'"}))
 dat.p$acquiredRank <- as.numeric(as.factor(rank(-dat.p$acquiredRank)))
 
-p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank, color=get(batch1))) +
+p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if skip_bc else ', color=get(batch1)'})) +
     facet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top') +
-    geom_boxplot(outlier.size = 0.5) +
-    scale_color_discrete(name='Batch') +
+    geom_boxplot(outlier.size = 0.5) +'''
+
+    if not skip_bc:
+        text += '''
+    scale_color_discrete(name='Batch') +'''
+
+    text += '''
     coord_flip() +
     ylab('log2(Area)') +
     xlab('Acquisition number') +
@@ -338,7 +355,7 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank, color=g
     return text
 
 
-def cv_plot(control_values=None, plot_file_path=None):
+def cv_plot(control_values=None, plot_file_path=None, skip_bc=False):
 
     fig_width = 6.5
     fig_height = 1 + 3 * len(control_values) if control_values else 4
@@ -373,7 +390,7 @@ dat.cv <- dat.precursor.l %>%{filter_text}
 
 # Convert method to factor
 dat.cv$method <- factor(dat.cv$method, levels=precursor.methods,
-                       labels=c('Unnormalized', 'Median Normalized', 'Batch Corrected'))
+                       labels=c('Unnormalized', 'Median Normalized'{'' if skip_bc else ", 'Batch Corrected'"}))
 
 # CV distribution plot
 p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
@@ -394,26 +411,27 @@ p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
     return text
 
 
-def pca_plot(p, color_vars=None, plot_file_path=None):
+def pca_plot(p, color_vars=None, plot_file_path=None, skip_bc=False):
 
-    n_methods = 3
+    n_methods = 2 if skip_bc else 3
 
     fig_width = n_methods * 3 + 2
-    fig_height = ((len(color_vars) if color_vars else 0) + 2) * 3 + 0.2
+    fig_height = ((len(color_vars) if color_vars else 0) + (1 if skip_bc else 2)) * 3 + 0.4
 
     text = '\n' + r_block_header(f'{p}_pca', fig_width=fig_width, fig_height=fig_height)
 
     norm_method = 'Median' if p != 'protein' else 'DirectLFQ'
     color_vars_text = '' if color_vars is None else ', color.vars'
+    batch_var_text = '' if skip_bc else ", 'Batch'=batch1"
 
     text += f'\n\n# {p} PCAs\npcs.{p} <- list()\nfor(method in {p}.methods)'
     text += '{' + f'''
     pcs.{p}[[method]] <- rDIAUtils::pcAnalysis(dat.{p}.l[dat.{p}.l$method == method,],
                                                      'value', rowsName='{p}', columnsName='replicate')'''
     text += '\n}\n\n'
-    text += f'''names({p}.methods) <- c('Unnormalized', '{norm_method} Normalized', 'Batch corrected')
+    text += f'''names({p}.methods) <- c('Unnormalized', '{norm_method} Normalized'{'' if skip_bc else ", 'Batch corrected'"})
 pca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
-    color.cols=c('Acquisition\\nnumber'='acquiredRank', 'Batch'=batch1{color_vars_text}),
+    color.cols=c('Acquisition\\nnumber'='acquiredRank'{batch_var_text}{color_vars_text}),
     dat.metadata=dat.metadata)\n'''
 
     if plot_file_path:
@@ -648,7 +666,7 @@ def main():
             LOGGER.error(message)
         sys.exit(1)
 
-    else:
+    finally:
         if conn is not None:
             conn.close()
 
@@ -663,45 +681,54 @@ def main():
 
         # setup
         outF.write(doc_initialize(args.db, **string_args,
+                                  skip_bc=skip_bc,
                                   filter_metadata=args.filter_metadata,
                                   remove_missing=not args.all_precursors))
 
-        # precursor batch correction
-        outF.write(batch_correction('precursor', string_args['batch1'],
-                                    batch2=args.batch2,
-                                    covariate_vars=args.covariate_vars,
-                                    bc_method=args.bcMethod))
+        if not skip_bc:
+            # precursor batch correction
+            outF.write(batch_correction('precursor', string_args['batch1'],
+                                        batch2=args.batch2,
+                                        covariate_vars=args.covariate_vars,
+                                        bc_method=args.bcMethod))
 
-        # protein batch correction
-        outF.write(batch_correction('protein', string_args['batch1'],
-                                    batch2=args.batch2,
-                                    covariate_vars=args.covariate_vars,
-                                    bc_method=args.bcMethod))
+            # protein batch correction
+            outF.write(batch_correction('protein', string_args['batch1'],
+                                        batch2=args.batch2,
+                                        covariate_vars=args.covariate_vars,
+                                        bc_method=args.bcMethod))
 
         # precursor normalization plot
         outF.write(add_header('Precursor normalization', level=1))
-        outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.png' if args.plot_ext else None))
+        outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.png' if args.plot_ext else None,
+                                       skip_bc=skip_bc))
 
         # CV distribution plot
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
         cv_plot_file_path = None
         if args.plot_ext:
             cv_plot_file_path = f'plots/{"control_" if args.control_values else ""}cv_dist.{args.plot_ext}'
-        outF.write(cv_plot(control_values=args.control_values, plot_file_path=cv_plot_file_path))
+        outF.write(cv_plot(control_values=args.control_values,
+                           plot_file_path=cv_plot_file_path,
+                           skip_bc=skip_bc))
 
         # precursor PCA plot
         outF.write(add_header('Precursor batch correction PCA', level=1))
-        outF.write(pca_plot('precursor', color_vars=args.color_vars,
+        outF.write(pca_plot('precursor',
+                            color_vars=args.color_vars,
+                            skip_bc=skip_bc,
                             plot_file_path=f'plots/precursor_pca.{args.plot_ext}' if args.plot_ext else None))
 
         # protein PCA plot
         outF.write(add_header('Protein batch correction PCA', level=1))
-        outF.write(pca_plot('protein', color_vars=args.color_vars,
+        outF.write(pca_plot('protein',
+                            color_vars=args.color_vars,
+                            skip_bc=skip_bc,
                             plot_file_path=f'plots/protein_pca.{args.plot_ext}' if args.plot_ext else None))
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
-        if sum([int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)]) > 0:
+        if sum(int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)) > 0:
             outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
 
 
