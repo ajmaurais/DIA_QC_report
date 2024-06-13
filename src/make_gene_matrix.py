@@ -280,7 +280,8 @@ def main():
         gene_id_table_cols['gene_uuid'] = 'gene_uuid'
 
     # read gene ID lookup table
-    gene_ids = pd.read_csv(args.gene_table)
+    gene_ids = pd.read_csv(args.gene_table,
+                           sep=('\t' if os.path.splitext(args.gene_table)[1] == '.tsv' else ','))
     if not check_df_columns(gene_ids, gene_id_table_cols):
         sys.exit(1)
     gene_ids = gene_ids[list(gene_id_table_cols.keys())].rename(columns=gene_id_table_cols)
