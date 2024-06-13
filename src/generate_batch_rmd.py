@@ -66,7 +66,20 @@ def ggsave(plot_path, plot_name, dim):
     return f"ggsave('{plot_path}', {plot_name}, height={dim[0]}, width={dim[1]})\n"
 
 
-def test_metadata_variables(db_path, batch1=None, batch2=None,
+def skip_batch_correction(conn, batch1, batch2):
+    # If no batch vars, test if we can use replicates.project
+    if batch1 is None and batch2 is None:
+        LOGGER.info('No batch variables specified. Attempting to use replicates.project as batch variable.')
+        cur = conn.cursor()
+        cur.execute('SELECT DISTINCT project FROM replicates WHERE includeRep == TRUE;')
+        n_projects = len([x[0] for x in cur.fetchall()])
+        if n_projects <= 1:
+            LOGGER.warning('Only 1 project in replicates! Skipping batch correction.')
+            return True
+    return False
+
+
+def test_metadata_variables(conn, batch1=None, batch2=None,
                             covariate_vars=None, color_vars=None,
                             control_key=None, control_values=None):
     '''
@@ -75,8 +88,8 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
 
     Parameters
     ----------
-    db_path: str
-        Precursor database path.
+    conn: sqlite.connection
+        Initialized connection to precursor database.
     batch1: str
         The batch 1 annotationKey in sampleMetadata.
     batch2: str
@@ -96,32 +109,6 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
         True if a valid query can be constructed, False if not.
     '''
 
-    # initialize db connection
-    if os.path.isfile(db_path):
-        conn = sqlite3.connect(db_path)
-    else:
-        LOGGER.error(f'Database file ({db_path}) does not exist!')
-        return False
-
-    # check database version
-    if not check_schema_version(conn):
-        return False
-
-    if not is_normalized(conn):
-        LOGGER.error('Database file it not normalized!')
-        return False
-
-    # If no batch vars, test if we can use replicates.project
-    if batch1 is None and batch2 is None:
-        LOGGER.info('No batch variables specified. Attempting to use replicates.project as batch variable.')
-        cur = conn.cursor()
-        cur.execute('SELECT DISTINCT project FROM replicates WHERE includeRep == TRUE;')
-        n_projects = len([x[0] for x in cur.fetchall()])
-        if n_projects <= 1:
-            LOGGER.error('Only 1 project in replicates! Cannot perform batch correction with only 1 batch!')
-            conn.close()
-            return False
-
     # get all metadata variable names
     cur = conn.cursor()
     cur.execute('SELECT annotationKey FROM sampleMetadata;')
@@ -132,7 +119,6 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
             LOGGER.error(f'Missing {color_cov} variable: "{variable}" in sampleMetadata table!')
             return False
         return True
-
 
     # Test that batch variables exist in metadata tables
     all_good = True
@@ -151,7 +137,6 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
     if control_key is not None:
         if (control_key is not None) != (control_values is not None):
             LOGGER.error('Must specify both control_key and control_values')
-            conn.close()
             return False
 
         if check_meta_key('Control', control_key):
@@ -169,13 +154,11 @@ def test_metadata_variables(db_path, batch1=None, batch2=None,
         else:
             all_good = False
 
-    # close db connection
-    conn.close()
-
     return all_good
 
 
-def doc_initialize(db_path, batch1, batch2=None, remove_missing=True,
+def doc_initialize(db_path, batch1, batch2=None,
+                   skip_bc=False, remove_missing=True,
                    color_vars=None, covariate_vars=None,
                    control_key=None, filter_metadata=False):
     '''
@@ -617,30 +600,61 @@ def main():
         sys.exit(1)
     if not validate_bit_mask(args.metadataTables, 1, 2):
         LOGGER.error('Error parsing --metadataTables')
-        sys.exit(1)
-
-
-    if not args.skipTests:
-        # check control_vars args
-        if args.control_key is None and args.control_values is not None:
-            LOGGER.error('No control key specified!')
-            sys.exit(1)
-        if args.control_key is not None and args.control_values is None:
-            LOGGER.error('No control value(s) specified!')
-            sys.exit(1)
-
-        if not test_metadata_variables(args.db, **string_args,
-                                       control_values=args.control_values):
-            sys.exit(1)
-
-    # set batch1 to default if it is None
-    if string_args['batch1'] is None:
-        string_args['batch1'] = 'project'
 
     # parse table_args
     protein_tables = parse_bitmask_options(args.proteinTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     precursor_tables = parse_bitmask_options(args.precursorTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     metadata_tables = parse_bitmask_options(args.metadataTables, ('wide', 'long'), ('write',))
+
+    try:
+        # Initialize db connection
+        conn = None
+        if os.path.isfile(args.db):
+            conn = sqlite3.connect(args.db)
+        else:
+            raise FileNotFoundError(f'Database file ({args.db}) does not exist!')
+
+        # Determine if batch correcion should be skipped
+        skip_bc = skip_batch_correction(conn, args.batch1, args.batch2)
+
+        if not args.skipTests:
+            # Check database version
+            if not check_schema_version(conn):
+                raise RuntimeError
+
+            if not is_normalized(conn):
+                raise RuntimeError('Database file it not normalized!')
+
+            # Check control_vars args
+            if args.control_key is None and args.control_values is not None:
+                raise RuntimeError('No control key specified!')
+            if args.control_key is not None and args.control_values is None:
+                raise RuntimeError('No control value(s) specified!')
+
+            if not test_metadata_variables(conn, **string_args,
+                                           control_values=args.control_values):
+                raise RuntimeError
+
+            # make sure batch corrected tables aren't written when batch correction is skipped.
+            if skip_bc:
+                for level in [precursor_tables, protein_tables]:
+                    for direction in ('wide', 'long'):
+                        if level[direction]['batch_corrected']:
+                            raise RuntimeError('Can not write batch corrected tables when batch correction is skipped.')
+
+    except (RuntimeError, FileNotFoundError) as e:
+        message = str(e)
+        if message != '':
+            LOGGER.error(message)
+        sys.exit(1)
+
+    else:
+        if conn is not None:
+            conn.close()
+
+    # set batch1 to default if it is None
+    if string_args['batch1'] is None:
+        string_args['batch1'] = 'project'
 
     # generate rmd
     with open(args.ofname, 'w') as outF:

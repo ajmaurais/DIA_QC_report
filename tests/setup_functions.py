@@ -34,6 +34,7 @@ def run_command(command, wd, prefix=None):
         outF.write(f"{result.stderr}\n")
     with open(f'{prefix_path}.rc.txt', 'w') as outF:
         outF.write(f'{str(result.returncode)}\n')
+
     return result
 
 

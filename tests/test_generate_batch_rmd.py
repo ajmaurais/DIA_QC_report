@@ -35,7 +35,7 @@ class TestMakeBatchRmd(unittest.TestCase):
         normalize_command = ['normalize_db', cls.db_path]
         cls.normalize_result = setup_functions.run_command(normalize_command,
                                                            cls.work_dir,
-                                                           prefix='normalize_single_proj')
+                                                           prefix='normalize_db')
 
         cls.conn = None
         if cls.normalize_result.returncode == 0:
@@ -63,7 +63,8 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         if self.RENDER_RMD:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{rmd_name}')
             self.assertEqual(render_result.returncode, 0)
 
             for file in [f'{rmd_name}.html',
@@ -77,39 +78,56 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertTrue(self.conn is not None)
         self.assertTrue(db_utils.is_normalized(self.conn))
 
-        # set is_normalized metadata entry to False
-        self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'False')
+        try:
+            # set is_normalized metadata entry to False
+            self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'False')
 
-        # make sure generate_batch_rmd fails
-        command = ['generate_batch_rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(result.returncode, 1)
-        self.assertTrue('Database file it not normalized!' in result.stderr)
+            # make sure generate_batch_rmd fails
+            command = ['generate_batch_rmd', self.db_path]
+            result = setup_functions.run_command(command, self.work_dir)
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue('Database file it not normalized!' in result.stderr)
 
-        # reset is_normalized metadata entry to True
-        self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'True')
+        finally:
+            # reset is_normalized metadata entry to True
+            self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'True')
 
 
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
-    def test_single_batch_fails(self):
+    def test_single_batch_works(self):
         self.assertTrue(self.conn is not None)
 
-        # set 'Strap' project replicates skipped
-        self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',)))
+        try:
+            # set 'Strap' project replicates skipped
+            self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',)))
 
-        # make sure generate_batch_rmd fails
-        command = ['generate_batch_rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(result.returncode, 1)
-        self.assertTrue('Only 1 project in replicates!' in result.stderr)
+            rmd_name = 'single_batch'
+            command = ['generate_batch_rmd',
+                       '--proteinTables=00', '--precursorTables=00',
+                       '-o', f'{rmd_name}.rmd', self.db_path]
+            result = setup_functions.run_command(command, self.work_dir)
 
-        # make sure --skipTests option works
-        command = ['generate_batch_rmd', '--skipTests', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
+            self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
 
-        # reset is_normalized metadata entry to True
-        self.conn = db_utils.mark_all_reps_includced(self.conn)
+            for option in ['40', '04']:
+                for flag in ['precursorTables', 'proteinTables']:
+                    command = ['generate_batch_rmd', f'--{flag}={option}', self.db_path]
+                    result = setup_functions.run_command(command, self.work_dir,
+                                                         prefix='invalid_table_options')
+                    self.assertEqual(result.returncode, 1)
+                    self.assertTrue('ERROR: Can not write batch corrected tables when batch correction is skipped' in result.stderr)
+
+            if self.RENDER_RMD:
+                render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
+                render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                            prefix=f'render_{rmd_name}')
+                self.assertEqual(render_result.returncode, 0)
+
+        finally:
+            # Set all replicates to be included
+            db_utils.mark_all_reps_includced(self.conn)
 
 
     def test_controlKey_check(self):
