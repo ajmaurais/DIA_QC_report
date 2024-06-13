@@ -62,7 +62,7 @@ def ggsave(plot_path, plot_name, dim):
         Plot dimensions. Tuple of 2 integers. (height, width)
     '''
     assert isinstance(dim, tuple) and len(dim) == 2 and all(isinstance(x, (int, float)) for x in dim)
-    return f"ggsave('{plot_path}', {plot_name}, height={dim[0]}, width={dim[1]})\n"
+    return f"ggsave('{plot_path}', {plot_name}, create.dir=T, height={dim[0]}, width={dim[1]})\n"
 
 
 def skip_batch_correction(conn, batch1, batch2):
@@ -706,7 +706,7 @@ def main():
 
         # precursor normalization plot
         outF.write(add_header('Precursor normalization', level=1))
-        outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.png' if args.plot_ext else None,
+        outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.tiff' if args.plot_ext else None,
                                        skip_bc=skip_bc))
 
         # CV distribution plot
