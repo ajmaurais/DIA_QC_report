@@ -41,7 +41,7 @@ class NormalizationManagerBase(ABC):
             LOGGER.error('All replicates in database have been excluded!')
             return False
 
-        if self.keep_na:
+        if not self.keep_na:
             df = df.set_index(['modifiedSequence', 'precursorCharge'])
             n_reps = len(df['replicateId'].drop_duplicates().index)
             na_counts = df.groupby(['modifiedSequence', 'precursorCharge'])['area'].apply(lambda x: len(x[~pd.isna(x)]))
@@ -49,12 +49,14 @@ class NormalizationManagerBase(ABC):
             n_precursors = len(na_counts.index)
             na_counts = na_counts[na_counts == 0]
 
-            df = df[df.index.isin(na_counts.index)]
-            n_not_missing = len(df.index)
-            n_missing = n_precursors = n_not_missing
+            n_not_missing = len(na_counts.index)
+            n_missing = n_precursors - n_not_missing
             if n_missing > 0:
                 LOGGER.warning(f'Removed {n_missing:,} of {n_precursors:,} precursors with missing values.')
                 LOGGER.warning(f'{n_not_missing:,} precursors without missing values remain.')
+
+                df = df[df.index.isin(na_counts.index)]
+            df = df.reset_index()
 
         self.precursors = df
 

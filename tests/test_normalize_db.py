@@ -1,6 +1,5 @@
 
 import unittest
-from unittest import mock
 import os
 import sqlite3
 import pandas as pd
@@ -126,7 +125,7 @@ class TestMultiProject(unittest.TestCase):
         but finite normalized abundances. This should never happen. If it does there is
         something wrong with the peptideToProtein table.
         '''
-        self.assertTrue(self.conn is not None)
+        self.assertIsNotNone(self.conn)
 
         cur = self.conn.cursor()
         cur.execute('''
@@ -139,7 +138,7 @@ class TestMultiProject(unittest.TestCase):
 
 
     def test_precursor_medians_equal(self):
-        self.assertTrue(self.conn is not None)
+        self.assertIsNotNone(self.conn)
 
         query = ''' SELECT
                 r.replicate,
