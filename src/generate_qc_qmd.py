@@ -353,7 +353,7 @@ def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', have_color_vars=Fa
     p.precursorCharge,
     p.{quant_col}
 FROM PRECURSORS p
-LEFT JOIN replicates r ON p.replicateId = r.replicateId
+LEFT JOIN replicates r ON p.replicateId = r.id
 WHERE p.{quant_col} IS NOT NULL AND r.includeRep == TRUE;'''
 
 df_pc = pd.read_sql(query, conn)
