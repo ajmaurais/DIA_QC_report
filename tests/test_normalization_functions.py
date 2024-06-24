@@ -68,6 +68,15 @@ class TestNormalizationBase(ABC):
         pass
 
 
+    def check_medians_equal(self, df, quant_col):
+        norm_col = normalization.cammel_case('normalized', quant_col)
+        log2_norm_col = normalization.cammel_case('log2', norm_col)
+
+        medians = df.groupby('replicateId')[log2_norm_col].median()
+        for m in medians:
+            self.assertAlmostEqual(medians.iloc[0], m)
+
+
     def test_abc_instantiation_fails(self):
         self.assertIsNotNone(self.conn)
 
@@ -84,16 +93,20 @@ class TestNormalizationBase(ABC):
 
         precursors, proteins = manager.get_long_tables()
 
-        def medians_equal(df, quant_col):
-            norm_col = normalization.cammel_case('normalized', quant_col)
-            log2_norm_col = normalization.cammel_case('log2', norm_col)
+        self.check_medians_equal(precursors, 'area')
+        self.check_medians_equal(proteins, 'abundance')
 
-            medians = df.groupby('replicateId')[log2_norm_col].median()
-            for m in medians:
-                self.assertAlmostEqual(medians.iloc[0], m)
 
-        medians_equal(precursors, 'area')
-        medians_equal(proteins, 'abundance')
+    def test_directlfq_normalization(self):
+        self.assertIsNotNone(self.conn)
+
+        manager = normalization.DirectlfqNormalizer(self.conn)
+        with self.assertLogs(normalization.LOGGER) as cm:
+            manager.normalize()
+
+        precursors, proteins = manager.get_long_tables()
+
+        self.check_medians_equal(precursors, 'area')
 
 
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
@@ -188,8 +201,8 @@ class TestMultiNormalization(unittest.TestCase, TestNormalizationBase):
         manager = normalization.MedianNormalizer(self.conn)
         with self.assertLogs(normalization.LOGGER, level='WARNING') as cm:
             self.assertTrue(manager._read_precursors())
-        
-        # check that log shows correct number of missinv values
+
+        # check that log shows correct number of missing values
         self.assertTrue(f'Removed {n_missing} of {n_precursors} precursors with missing values.' in l for l in cm.output)
         self.assertTrue(f'{n_not_missing} precursors without missing values remain.' in l for l in cm.output)
 
