@@ -2,8 +2,56 @@
 import os
 import subprocess
 import inspect
+from abc import ABC, abstractmethod
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+class AbstractTestsBase(ABC):
+    '''
+    Base class for abstract shared unittest base classes.
+    '''
+    @classmethod
+    @abstractmethod
+    def setUpClass(cls):
+        pass
+
+
+    @classmethod
+    @abstractmethod
+    def tearDownClass(cls):
+        pass
+
+
+    @abstractmethod
+    def assertIsNotNone(self, expr):
+        pass
+
+
+    @abstractmethod
+    def assertTrue(self, expr):
+        pass
+
+
+    @abstractmethod
+    def assertEqual(self, lhs, rhs):
+        pass
+
+
+    @abstractmethod
+    def assertFalse(self, expr):
+        pass
+
+
+    @abstractmethod
+    def assertRaises(self, exception):
+        pass
+
+
+    @abstractmethod
+    def assertLogs(self, logger, level=None):
+        pass
+
 
 def make_work_dir(work_dir, clear_dir=False):
     if not os.path.isdir(work_dir):

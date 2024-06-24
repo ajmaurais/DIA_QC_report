@@ -2,7 +2,6 @@
 import unittest
 import os
 import sqlite3
-from abc import ABC, abstractmethod
 
 import pandas as pd
 from numpy import log2
@@ -11,26 +10,12 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 
-class CommonTests(ABC):
+
+class CommonTests(setup_functions.AbstractTestsBase):
     def __init__(self):
         self.conn = None
         self.precursor_method = None
         self.protein_method = None
-
-
-    @abstractmethod
-    def assertIsNotNone(self, stmt):
-        pass
-
-
-    @abstractmethod
-    def assertTrue(self, stmt):
-        pass
-
-
-    @abstractmethod
-    def assertEqual(self, lhs, rhs):
-        pass
 
 
     @classmethod

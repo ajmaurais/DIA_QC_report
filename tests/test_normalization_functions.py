@@ -1,7 +1,6 @@
 
 import unittest
 from unittest import mock
-from abc import ABC, abstractmethod
 import os
 import sqlite3
 from collections import Counter
@@ -22,7 +21,7 @@ class TestCammelCase(unittest.TestCase):
         self.assertEqual(normalization.cammel_case('log2', norm_value), 'log2NormalizedArea')
 
 
-class TestNormalizationBase(ABC):
+class TestNormalizationBase(setup_functions.AbstractTestsBase):
     def __init__(self):
         self.work_dir = None
         self.db_path = None
@@ -32,45 +31,9 @@ class TestNormalizationBase(ABC):
 
 
     @classmethod
-    @abstractmethod
-    def setUpClass(cls):
-        pass
-
-
-    @classmethod
     def tearDownClass(cls):
         if cls.conn is not None:
             cls.conn.close()
-
-
-    @abstractmethod
-    def assertIsNotNone(self, expr):
-        pass
-
-
-    @abstractmethod
-    def assertTrue(self, expr):
-        pass
-
-
-    @abstractmethod
-    def assertEqual(self, lhs, rhs):
-        pass
-
-
-    @abstractmethod
-    def assertFalse(self, expr):
-        pass
-
-
-    @abstractmethod
-    def assertRaises(self, exception):
-        pass
-
-
-    @abstractmethod
-    def assertLogs(self, logger, level=None):
-        pass
 
 
     def check_medians_equal(self, df, quant_col):

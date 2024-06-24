@@ -1,7 +1,6 @@
 
 import unittest
 from unittest import mock
-from abc import ABC, abstractmethod
 import os
 import re
 
@@ -12,7 +11,7 @@ from DIA_QC_report.submodules.read_metadata import read_metadata
 from DIA_QC_report.submodules.dtype import Dtype
 
 
-class TestFileTypeBase(ABC):
+class TestFileTypeBase(setup_functions.AbstractTestsBase):
     META_TYPES = {'string_var': Dtype.STRING,
                   'bool_var': Dtype.BOOL,
                   'int_var': Dtype.INT,
@@ -30,27 +29,6 @@ class TestFileTypeBase(ABC):
         self.work_dir = None
         self.metadata_file = None
         self.result = None
-
-
-    @classmethod
-    @abstractmethod
-    def setUpClass(cls):
-        pass
-
-
-    @abstractmethod
-    def assertDictEqual(self, lhs, rhs):
-        pass
-
-
-    @abstractmethod
-    def assertTrue(self, stmt):
-        pass
-
-
-    @abstractmethod
-    def assertEqual(self, lhs, rhs):
-        pass
 
 
     def test_is_sucessful(self):
