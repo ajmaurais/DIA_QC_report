@@ -98,8 +98,8 @@ class NormalizationManagerBase(ABC):
         if use_db_ids:
             return self.precursors, self.proteins
 
-        proteins = self.proteins
-        precursors = self.precursors
+        proteins = self.proteins.copy()
+        precursors = self.precursors.copy()
 
         # add replicate column
         cur = self.conn.cursor()
@@ -165,8 +165,10 @@ def median_normalize_df(df, key_cols, value_col):
 
 
 class MedianNormalizer(NormalizationManagerBase):
-
     def normalize(self):
+        '''
+        Populate self.proteins and self.precursors with median normalized values.
+        '''
         if not self._read_precursors():
             return False
 
@@ -186,12 +188,15 @@ class MedianNormalizer(NormalizationManagerBase):
 
 
 class DirectlfqNormalizer(NormalizationManagerBase):
-
     def __init__(self, conn):
         NormalizationManagerBase.__init__(self, conn, keep_na=False)
 
 
     def normalize(self):
+        '''
+        Populate self.proteins with DirectLFQ normalized values and
+        self.precursors with median normalized values.
+        '''
         if not self._read_precursors():
             return False
 

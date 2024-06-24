@@ -54,6 +54,11 @@ class TestNormalizationBase(ABC):
 
 
     @abstractmethod
+    def assertEqual(self, lhs, rhs):
+        pass
+
+
+    @abstractmethod
     def assertFalse(self, expr):
         pass
 
@@ -107,6 +112,30 @@ class TestNormalizationBase(ABC):
         precursors, proteins = manager.get_long_tables()
 
         self.check_medians_equal(precursors, 'area')
+
+
+    def test_get_long_tables(self):
+        self.assertIsNotNone(self.conn)
+
+        manager = normalization.MedianNormalizer(self.conn)
+        with self.assertLogs(normalization.LOGGER) as cm:
+            manager.normalize()
+
+        precursors, proteins = manager.get_long_tables(use_db_ids=False)
+
+        self.assertTrue('replicate' in precursors.columns)
+        self.assertTrue('replicate' in proteins.columns)
+        self.assertTrue('protein' in proteins.columns)
+        self.assertEqual(proteins.shape[1], 8)
+        self.assertEqual(precursors.shape[1], 9)
+
+        precursors, proteins = manager.get_long_tables(use_db_ids=True)
+
+        self.assertFalse('replicate' in precursors.columns)
+        self.assertFalse('replicate' in proteins.columns)
+        self.assertFalse('protein' in proteins.columns)
+        self.assertEqual(proteins.shape[1], 6)
+        self.assertEqual(precursors.shape[1], 8)
 
 
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
