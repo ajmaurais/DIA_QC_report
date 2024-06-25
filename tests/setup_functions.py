@@ -3,6 +3,7 @@ import os
 import subprocess
 import inspect
 from abc import ABC, abstractmethod
+from numpy import isnan
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,8 +55,55 @@ class AbstractTestsBase(ABC):
 
 
     @abstractmethod
-    def assertAlmostEqual(self, lhs, rhs, places=None):
+    def assertAlmostEqual(self, lhs, rhs, places=None, delta=None):
         pass
+
+
+    @abstractmethod
+    def assertDictEqual(self, lhs, rhs):
+        pass
+
+
+    @abstractmethod
+    def assertIsInstance(self, obj, obj_type):
+        pass
+
+
+    def assertDataDictEqual(self, lhs, rhs, places=6, col_deltas=None):
+        '''
+        Check that 2 dictionaries having format
+        '''
+        self.assertIsInstance(lhs, dict)
+        self.assertIsInstance(rhs, dict)
+
+
+        lhs_keys = set(lhs.keys())
+        rhs_keys = set(rhs.keys())
+
+        self.assertEqual(lhs_keys, rhs_keys)
+
+        for rep in lhs_keys:
+            lhs_vars = set(lhs[rep].keys())
+            rhs_vars = set(rhs[rep].keys())
+
+            self.assertEqual(lhs_vars, rhs_vars)
+            for var in lhs_vars:
+                if type(lhs[rep][var]) != type(rhs[rep][var]):
+                    raise AssertionError(f"Data types differ in column '{var}'")
+                if isinstance(lhs[rep][var], float):
+                    if isnan(lhs[rep][var]) and isnan(rhs[rep][var]):
+                        continue
+                    try:
+                        if col_deltas is None:
+                            self.assertAlmostEqual(lhs[rep][var], rhs[rep][var], places=places)
+                        else:
+                            delta = col_deltas.get(var, None)
+                            self.assertAlmostEqual(lhs[rep][var], rhs[rep][var], delta=delta)
+                    except AssertionError as e:
+                        raise AssertionError(f"In column '{var}': {str(e)}") from e
+                else:
+                    if lhs[rep][var] != rhs[rep][var]:
+                        raise AssertionError("Values differ in column '{var}'. {lhs[rep][var]} != {rhs[rep][var]}")
 
 
 def make_work_dir(work_dir, clear_dir=False):

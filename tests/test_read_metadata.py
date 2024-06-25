@@ -22,7 +22,7 @@ def df_to_dict(df, types):
     return ret
 
 
-class TestReadMetadataBase(unittest.TestCase):
+class TestReadMetadataBase(unittest.TestCase, setup_functions.AbstractTestsBase):
 
     META_TYPES = {'string_var': Dtype.STRING,
                   'bool_var': Dtype.BOOL,
@@ -48,65 +48,6 @@ class TestReadMetadataBase(unittest.TestCase):
     @staticmethod
     def remove_null_types(d):
         return {k: v for k, v in d.items() if v is not Dtype.NULL}
-
-
-    def assertDataDictEqual(self, lhs, rhs):
-        lhs_keys = set(lhs.keys())
-        rhs_keys = set(rhs.keys())
-
-        self.assertEqual(lhs_keys, rhs_keys)
-
-        for rep in lhs_keys:
-            lhs_vars = set(lhs[rep].keys())
-            rhs_vars = set(rhs[rep].keys())
-
-            self.assertEqual(lhs_vars, rhs_vars)
-            for var in lhs_vars:
-                self.assertEqual(type(lhs[rep][var]), type(rhs[rep][var]))
-                if isinstance(lhs[rep][var], float):
-                    self.assertAlmostEqual(lhs[rep][var], rhs[rep][var], places=6)
-                else:
-                    self.assertEqual(lhs[rep][var], rhs[rep][var])
-
-
-class TestCustomAssertion(TestReadMetadataBase):
-    @unittest.expectedFailure
-    def test_missing_rep_fails(self):
-        test_data = {k: v for i, (k, v) in enumerate(self.gt_data.items()) if i != 0}
-        self.assertDataDictEqual(self.gt_data, test_data)
-
-
-    @unittest.expectedFailure
-    def test_missing_var_fails(self):
-        test_data = self.remove_null_data(self.gt_data)
-        self.assertDataDictEqual(self.gt_data, test_data)
-
-
-    @unittest.expectedFailure
-    def test_different_var_type_fails(self):
-        test_data = {rep: {k: str(v) if isinstance(v, float) else v for k, v in row.items()}
-                        for rep, row in self.gt_data.items()}
-        self.assertDataDictEqual(self.gt_data, test_data)
-
-
-    @unittest.expectedFailure
-    def test_not_almost_equal_float_fails(self):
-        test_data = {rep: {k: v + 1 if isinstance(v, float) else v for k, v in row.items()}
-                        for rep, row in self.gt_data.items()}
-        self.assertDataDictEqual(self.gt_data, test_data)
-
-
-    def test_almost_equal_float_succedes(self):
-        test_data = {rep: {k: v + 1e-7 if isinstance(v, float) else v for k, v in row.items()}
-                        for rep, row in self.gt_data.items()}
-        self.assertDataDictEqual(self.gt_data, test_data)
-
-
-    @unittest.expectedFailure
-    def test_not_equal_int_fails(self):
-        test_data = {rep: {k: v + 1 if isinstance(v, int) else v for k, v in row.items()}
-                        for rep, row in self.gt_data.items()}
-        self.assertDataDictEqual(self.gt_data, test_data)
 
 
 class TestParseMetadata(TestReadMetadataBase):
