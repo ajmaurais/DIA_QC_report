@@ -53,6 +53,11 @@ class AbstractTestsBase(ABC):
         pass
 
 
+    @abstractmethod
+    def assertAlmostEqual(self, lhs, rhs, places=None):
+        pass
+
+
 def make_work_dir(work_dir, clear_dir=False):
     if not os.path.isdir(work_dir):
         if os.path.isfile(work_dir):
