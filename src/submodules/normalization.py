@@ -22,9 +22,9 @@ class NormalizationManagerBase(ABC):
     conn: sqlite.Connection
         A connection to a precursor database
     precursors: pd.DataFrame
-        Long formated dataframe of precursor quantities.
+        Long formatted dataframe of precursor quantities.
     proteins: pd.DataFrame
-        Long formated dataframe of protein quantities.
+        Long formatted dataframe of protein quantities.
     keep_na: bool
         Should values missing in 1 or more batches be kept? Default is False.
     '''
@@ -87,7 +87,7 @@ class NormalizationManagerBase(ABC):
 
     def get_long_tables(self, use_db_ids=False):
         '''
-        Get long formated precursor and protein tables.
+        Get long formatted precursor and protein tables.
 
         Parameters
         ----------

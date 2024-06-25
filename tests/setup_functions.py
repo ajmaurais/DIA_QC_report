@@ -71,11 +71,22 @@ class AbstractTestsBase(ABC):
 
     def assertDataDictEqual(self, lhs, rhs, places=6, col_deltas=None):
         '''
-        Check that 2 dictionaries having format
+        Check that 2 dictionaries having the format {'rep_name': {<var_name>: <value>, ...}, ...}
+        are almost equal. <value>(s) with type `float` will be compared using the `places` or
+        `col_deltas` arguments using unittest.assertAlmostEqual. All other types will be tested
+        for equality.
+
+        Parameters
+        ----------
+        lhs: dict
+        rhs: dict
+        places: int
+            Round to given number of decimal places.
+        col_deltas: dict
+            Dictionary of delta(s) to pass to unittest.assertAlmostEqual for each <var_name>
         '''
         self.assertIsInstance(lhs, dict)
         self.assertIsInstance(rhs, dict)
-
 
         lhs_keys = set(lhs.keys())
         rhs_keys = set(rhs.keys())
@@ -107,6 +118,15 @@ class AbstractTestsBase(ABC):
 
 
 def make_work_dir(work_dir, clear_dir=False):
+    '''
+    Setup work directory for test.
+
+    Parameters
+    ----------
+    clear_dir: bool
+        If the directory already exists, should the files already in directory be deleted?
+        Will not work recursively or delete directories.
+    '''
     if not os.path.isdir(work_dir):
         if os.path.isfile(work_dir):
             raise RuntimeError('Cannot create work directory!')
@@ -118,6 +138,20 @@ def make_work_dir(work_dir, clear_dir=False):
 
 
 def run_command(command, wd, prefix=None):
+    '''
+    Run command in subprocess and write stdout, stderr, return code and command to
+    textfiles in specified directory.
+
+    Parameters
+    ----------
+    command: list
+        The command to run. Each argument should be a separate list element.
+    wd: str
+        The directory to run the command from.
+    prefix: str
+        A prefix to add to stdout, stderr, rc and command files.
+        If None, the name of the calling function is used as the prefix.
+    '''
     result = subprocess.run(command, cwd=wd,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             shell=False, check=False)
