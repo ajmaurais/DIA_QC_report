@@ -1,7 +1,8 @@
 
 from csv import Sniffer
-import pandas as pd
 from datetime import datetime
+from numpy import float64, int8
+import pandas as pd
 
 from .logger import LOGGER
 from .dia_db_utils import METADATA_TIME_FORMAT
@@ -123,12 +124,13 @@ def _detect_language(df, col_dict):
     # remove cols with no matches
     col_languages = {col: langs for col, langs in col_languages.items() if len(langs) > 0}
 
-    # If multiple language matches, report invariant or first match
-    if all('invariant' in langs for langs in col_languages.values()):
-        return 'invariant'
-    for lang in LANGUAGES:
-        if all(lang in langs for langs in col_languages.values()):
-            return lang
+    if len(col_languages) > 0:
+        # If multiple language matches, report invariant or first match
+        if all('invariant' in langs for langs in col_languages.values()):
+            return 'invariant'
+        for lang in LANGUAGES:
+            if all(lang in langs for langs in col_languages.values()):
+                return lang
 
     return None
 
@@ -159,6 +161,43 @@ def read_replicate_report(fname):
     return df
 
 
-def read_precursor_report(fname):
-    pass
+def read_precursor_report(fname, by_gene=False):
+    # create dict of precursor report column types
+    col_types = dict()
+    for sky_col, my_col in PRECURSOR_QUALITY_REQUIRED_COLUMNS.items():
+        col_types[sky_col] = float64 if my_col in PRECURSOR_QUALITY_NUMERIC_COLUMNS else str
+    col_types['PrecursorCharge'] = int8
+    col_types['UserSetTotal'] = bool
+    for col in ['ProteinGene', 'Precursor', 'Peptide']:
+        col_types[col] = str
 
+    # read report df
+    with open(fname, 'r') as inF:
+        df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
+
+    # Translate report into invariant format
+    report_language = _detect_language(df, PRECURSOR_LANGUAGE_TO_INVARIANT)
+    LOGGER.info(f'Found {report_language} precursor report...')
+    if report_language != 'invariant':
+        col_dict = {}
+        for inv_col, langs in PRECURSOR_LANGUAGE_TO_INVARIANT.items():
+            col_dict[langs[report_language]] = inv_col
+        df = df.rename(columns=col_dict)
+
+        for col in df.columns:
+            if col in col_types:
+                df[col] = df[col].astype(col_types[col])
+
+    # rename columns
+    df = df.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
+
+    precursor_cols = list(PRECURSOR_QUALITY_REQUIRED_COLUMNS.values())
+    if by_gene == 'gene':
+        precursor_cols.append('ProteinGene')
+
+    if not check_df_columns(df, precursor_cols, 'df'):
+        return None
+
+    LOGGER.info('Done reading precursors table...')
+
+    return df

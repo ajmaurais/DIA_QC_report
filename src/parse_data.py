@@ -7,53 +7,24 @@ from datetime import datetime
 import re
 
 import pandas as pd
-from numpy import float64, int8
 
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import SCHEMA, SCHEMA_VERSION
+from .submodules.skyline_reports import PRECURSOR_QUALITY_REQUIRED_COLUMNS
+from .submodules.skyline_reports import PRECURSOR_QUALITY_NUMERIC_COLUMNS
+from .submodules.skyline_reports import REPLICATE_QUALITY_REQUIRED_COLUMNS
+from .submodules.skyline_reports import read_replicate_report, read_precursor_report
 from .submodules.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
-from .submodules.dtype import Dtype
 from .submodules.read_metadata import read_metadata, ValidationError
-
-
-PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
-                                      'ProteinAccession': 'proteinAccession',
-                                      'ProteinName': 'proteinName',
-                                      'ModifiedSequence': 'modifiedSequence',
-                                      'PrecursorCharge': 'precursorCharge',
-                                      'PrecursorMz': 'precursorMz',
-                                      'AverageMassErrorPPM': 'averageMassErrorPPM',
-                                      'TotalAreaFragment': 'totalAreaFragment',
-                                      'TotalAreaMs1': 'totalAreaMs1',
-                                      'NormalizedArea': 'normalizedArea',
-                                      'BestRetentionTime': 'rt',
-                                      'MinStartTime': 'minStartTime',
-                                      'MaxEndTime': 'maxEndTime',
-                                      'MaxFwhm': 'maxFwhm',
-                                      'LibraryDotProduct': 'libraryDotProduct',
-                                      'IsotopeDotProduct': 'isotopeDotProduct'}
-
-PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
-                                     'totalAreaMs1', 'normalizedArea', 'rt', 'minStartTime',
-                                     'maxEndTime', 'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
 
 PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['modifiedSequence'] + PRECURSOR_QUALITY_NUMERIC_COLUMNS
 
-REPLICATE_QUALITY_REQUIRED_COLUMNS = {'Replicate': 'replicate',
-                                      'AcquiredTime': 'acquiredTime',
-                                      'TicArea': 'ticArea'}
-
-PROTEIN_QUANTS_REQUIRED_COLUMNS = {'ProteinAccession': 'accession',
-                                   'Protein': 'name',
-                                   'ProteinDescription': 'description',
-                                   'ReplicateName': 'replicateName',
-                                   'ProteinAbundance': 'abundance'}
-
 DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
+
 
 def _initialize(fname):
     ''' Initialize empty database with SCHEMA '''
@@ -497,17 +468,6 @@ def check_duplicate_precursors(precursors, mode):
     return ret
 
 
-def check_df_columns(df, required_cols, df_name=None):
-    ''' Check that df has all of required_cols. '''
-    all_good = True
-    df_cols = set(df.columns.to_list())
-    for col in required_cols:
-        if col not in df_cols:
-            LOGGER.error(f'Missing required column: "{col}"' + f' in {df_name}' if df_name else '')
-            all_good = False
-    return all_good
-
-
 def main():
     parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
                                                  'Skyline precursor_quality and replicate_quality reports.')
@@ -549,39 +509,18 @@ def main():
             sys.exit(1)
 
     # read replicates
-    replicates = pd.read_csv(args.replicates, sep='\t')
-    replicates = replicates.rename(columns=REPLICATE_QUALITY_REQUIRED_COLUMNS)
-    if not check_df_columns(replicates, REPLICATE_QUALITY_REQUIRED_COLUMNS.values(), 'replicates'):
+    replicates = read_replicate_report(args.replicates)
+    if replicates is None:
         sys.exit(1)
-    LOGGER.info('Done reading replicates table...')
-
-    # create dict of precursor report column types
-    precursor_types = dict()
-    for sky_col, my_col in PRECURSOR_QUALITY_REQUIRED_COLUMNS.items():
-        precursor_types[sky_col] = float64 if my_col in PRECURSOR_QUALITY_NUMERIC_COLUMNS else str
-    precursor_types['PrecursorCharge'] = int8
-    precursor_types['UserSetTotal'] = bool
-    for col in ['ProteinGene', 'Precursor', 'Peptide']:
-        precursor_types[col] = str
 
     # read precursor quality report
-    precursors = pd.read_csv(args.precursors, sep='\t', dtype=precursor_types)
-    LOGGER.info('Done reading precursors table...')
-
-    # rename columns
-    precursors = precursors.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-
-    precursor_cols = list(PRECURSOR_QUALITY_REQUIRED_COLUMNS.values())
-    if args.group_precursors_by == 'gene':
-        precursor_cols.append('ProteinGene')
-
-    if not check_df_columns(precursors, precursor_cols, 'precursors'):
+    precursors = read_precursor_report(args.precursors, by_gene=(args.group_precursors_by=='gene'))
+    if precursors is None:
         sys.exit(1)
 
     if args.group_precursors_by == 'gene':
         def protein_uid(row):
             return row.proteinName if pd.isna(row.ProteinGene) else row.ProteinGene
-
         precursors['proteinName'] = precursors.apply(protein_uid, axis=1)
 
     if (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
@@ -590,7 +529,6 @@ def main():
     precursor_reps = set(precursors['replicateName'].drop_duplicates().tolist())
     if not all(k in precursor_reps for k in replicates['replicate'].tolist()):
         LOGGER.warning('Not all replicates in replicate report are in precursor report.')
-
 
     # read protein quants
     protein_quants = None
