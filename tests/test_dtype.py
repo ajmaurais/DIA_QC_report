@@ -3,21 +3,22 @@ import unittest
 
 from DIA_QC_report.submodules.dtype import Dtype
 
+
 class TestDtype(unittest.TestCase):
     @classmethod
-    def setUpClass(TestDtype):
-        TestDtype.na_strings = ['NA', 'NULL', '#N/A', 'NaN']
+    def setUpClass(cls):
+        cls.na_strings = ['NA', 'NULL', '#N/A', 'NaN', '']
 
-        TestDtype.bool_strings = ['true', 'True', 'TRUE', 'False', 'false', 'FALSE']
-        TestDtype.bool_bools = [True, True, True, False, False, False]
+        cls.bool_strings = ['true', 'True', 'TRUE', 'False', 'false', 'FALSE']
+        cls.bool_bools = [True, True, True, False, False, False]
 
-        TestDtype.int_strings = ['1', '01', '+8', '-8', '10029', '-69', '-01747', '+98133']
-        TestDtype.int_ints = [1, 1, 8, -8, 10029, -69, -1747, 98133]
+        cls.int_strings = ['1', '01', '+8', '-8', '10029', '-69', '-01747', '+98133']
+        cls.int_ints = [1, 1, 8, -8, 10029, -69, -1747, 98133]
 
-        TestDtype.float_strings = ['0.1', '+0.102', '-0.15', '1.', '1.4e5', '3.14E0', '7.5e-2']
-        TestDtype.float_floats = [0.1, 0.102, -0.15, 1.0, 1.4e5, 3.14e0, 7.5e-2]
+        cls.float_strings = ['0.1', '+0.102', '-0.15', '1.', '1.4e5', '3.14E0', '7.5e-2']
+        cls.float_floats = [0.1, 0.102, -0.15, 1.0, 1.4e5, 3.14e0, 7.5e-2]
 
-        TestDtype.string_strings = ['0.5r', 'op90']
+        cls.string_strings = ['0.5r', 'op90']
 
 
     def test_infer_type_NA(self):
@@ -47,17 +48,17 @@ class TestDtype(unittest.TestCase):
 
     def test_invalid_bool_converstions_fail(self):
         for s in self.float_strings + self.string_strings + self.na_strings:
-            self.assertRaises(ValueError, Dtype.BOOL.convert, s)
+            self.assertIsNone(Dtype.BOOL.convert(s))
 
 
     def test_invalid_int_converstions_fail(self):
         for s in self.string_strings:
-            self.assertRaises(ValueError, Dtype.INT.convert, s)
+            self.assertIsNone(Dtype.INT.convert(s))
 
 
     def test_invalid_float_converstions_fail(self):
         for s in self.string_strings:
-            self.assertRaises(ValueError, Dtype.FLOAT.convert, s)
+            self.assertIsNone(Dtype.FLOAT.convert(s))
 
 
     def test_na_conversions(self):
@@ -73,6 +74,13 @@ class TestDtype(unittest.TestCase):
     def test_float_conversions(self):
         for s, d in zip(self.float_strings, self.float_floats):
             self.assertEqual(Dtype.convert(Dtype.FLOAT, s), d)
+
+
+    def test_string_conversions(self):
+        for s in self.bool_strings + self.int_strings + self.float_strings + self.string_strings:
+            ret = Dtype.convert(Dtype.STRING, s)
+            self.assertIsInstance(ret, str)
+            self.assertEqual(ret, s)
 
 
     def test_bool_conversions(self):
@@ -111,7 +119,3 @@ class TestDtype(unittest.TestCase):
         self.assertIs(Dtype.var_to_type(69), Dtype.INT)
         self.assertIs(Dtype.var_to_type(3.14), Dtype.FLOAT)
         self.assertIs(Dtype.var_to_type('Hello there General Kenobi'), Dtype.STRING)
-
-
-if __name__ == '__main__':
-    unittest.main()

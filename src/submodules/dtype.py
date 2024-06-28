@@ -2,7 +2,6 @@
 import re
 from enum import Enum
 
-
 NA_RE = re.compile(r'^(NA|NULL|#N/A|NaN)$')
 BOOL_RE = re.compile(r'^(true|True|TRUE|false|FALSE|False)$')
 INT_RE = re.compile(r'^[+\-]?\d+$')
@@ -32,6 +31,7 @@ class Dtype(Enum):
 
         raise ValueError(f'Cannot compare {type(self)} to {type(rhs)}!')
 
+
     def convert(self, val):
         ''' Convert val to the same type as self. '''
         if self is Dtype.NULL:
@@ -41,11 +41,14 @@ class Dtype(Enum):
                 return True
             if val.lower() in ('false', '0', 'f'):
                 return False
-            raise ValueError(f'Invalid conversion to boolean: "{val}"')
-        if self is Dtype.INT:
-            return int(val)
-        if self is Dtype.FLOAT:
-            return float(val)
+            return None
+        try:
+            if self is Dtype.INT:
+                return int(val)
+            if self is Dtype.FLOAT:
+                return float(val)
+        except ValueError:
+            return None
         return val
 
 
