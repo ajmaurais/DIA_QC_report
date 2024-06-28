@@ -3,8 +3,14 @@ import unittest
 import argparse
 import sys
 import os
+import sqlite3
+import random
+import pandas as pd
+from numpy import isnan
 
 import setup_functions
+
+from DIA_QC_report.submodules.pca_plot import convert_string_cols
 
 
 class TestMakeQCqmd(unittest.TestCase):
@@ -70,6 +76,88 @@ class TestMakeQCqmd(unittest.TestCase):
         self.assertFalse(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
 
+class TestMissingMetadata(unittest.TestCase):
+    TEST_PROJECT = 'Strap'
+    RENDER_QMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_convert_string_cols/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
+                                                           cls.work_dir,
+                                                           cls.TEST_PROJECT,
+                                                           metadata_suffix='_missing_multi_var_metadata.tsv',
+                                                           clear_dir=True)
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def do_query(self, keys):
+        query = '''SELECT replicateId,
+                 m.annotationKey as key,
+                 m.annotationValue as value,
+                 t.annotationType as type
+             FROM sampleMetadata m
+             LEFT JOIN sampleMetadataTypes t ON t.annotationKey == m.annotationKey
+             WHERE m.annotationKey IN ("{}")'''.format('", "'.join(keys))
+
+        return pd.read_sql(query, self.conn)
+
+
+    def convert_strings_test(self, var):
+        self.assertIsNotNone(self.conn)
+        df = self.do_query([var])
+        na_reps = df.loc[(df['key'] == var) & pd.isna(df['value']), 'replicateId'].to_list()
+        metadata = convert_string_cols(df)
+        metadata = metadata.set_index('replicateId')
+
+        for rep in na_reps:
+            self.assertTrue(isnan(metadata.loc[rep, var]))
+
+
+    def test_missing_float(self):
+        self.convert_strings_test('float_var')
+
+
+    def test_missing_string(self):
+        self.convert_strings_test('string_var')
+
+
+    def test_missing_int(self):
+        self.convert_strings_test('int_var')
+
+
+    def test_missing_bool(self):
+        self.convert_strings_test('bool_var')
+
+
+    def test_is_successful(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        qmd_name = 'basic_test'
+        command = ['generate_qc_qmd',
+                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
+                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
+                   '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir)
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_qc_qmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,
@@ -78,6 +166,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     TestMakeQCqmd.RENDER_QMD = args.render
+    TestMissingMetadata.RENDER_QMD = args.render
 
     unittest_args = args.unittest_args
     unittest_args.insert(0, sys.argv[0])

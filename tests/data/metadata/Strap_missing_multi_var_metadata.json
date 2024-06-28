@@ -1,0 +1,142 @@
+{
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR10-4-pool-01": {
+        "string_var": "NCI7 4-pool",
+        "bool_var": true,
+        "int_var": 0,
+        "float_var": 895924690.3,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR10-4-pool-02": {
+        "string_var": "NCI7 4-pool",
+        "bool_var": true,
+        "int_var": 1,
+        "float_var": -478416513.4,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR05-7-pool-01": {
+        "string_var": "NCI7 7-pool",
+        "bool_var": true,
+        "int_var": 2,
+        "float_var": -767805057.2,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR05-7-pool-02": {
+        "string_var": "NCI7 7-pool",
+        "bool_var": true,
+        "int_var": 3,
+        "float_var": 493406569.9,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR06-A549-02": {
+        "string_var": "A549",
+        "bool_var": true,
+        "int_var": 4,
+        "float_var": 81682188.22,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR06-A549-01": {
+        "string_var": "A549",
+        "bool_var": true,
+        "int_var": 5,
+        "float_var": -196635650.2,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR08-CCRF-CEM-01": {
+        "string_var": "CCRF-CEM",
+        "bool_var": true,
+        "int_var": 6,
+        "float_var": -461671915.4,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR08-CCRF-CEM-02": {
+        "string_var": "CCRF-CEM",
+        "bool_var": true,
+        "int_var": 7,
+        "float_var": 303521802.8,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR01-COLO-205-02": {
+        "string_var": "COLO-205",
+        "bool_var": true,
+        "int_var": 8,
+        "float_var": -299764717.7,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR01-COLO-205-01": {
+        "string_var": "COLO-205",
+        "bool_var": true,
+        "int_var": 9,
+        "float_var": 275575323.5,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-02": {
+        "string_var": "",
+        "bool_var": null,
+        "int_var": null,
+        "float_var": null,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-01": {
+        "string_var": "H226",
+        "bool_var": true,
+        "int_var": 11,
+        "float_var": -533910731.5,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR09-H23-02": {
+        "string_var": "H23",
+        "bool_var": true,
+        "int_var": 12,
+        "float_var": 923269206.9,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR09-H23-01": {
+        "string_var": "H23",
+        "bool_var": true,
+        "int_var": 13,
+        "float_var": 883022161.1,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR04-HeLa-01": {
+        "string_var": "HeLa",
+        "bool_var": false,
+        "int_var": 14,
+        "float_var": -562295080.5,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR04-HeLa-02": {
+        "string_var": "HeLa",
+        "bool_var": false,
+        "int_var": 15,
+        "float_var": -454878241.4,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR02-RPMI-8226-02": {
+        "string_var": "RPMI-8228",
+        "bool_var": true,
+        "int_var": 16,
+        "float_var": -741738747.3,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR02-RPMI-8226-01": {
+        "string_var": "RPMI-8228",
+        "bool_var": true,
+        "int_var": 17,
+        "float_var": -146120162.2,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR07-T47D-02": {
+        "string_var": "T47D",
+        "bool_var": true,
+        "int_var": 18,
+        "float_var": 125990621.3,
+        "na_var": null
+    },
+    "10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR07-T47D-01": {
+        "string_var": "T47D",
+        "bool_var": true,
+        "int_var": 19,
+        "float_var": -509612496.0,
+        "na_var": null
+    }
+}
