@@ -43,7 +43,7 @@ query = \'\'\'SELECT
     p.totalAreaFragment,
     p.totalAreaMs1,
     p.rt,
-    p.maxFwhm,
+    p.maxFwhm * 60 as maxFwhm,
     p.averageMassErrorPPM as massError,
     p.libraryDotProduct,
     p.isotopeDotProduct
@@ -488,7 +488,7 @@ def main():
                                   do_query=True, dpi=args.dpi))
 
         outF.write(add_header('Peak width distribution', level=2))
-        outF.write(pivot_box_plot('maxFwhm', title='Peak FWHM',
+        outF.write(pivot_box_plot('maxFwhm', title='Peak FWHM (seconds)',
                                   do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Library dot product distribution', level=2))
