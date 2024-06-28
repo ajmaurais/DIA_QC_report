@@ -25,11 +25,14 @@ def pca_plot(pc, label_col, pc_var, label_type='discrete',
              fname=None, dpi=250, x_axis_pc=0, y_axis_pc=1, add_title=True):
 
     cmap = plt.get_cmap('viridis')
-    colors = {label: color for color, label in zip(cmap(np.linspace(0, 1, len(pc[label_col].drop_duplicates()))),
-                                                   pc[label_col].drop_duplicates())}
-    pc['color'] = pc[label_col].apply(lambda x: colors[x])
 
     if label_type == 'discrete':
+        colors = {label: color for color, label in zip(cmap(np.linspace(0, 1, len(pc[label_col].drop_duplicates()))),
+                                                       pc[label_col].drop_duplicates())}
+
+        # if '<NA>' in colors:
+        #     raise RuntimeError('poop')
+
         fig = plt.figure(figsize = (6, 4), dpi=dpi)
         ax = fig.add_axes([0.1, 0.15, 0.65, 0.75])
 
@@ -40,7 +43,8 @@ def pca_plot(pc, label_col, pc_var, label_type='discrete',
 
     elif label_type == 'continuous':
         fig, ax = plt.subplots(1, 1, figsize=(6, 4), dpi=dpi)
-        points=ax.scatter(pc[x_axis_pc], pc[y_axis_pc], c=pc[label_col], cmap='viridis')
+        cmap.set_bad(color='grey')
+        points=ax.scatter(pc[x_axis_pc], pc[y_axis_pc], c=pc[label_col], cmap=cmap, plotnonfinite=True)
         fig.colorbar(points, label=label_col, use_gridspec=False,
                      ticks=MaxNLocator(integer=True) if pd.api.types.is_integer_dtype(pc[label_col]) else None)
 
@@ -62,11 +66,11 @@ def convert_string_cols(df):
     '''
     Convert string annotation key columns in DataFrame to annotationType
     '''
-
     types = {row.key: Dtype[row.type] for row in df[['key', 'type']].drop_duplicates().itertuples()}
     ret = df.pivot(index="replicateId", columns="key", values="value")
     for column in ret.columns:
-        ret[column] = ret[column].apply(lambda x: types[column].convert(x))
+        ret[column] = ret[column].apply(types[column].convert)
+        if types[column] is Dtype.STRING:
+            ret.loc[ret[column] == '', column] = pd.NA
 
     return ret.rename_axis(columns=None).reset_index()
-
