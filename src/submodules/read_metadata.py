@@ -107,7 +107,7 @@ def read_metadata_json(fname):
         try:
             validate(data, METADATA_SCHEMA)
         except ValidationError as e:
-            raise ValidationError(f'Invalid metadata format:\n{e.message}')
+            raise ValidationError(f'Invalid metadata format:\n{e.message}') from e
 
     # determine metadata types
     types = dict()

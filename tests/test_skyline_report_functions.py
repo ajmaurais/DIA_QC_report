@@ -153,7 +153,6 @@ class TestReadReplicateReport(unittest.TestCase, TestReadReportsBase):
 
 class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
     TEST_PROJECT = 'Strap'
-
     COL_DIFFS = {'precursorMz': 0.0001,
                  'averageMassErrorPPM': 0.1,
                  'totalAreaFragment': 0.5,
@@ -165,6 +164,7 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
                  'maxFwhm': 0.1,
                  'libraryDotProduct': 0.0001,
                  'isotopeDotProduct': 0.0001}
+
 
     def setUp(self):
         # file vars
@@ -198,7 +198,3 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
 
     def test_read_english_csv(self):
         self.do_test('English', 'csv', col_deltas=self.COL_DIFFS)
-
-
-if __name__ == '__main__':
-    unittest.main()

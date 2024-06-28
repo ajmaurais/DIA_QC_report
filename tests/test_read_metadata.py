@@ -40,12 +40,6 @@ class TestReadMetadataBase(unittest.TestCase, setup_functions.AbstractTestsBase)
 
 
     @staticmethod
-    def remove_null_data(d):
-        na_types = {k for k, v in TestParseSkylineAnnotations.ALL_META_TYPES.items() if v is Dtype.NULL}
-        return {rep: {k: v for k, v in row.items() if k not in na_types} for rep, row in d.items()}
-
-
-    @staticmethod
     def remove_null_types(d):
         return {k: v for k, v in d.items() if v is not Dtype.NULL}
 
@@ -56,8 +50,8 @@ class TestParseMetadata(TestReadMetadataBase):
 
         test_df = df_to_dict(data, self.META_TYPES)
 
-        self.assertDataDictEqual(self.gt_data, test_df)
         self.assertDictEqual(self.META_TYPES, types)
+        self.assertDataDictEqual(self.gt_data, test_df)
 
 
     def test_csv(self):
@@ -65,8 +59,8 @@ class TestParseMetadata(TestReadMetadataBase):
 
         test_df = df_to_dict(data, self.META_TYPES)
 
-        self.assertDataDictEqual(self.gt_data, test_df)
         self.assertDictEqual(self.META_TYPES, types)
+        self.assertDataDictEqual(self.gt_data, test_df)
 
 
     def test_tsv(self):
@@ -74,12 +68,22 @@ class TestParseMetadata(TestReadMetadataBase):
 
         test_df = df_to_dict(data, self.META_TYPES)
 
+        self.assertDictEqual(self.META_TYPES, types)
         self.assertDataDictEqual(self.gt_data, test_df)
+
+
+class TestParseMissingMetadata(TestReadMetadataBase):
+    def test_tsv(self):
+        data, types = read_metadata(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.tsv')
+        self.assertDictEqual(self.META_TYPES, types)
+
+
+    def test_json(self):
+        data, types = read_metadata(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.json')
         self.assertDictEqual(self.META_TYPES, types)
 
 
 class TestParseSkylineAnnotations(TestReadMetadataBase):
-
     ALL_META_TYPES = {'BioReplicate': Dtype.NULL,
                       'bool_var': Dtype.BOOL,
                       'Concentration': Dtype.NULL,
@@ -87,6 +91,12 @@ class TestParseSkylineAnnotations(TestReadMetadataBase):
                       'int_var': Dtype.INT,
                       'na_var': Dtype.NULL,
                       'string_var': Dtype.STRING}
+
+
+    @staticmethod
+    def remove_null_data(d):
+        na_types = {k for k, v in TestParseSkylineAnnotations.ALL_META_TYPES.items() if v is Dtype.NULL}
+        return {rep: {k: v for k, v in row.items() if k not in na_types} for rep, row in d.items()}
 
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
@@ -137,7 +147,6 @@ class TestParseSkylineAnnotations(TestReadMetadataBase):
         self.assertDataDictEqual(self.remove_null_data(self.gt_data),
                                  self.remove_null_data(test_df))
         self.assertDictEqual(self.META_TYPES, types)
-
 
 
 if __name__ == '__main__':

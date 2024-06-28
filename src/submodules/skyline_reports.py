@@ -195,7 +195,7 @@ def read_precursor_report(fname, by_gene=False):
     if by_gene == 'gene':
         precursor_cols.append('ProteinGene')
 
-    if not check_df_columns(df, precursor_cols, 'df'):
+    if not check_df_columns(df, precursor_cols, 'precursors'):
         return None
 
     LOGGER.info('Done reading precursors table...')

@@ -107,6 +107,7 @@ import sys
 import os
 import re
 import sqlite3
+import warnings
 from statistics import stdev
 from scipy.stats import zscore
 import numpy as np
@@ -330,11 +331,6 @@ def join_metadata(pc, acquired_ranks, meta_values, metadata=None):
             if any(pc[label_name].apply(pd.isna)):
                 warnings.warn('Missing label values!', Warning)
             pc[label_name] = pc[label_name].apply(str)
-        elif label_type == 'continuous':
-            if any(pc[label_name].apply(pd.isna)):
-                raise RuntimeError('Cannot have missing label values in continuous scale!')
-        else:
-            raise RuntimeError(f'"{label_type}" is an unknown label_type!')
     return pc
 \n```\n\n"""
 
@@ -343,7 +339,7 @@ def join_metadata(pc, acquired_ranks, meta_values, metadata=None):
 
 def pc_analysis(do_query, dpi, quant_col='totalAreaFragment', have_color_vars=False):
 
-    text = '\n{}\n'.format(python_block_header(f'{stack()[0][3]}_{quant_col}'))
+    text = f"\n{python_block_header(f'{stack()[0][3]}_{quant_col}')}\n"
 
     if do_query:
         text += f"""\nquery = '''SELECT
@@ -359,13 +355,11 @@ WHERE p.{quant_col} IS NOT NULL AND r.includeRep == TRUE;'''
 df_pc = pd.read_sql(query, conn)
 """
     else:
-        text += f'''
-df_pc = df[['replicateId', 'modifiedSequence', 'precursorCharge', '{quant_col}']]
-df_pc['acquisition_number'] = df['acquiredRank']\n'''
+        text += f"\ndf_pc = df[['replicateId', 'acquiredRank', 'modifiedSequence', 'precursorCharge', '{quant_col}']]\n"
+        text += "df_pc = df_pc.rename(columns={'acquiredRank': 'acquisition_number'})\n"
 
     text += f'''
 df_pc['log2TotalAreaFragment'] = np.log2(df_pc['{quant_col}'] + 1)
-# df_pc['zScore'] = df_pc.groupby('acquisition_number')['log2TotalAreaFragment'].transform(lambda x: np.abs(zscore(x)))
 
 df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
                             columns="replicateId", values='{quant_col}')
