@@ -15,8 +15,8 @@ from .submodules.logger import LOGGER
 
 def main():
     parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
-    parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='median',
-                        help='Normalization method to use. ')
+    parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
+                        help='Normalization method to use. Default is "DirectLFQ"')
     exclude_args = parser.add_argument_group('Filter replicates',
                                              'Add replicates or projects to exclude from normalization. '
                                              'The replicates.includeRep value will simply be set to FALSE '
