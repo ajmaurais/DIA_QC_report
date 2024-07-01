@@ -92,7 +92,7 @@ class TestMedianSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['normalize_db', cls.db_path]
+        normalize_command = ['normalize_db', '-m=median', cls.db_path]
         cls.run_commands(normalize_command)
 
 
@@ -241,7 +241,7 @@ class TestMedianMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['normalize_db', cls.db_path]
+        normalize_command = ['normalize_db', '-m=median', cls.db_path]
         cls.run_commands(normalize_command)
 
 

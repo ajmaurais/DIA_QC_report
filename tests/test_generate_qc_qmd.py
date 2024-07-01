@@ -82,7 +82,7 @@ class TestMissingMetadata(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_convert_string_cols/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_missing_metadata/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
