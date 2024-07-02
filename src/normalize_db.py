@@ -69,7 +69,8 @@ def main():
         LOGGER.error(f'"{args.method}" is an unknown normalization method!')
         sys.exit(1)
 
-    norm_manager.normalize()
+    if not norm_manager.normalize():
+        sys.exit(1)
 
     # delete existing normalized values
     cur = conn.cursor()

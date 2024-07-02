@@ -96,6 +96,26 @@ class TestMedianSingle(unittest.TestCase, TestSingleProject):
         cls.run_commands(normalize_command)
 
 
+    def test_protein_medians_equal(self):
+        self.assertIsNotNone(self.conn)
+
+        query = ''' SELECT
+                r.replicate,
+                q.proteinId,
+                q.normalizedAbundance
+            FROM proteinQuants q
+            LEFT JOIN replicates r ON r.id == q.replicateId
+            WHERE q.normalizedAbundance IS NOT NULL; '''
+        df = pd.read_sql(query, self.conn)
+
+        self.assertTrue(not any(df['normalizedAbundance'] == 0))
+
+        df['log2NormAbundance'] = log2(df['normalizedAbundance'] + 1)
+        medians = df.groupby('replicate')['log2NormAbundance'].median()
+
+        self.assertTrue(all(medians.iloc[0] == medians))
+
+
 class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
     @classmethod
     def setUpClass(cls):
@@ -260,5 +280,62 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
         cls.run_commands(normalize_command)
 
 
-if __name__ == '__main__':
-    unittest.main()
+class TestAllPrecursorsMissing(unittest.TestCase):
+    TEST_PROJECT = 'GFP'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_missing_precursors/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
+                   f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
+                   f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
+
+        setup_functions.make_work_dir(cls.work_dir, True)
+        cls.parse_result = setup_functions.run_command(command, cls.work_dir,
+                                                       prefix='parse_missing_precursors')
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        cls.conn = None
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_median_normalization(self):
+        self.assertIsNotNone(self.conn)
+
+        norm_levels = ['precursor_normalization_method', 'protein_normalization_method']
+        cur = self.conn.cursor()
+        for level in norm_levels:
+            cur.execute('DELETE FROM metadata WHERE key == ?', (level,))
+        cur.execute("UPDATE metadata SET value == FALSE WHERE key == 'is_normalized'")
+        self.conn.commit()
+
+        self.assertFalse(db_utils.is_normalized(self.conn))
+        with self.assertLogs(db_utils.LOGGER, level='ERROR') as cm:
+            for level in norm_levels:
+                self.assertIsNone(db_utils.get_meta_value(self.conn, level))
+
+        normalize_command = ['normalize_db', '-m=median', self.db_path]
+        normalize_result = setup_functions.run_command(normalize_command,
+                                                       self.work_dir,
+                                                       prefix='normalize_db_median')
+
+        self.assertTrue(db_utils.is_normalized(self.conn))
+        for level in norm_levels:
+            self.assertEqual(db_utils.get_meta_value(self.conn, level), 'median')
+
+
+    def test_DirectLFQ_normalization(self):
+        normalize_command = ['normalize_db', '-m=DirectLFQ', self.db_path]
+
+        normalize_result = setup_functions.run_command(normalize_command,
+                                                       self.work_dir,
+                                                       prefix='normalize_db_DirectLFQ')
+
+        self.assertEqual(normalize_result.returncode, 1)
+        self.assertTrue('ERROR: Can not perform DirectLFQ normalization with 0 precursors!' in normalize_result.stderr)

@@ -162,12 +162,11 @@ class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        setup_functions.make_work_dir(cls.work_dir, True)
-
         command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
+        setup_functions.make_work_dir(cls.work_dir, True)
         cls.parse_result = setup_functions.run_command(command, cls.work_dir,
                                                        prefix='parse_missing_precursors')
 
