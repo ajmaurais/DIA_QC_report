@@ -99,6 +99,12 @@ class TestMissingMetadata(unittest.TestCase):
             cls.conn = sqlite3.connect(cls.db_path)
 
 
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
     def do_query(self, keys):
         query = '''SELECT replicateId,
                  m.annotationKey as key,
@@ -181,6 +187,12 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
         if os.path.isfile(cls.db_path):
             cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
 
 
     def test_is_sucessful(self):

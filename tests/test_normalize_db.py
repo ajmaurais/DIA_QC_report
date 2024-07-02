@@ -305,6 +305,12 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             cls.conn = sqlite3.connect(cls.db_path)
 
 
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
     def test_median_normalization(self):
         self.assertIsNotNone(self.conn)
 
