@@ -29,7 +29,7 @@ def box_plot(data, ylab, xlab='Acquisition number', fname=None, hline=None, limi
 
     # plot outliers as scatter
     for i, c in enumerate(data.columns):
-        y = data[c]
+        y = data[c].dropna()
         q3, q1 = np.percentile(y, [75, 25])
         iqr = q3 - q1
         outliers = y[(y > q3 + (1.5 * iqr)) | (y < q1 - (1.5 * iqr))]
@@ -40,7 +40,7 @@ def box_plot(data, ylab, xlab='Acquisition number', fname=None, hline=None, limi
         plt.axhline(y=hline, color='black', linestyle=':', linewidth=1)
 
     # plot boxes
-    ax.boxplot(data, showfliers=False)
+    ax.boxplot([data[col].dropna() for col in data.columns], showfliers=False)
 
     if limits:
         plt.ylim(limits)
@@ -94,14 +94,14 @@ def multi_boxplot(dats, data_levels,
 
         # plot outliers as scatter
         for i, c in enumerate(dats[level].columns):
-            y = dats[level][c]
+            y = dats[level][c].dropna()
             q3, q1 = np.percentile(y, [75, 25])
             iqr = q3 - q1
             outliers = y[(y > q3 + (1.5 * iqr)) | (y < q1 - (1.5 * iqr))]
             x = np.random.normal(i + 1, 0.04, size=len(outliers))
             axs[index].scatter(x, outliers, c = 'black', s = 0.3, alpha = 0.5)
 
-        axs[index].boxplot(dats[level], showfliers=False) #, vert=False)
+        axs[index].boxplot([dats[level][col].dropna() for col in dats[level].columns], showfliers=False)
 
         if index == len(data_levels) - 1:
             axs[index].set_xlabel(xlab)

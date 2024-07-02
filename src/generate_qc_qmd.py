@@ -202,7 +202,7 @@ def _pivot_box_plot(values, title=None, dpi=DEFAULT_DPI):
 
     text = '''
 data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-    columns="acquiredRank", values='%s', aggfunc=sum)
+    columns="acquiredRank", values='%s')
 box_plot(data, '%s', dpi=%i)\n''' % (values, title, dpi)
 
     return text
@@ -225,7 +225,7 @@ def ms1_ms2_ratio(do_query=True, dpi=DEFAULT_DPI):
 df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
 df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
 data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
-                      columns="acquiredRank", values='ms2_ms1_ratio', aggfunc=sum)
+                      columns="acquiredRank", values='ms2_ms1_ratio')
 box_plot(data, 'Transition / precursor ratio',
          limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3), dpi=%i)
 ```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
@@ -271,24 +271,23 @@ query = '''SELECT
     {quant_col_query}
 FROM precursors p
 LEFT JOIN replicates r ON p.replicateId = r.id
-WHERE r.includeRep == TRUE;'''
-
-df_areas = pd.read_sql(query, conn)\n"""
+WHERE r.includeRep == TRUE;'''\n"""
 
     data_levels = {v: i for i, v in enumerate(quant_cols.values())}
-    text += f'data_levels = {str(data_levels)}\n'
+    text += f'\ndata_levels = {str(data_levels)}\n\n'
 
-    text += '''\ndf_areas = df_areas.melt(id_vars=['acquisitionNumber', 'modifiedSequence', 'precursorCharge'],
-                         value_vars=list(data_levels.keys()),
-                         var_name='method', value_name='area')
+    text += '''df_areas = pd.read_sql(query, conn)
+df_areas = df_areas.melt(id_vars=['acquisitionNumber', 'modifiedSequence', 'precursorCharge'],
+                    value_vars=list(data_levels.keys()),
+                    var_name='method', value_name='area')
+df_areas = df_areas.dropna()
+df_areas = df_areas.astype({'area': 'float64'})
+df_areas['log2Area'] = np.log2(df_areas['area'] + 1)\n\n'''
 
-df_areas['log2Area'] = df_areas['area'].apply(np.log2)
-
-dats = dict()
+    text += '''\ndats = dict()
 for level in data_levels:
     dats[level] = df_areas[df_areas['method'] == level].pivot_table(index=['modifiedSequence', 'precursorCharge'],
                                                                     columns='acquisitionNumber', values='log2Area')
-    dats[level] = dats[level].dropna()
 
 multi_boxplot(dats, data_levels, dpi=250)\n\n```\n\n'''
 
@@ -363,18 +362,24 @@ df_pc['log2TotalAreaFragment'] = np.log2(df_pc['{quant_col}'] + 1)
 
 df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
                             columns="replicateId", values='{quant_col}')
+n_precursors = len(df_wide.index)
 df_wide = df_wide.dropna()
+n_overlapping = len(df_wide.index)
 
-# do pc analysis
-pc, pc_var = pc_matrix(df_wide)
+if n_overlapping == 0:
+    print('Can not perform PC analysis! 0 precursors found in all replicates.')
 
-acquired_ranks = df_pc[['replicateId', 'acquisition_number']].drop_duplicates().set_index('replicateId')
+else:
+    # do pc analysis
+    pc, pc_var = pc_matrix(df_wide)
 
-pc = join_metadata(pc, acquired_ranks, meta_values, {'metadata=metadata' if have_color_vars else ''})\n'''
+    acquired_ranks = df_pc[['replicateId', 'acquisition_number']].drop_duplicates().set_index('replicateId')
+
+    pc = join_metadata(pc, acquired_ranks, meta_values, {'metadata=metadata' if have_color_vars else ''})\n'''
 
     text += f'''
-for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
-    pca_plot(pc, label_name, pc_var, label_type=label_type, dpi={dpi})
+    for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
+        pca_plot(pc, label_name, pc_var, label_type=label_type, dpi={dpi})
 ```\n\n'''
 
     return text
