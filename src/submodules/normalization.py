@@ -59,9 +59,9 @@ class NormalizationManagerBase(ABC):
             return False
 
         if not self.keep_na:
-            df = df.set_index(['modifiedSequence', 'precursorCharge'])
+            df = df.set_index(['proteinId', 'modifiedSequence', 'precursorCharge'])
             n_reps = len(df['replicateId'].drop_duplicates().index)
-            na_counts = df.groupby(['modifiedSequence', 'precursorCharge'])['area'].apply(lambda x: len(x[~pd.isna(x)]))
+            na_counts = df.groupby(level=[0, 1, 2])['area'].apply(lambda x: len(x[~pd.isna(x)]))
             na_counts = n_reps - na_counts
             n_precursors = len(na_counts.index)
             na_counts = na_counts[na_counts == 0]
@@ -186,6 +186,8 @@ class MedianNormalizer(NormalizationManagerBase):
                                            'area']].drop_duplicates()
         self.precursors = median_normalize_df(self.precursors, ['replicateId'], 'area')
 
+        return True
+
 
 class DirectlfqNormalizer(NormalizationManagerBase):
     def __init__(self, conn):
@@ -198,6 +200,10 @@ class DirectlfqNormalizer(NormalizationManagerBase):
         self.precursors with median normalized values.
         '''
         if not self._read_precursors():
+            return False
+
+        if len(self.precursors.index) == 0:
+            LOGGER.error('Can not perform DirectLFQ normalization with 0 precursors!')
             return False
 
         input_df = self.precursors.rename(columns={'proteinId': 'protein'})
@@ -233,3 +239,5 @@ class DirectlfqNormalizer(NormalizationManagerBase):
                                            'precursorCharge',
                                            'area']].drop_duplicates()
         self.precursors = median_normalize_df(self.precursors, ['replicateId'], 'area')
+
+        return True
