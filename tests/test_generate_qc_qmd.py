@@ -158,6 +158,68 @@ class TestMissingMetadata(unittest.TestCase):
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
 
+class TestAllPrecursorsMissing(unittest.TestCase):
+    TEST_PROJECT = 'GFP'
+    RENDER_QMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_missing_precursors/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
+                   f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
+                   f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
+
+        setup_functions.make_work_dir(cls.work_dir, True)
+        cls.parse_result = setup_functions.run_command(command, cls.work_dir,
+                                                       prefix='parse_missing_precursors')
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_is_sucessful(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        # Generate unnormalized qmd
+        unorm_qmd_name = 'unnormalized_test'
+        generate_qmd_command = ['generate_qc_qmd', '-o', f'{unorm_qmd_name}.qmd', self.db_path]
+        unorm_result = setup_functions.run_command(generate_qmd_command, self.work_dir,
+                                                   prefix=unorm_qmd_name)
+
+        self.assertEqual(unorm_result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{unorm_qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir)
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.html'))
+
+        # Normalize database
+        normalize_command = ['normalize_db', '-m=median', self.db_path]
+        norm_db_result = setup_functions.run_command(normalize_command, self.work_dir,
+                                                  prefix='normalize_db')
+        self.assertEqual(norm_db_result.returncode, 0)
+
+        # Generate normalized qmd
+        norm_db_result = setup_functions.run_command(generate_qmd_command, self.work_dir,
+                                                     prefix=unorm_qmd_name)
+        self.assertEqual(norm_db_result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{unorm_qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir)
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.html'))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_qc_qmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,
@@ -167,6 +229,7 @@ if __name__ == '__main__':
 
     TestMakeQCqmd.RENDER_QMD = args.render
     TestMissingMetadata.RENDER_QMD = args.render
+    TestAllPrecursorsMissing.RENDER_QMD = args.render
 
     unittest_args = args.unittest_args
     unittest_args.insert(0, sys.argv[0])
