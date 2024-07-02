@@ -205,6 +205,77 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
 
 
+class TestMissingMetadata(unittest.TestCase):
+    TEST_PROJECT = 'Strap'
+    RENDER_RMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_batch_rmd_missing_metadata/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        # remove tables subdirectory in work_dir if necissary
+        if os.path.isdir(f'{cls.work_dir}/tables'):
+            for file in os.listdir(f'{cls.work_dir}/tables'):
+                os.remove(f'{cls.work_dir}/tables/{file}')
+            os.rmdir(f'{cls.work_dir}/tables')
+
+        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
+                                                           cls.work_dir,
+                                                           cls.TEST_PROJECT,
+                                                           metadata_suffix='_missing_multi_var_metadata.tsv',
+                                                           clear_dir=True)
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        normalize_command = ['normalize_db', cls.db_path]
+        cls.normalize_result = setup_functions.run_command(normalize_command,
+                                                           cls.work_dir,
+                                                           prefix='normalize_db')
+
+        if cls.normalize_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        cls.conn = None
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+    def test_is_successful(self):
+        self.assertTrue(self.conn is not None)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        rmd_name = 'basic_test'
+        command = ['generate_batch_rmd',
+                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
+                   '-o', f'{rmd_name}.rmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
+        self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
+
+        if self.RENDER_RMD:
+            render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{rmd_name}')
+            self.assertEqual(render_result.returncode, 0)
+
+            for file in [f'{rmd_name}.html',
+                         'proteins_batch_corrected_wide.tsv',
+                         'precursors_batch_corrected_wide.tsv',
+                         'metadata_wide.tsv']:
+                self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_batch_rmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,
