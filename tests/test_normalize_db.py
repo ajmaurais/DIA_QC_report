@@ -130,6 +130,15 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
         cls.run_commands(normalize_command)
 
 
+    def test_keep_missing_fails(self):
+        command = ['normalize_db', '-m=DirectLFQ', '--keepMissing', self.db_path]
+
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='test_keepMissing')
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('--keepMissing option not compatable with DirectLFQ' in result.stderr)
+
+
 class TestMultiProject(CommonTests):
     @classmethod
     def run_commands(cls, normalize_command):
@@ -278,6 +287,15 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
 
         normalize_command = ['normalize_db', '-m=DirectLFQ', cls.db_path]
         cls.run_commands(normalize_command)
+
+
+    def test_keep_missing_fails(self):
+        command = ['normalize_db', '-m=DirectLFQ', '--keepMissing', self.db_path]
+
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='test_keepMissing')
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('--keepMissing option not compatable with DirectLFQ' in result.stderr)
 
 
 class TestAllPrecursorsMissing(unittest.TestCase):

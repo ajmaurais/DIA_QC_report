@@ -15,8 +15,13 @@ from .submodules.logger import LOGGER
 
 def main():
     parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
-    parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
-                        help='Normalization method to use. Default is "DirectLFQ"')
+    norm_settings = parser.add_argument_group('Normalization settings')
+    norm_settings.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
+                               help='Normalization method to use. Default is "DirectLFQ"')
+    norm_settings.add_argument('--keepMissing', default=False, action='store_true', dest='keep_missing',
+                               help="Don't exclude precursors which are missing in 1 or more "
+                                    "replicates from normalization. This option is only compabable "
+                                    "with median normalization.")
     exclude_args = parser.add_argument_group('Filter replicates',
                                              'Add replicates or projects to exclude from normalization. '
                                              'The replicates.includeRep value will simply be set to FALSE '
@@ -58,10 +63,13 @@ def main():
 
     # init normalization manager
     if args.method == 'median':
-        norm_manager = MedianNormalizer(conn, keep_na=False)
+        norm_manager = MedianNormalizer(conn, keep_na=args.keep_missing)
         precursor_normalization_method = 'median'
         protein_normalization_method = 'median'
     elif args.method == 'DirectLFQ':
+        if args.keep_missing:
+            LOGGER.error('--keepMissing option not compatable with DirectLFQ')
+            sys.exit(1)
         norm_manager = DirectlfqNormalizer(conn)
         precursor_normalization_method = 'median'
         protein_normalization_method = 'DirectLFQ'
