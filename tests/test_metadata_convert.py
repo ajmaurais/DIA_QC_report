@@ -70,7 +70,7 @@ class TestTsvToSkylineCsv(unittest.TestCase, TestFileTypeBase):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
 
-        commands = ['metadata_to_sky_annotations', cls.metadata_file]
+        commands = ['metadata_convert', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -81,7 +81,7 @@ class TestCsvToSkylineCsv(unittest.TestCase, TestFileTypeBase):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.csv'
 
-        commands = ['metadata_to_sky_annotations', cls.metadata_file]
+        commands = ['metadata_convert', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -92,7 +92,7 @@ class TestJsonToSkylineCsv(unittest.TestCase, TestFileTypeBase):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.json'
 
-        commands = ['metadata_to_sky_annotations', cls.metadata_file]
+        commands = ['metadata_convert', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -114,5 +114,5 @@ class TestProblamaticHeaders(unittest.TestCase, TestFileTypeBase):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
 
-        commands = ['metadata_to_sky_annotations', cls.metadata_file]
+        commands = ['metadata_convert', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
