@@ -136,7 +136,7 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='test_keepMissing')
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('--keepMissing option not compatable with DirectLFQ' in result.stderr)
+        self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
 
 
 class TestMultiProject(CommonTests):
@@ -295,7 +295,7 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='test_keepMissing')
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('--keepMissing option not compatable with DirectLFQ' in result.stderr)
+        self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
 
 
 class TestAllPrecursorsMissing(unittest.TestCase):

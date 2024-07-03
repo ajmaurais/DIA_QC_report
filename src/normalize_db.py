@@ -68,7 +68,7 @@ def main():
         protein_normalization_method = 'median'
     elif args.method == 'DirectLFQ':
         if args.keep_missing:
-            LOGGER.error('--keepMissing option not compatable with DirectLFQ')
+            LOGGER.error('--keepMissing option not compatible with DirectLFQ')
             sys.exit(1)
         norm_manager = DirectlfqNormalizer(conn)
         precursor_normalization_method = 'median'
