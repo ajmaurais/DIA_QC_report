@@ -6,7 +6,7 @@ from jsonschema import validate, ValidationError
 
 import setup_functions
 
-from DIA_QC_report.submodules.read_metadata import METADATA_SCHEMA, read_metadata
+from DIA_QC_report.submodules.read_metadata import JSON_SCHEMA, Metadata
 from DIA_QC_report.submodules.dtype import Dtype
 
 
@@ -36,7 +36,11 @@ class TestReadMetadataBase(unittest.TestCase, setup_functions.AbstractTestsBase)
 
         with open(f'{cls.metadata_dir}/HeLa_metadata.json') as inF:
             cls.gt_data = json.load(inF)
-            validate(cls.gt_data, METADATA_SCHEMA)
+            validate(cls.gt_data, JSON_SCHEMA)
+
+
+    def setUp(self):
+        self.meta_reader = Metadata()
 
 
     @staticmethod
@@ -46,41 +50,44 @@ class TestReadMetadataBase(unittest.TestCase, setup_functions.AbstractTestsBase)
 
 class TestParseMetadata(TestReadMetadataBase):
     def test_json(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.json')
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_metadata.json'))
+        self.assertEqual('json', self.meta_reader.input_format)
 
-        test_df = df_to_dict(data, self.META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.META_TYPES)
 
-        self.assertDictEqual(self.META_TYPES, types)
+        self.assertDictEqual(self.META_TYPES, self.meta_reader.types)
         self.assertDataDictEqual(self.gt_data, test_df)
 
 
     def test_csv(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.csv')
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_metadata.csv'))
+        self.assertEqual('csv', self.meta_reader.input_format)
 
-        test_df = df_to_dict(data, self.META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.META_TYPES)
 
-        self.assertDictEqual(self.META_TYPES, types)
+        self.assertDictEqual(self.META_TYPES, self.meta_reader.types)
         self.assertDataDictEqual(self.gt_data, test_df)
 
 
     def test_tsv(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_metadata.tsv')
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_metadata.tsv'))
+        self.assertEqual('tsv', self.meta_reader.input_format)
 
-        test_df = df_to_dict(data, self.META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.META_TYPES)
 
-        self.assertDictEqual(self.META_TYPES, types)
+        self.assertDictEqual(self.META_TYPES, self.meta_reader.types)
         self.assertDataDictEqual(self.gt_data, test_df)
 
 
 class TestParseMissingMetadata(TestReadMetadataBase):
     def test_tsv(self):
-        data, types = read_metadata(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.tsv')
-        self.assertDictEqual(self.META_TYPES, types)
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.tsv'))
+        self.assertDictEqual(self.META_TYPES, self.meta_reader.types)
 
 
     def test_json(self):
-        data, types = read_metadata(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.json')
-        self.assertDictEqual(self.META_TYPES, types)
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.json'))
+        self.assertDictEqual(self.META_TYPES, self.meta_reader.types)
 
 
 class TestParseSkylineAnnotations(TestReadMetadataBase):
@@ -101,52 +108,54 @@ class TestParseSkylineAnnotations(TestReadMetadataBase):
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_skyline_csv(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv')
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_annotations.csv'))
+        self.assertEqual('skyline', self.meta_reader.input_format)
 
-        test_df = df_to_dict(data, self.META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.META_TYPES)
 
         gt_data = self.remove_null_data(self.gt_data)
         gt_types = self.remove_null_types(self.META_TYPES)
 
         self.assertDataDictEqual(gt_data, test_df)
-        self.assertDictEqual(gt_types, types)
+        self.assertDictEqual(gt_types, self.meta_reader.types)
 
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_full_skyline_csv(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv')
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_all_annotations.csv'))
+        self.assertEqual('skyline', self.meta_reader.input_format)
 
-        test_df = df_to_dict(data, self.ALL_META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.ALL_META_TYPES)
 
         gt_data = self.remove_null_data(self.gt_data)
         gt_types = self.remove_null_types(self.ALL_META_TYPES)
 
         self.assertDataDictEqual(gt_data, test_df)
-        self.assertDictEqual(gt_types, types)
+        self.assertDictEqual(gt_types, self.meta_reader.types)
 
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_full_skyline_csv_include_null(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_all_annotations.csv',
-                                             exclude_null_from_skyline=False)
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_all_annotations.csv',
+                                              exclude_null_from_skyline=False))
 
-        test_df = df_to_dict(data, self.ALL_META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.ALL_META_TYPES)
 
         self.assertDataDictEqual(self.remove_null_data(self.gt_data),
                                  self.remove_null_data(test_df))
-        self.assertDictEqual(self.ALL_META_TYPES, types)
+        self.assertDictEqual(self.ALL_META_TYPES, self.meta_reader.types)
 
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_skyline_csv_includ_null(self):
-        data, types = read_metadata(f'{self.metadata_dir}/HeLa_annotations.csv',
-                                             exclude_null_from_skyline=False)
+        self.assertTrue(self.meta_reader.read(f'{self.metadata_dir}/HeLa_annotations.csv',
+                                              exclude_null_from_skyline=False))
 
-        test_df = df_to_dict(data, self.META_TYPES)
+        test_df = df_to_dict(self.meta_reader.df, self.META_TYPES)
 
         self.assertDataDictEqual(self.remove_null_data(self.gt_data),
                                  self.remove_null_data(test_df))
-        self.assertDictEqual(self.META_TYPES, types)
+        self.assertDictEqual(self.META_TYPES, self.meta_reader.types)
 
 
 if __name__ == '__main__':

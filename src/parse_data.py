@@ -19,7 +19,7 @@ from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ran
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
-from .submodules.read_metadata import read_metadata, ValidationError
+from .submodules.read_metadata import Metadata
 
 PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['modifiedSequence'] + PRECURSOR_QUALITY_NUMERIC_COLUMNS
 
@@ -502,11 +502,11 @@ def main():
     metadata = None
     metadata_types = None
     if args.metadata is not None:
-        try:
-            metadata, metadata_types = read_metadata(args.metadata, args.metadataFormat)
-        except (ValueError, ValidationError) as e:
-            LOGGER.error(e)
+        metadata_reader = Metadata()
+        if not metadata_reader.read(args.metadata, args.metadataFormat):
             sys.exit(1)
+        metadata = metadata_reader.df
+        metadata_types = metadata_reader.types
 
     # read replicates
     replicates = read_replicate_report(args.replicates)

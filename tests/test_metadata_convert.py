@@ -7,7 +7,7 @@ import re
 import setup_functions
 from setup_functions import TEST_DIR
 
-from DIA_QC_report.submodules.read_metadata import read_metadata
+from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report.submodules.dtype import Dtype
 
 
@@ -40,8 +40,12 @@ class TestFileTypeBase(setup_functions.AbstractTestsBase):
         annotation_csv = f'{self.work_dir}/sky_annotations.csv'
         self.assertTrue(os.path.isfile(annotation_csv))
 
-        _, types_in = read_metadata(self.metadata_file, exclude_null_from_skyline=True)
-        _, types_out = read_metadata(annotation_csv, exclude_null_from_skyline=False)
+        reader = Metadata()
+        self.assertTrue(reader.read(self.metadata_file, exclude_null_from_skyline=True))
+        types_in = reader.types
+
+        self.assertTrue(reader.read(annotation_csv, exclude_null_from_skyline=False))
+        types_out = reader.types
 
         # check that data types are correct
         self.assertDictEqual(self.META_TYPES, types_in)

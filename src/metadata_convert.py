@@ -1,9 +1,10 @@
 
+import sys
 import argparse
 from csv import DictReader
 
 from .submodules.dtype import Dtype
-from .submodules.read_metadata import read_metadata
+from .submodules.read_metadata import Metadata
 
 def write_csv_row(elems, out):
     out.write('"{}"\n'.format('","'.join(elems)))
@@ -17,25 +18,32 @@ def get_sky_type(dtype):
     return 'text'
 
 
+IN_FORMATS = ('json', 'csv', 'tsv')
+OUT_FORMATS = ('json', 'skyline', 'csv', 'tsv')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Convert metadata annotation tsv to skyline '
                                                  'annotation csv and batch file to add annotation '
                                                  'definition to a skyline document.')
-    parser.add_argument('-f', '--metadataFormat', default=None,
-                        choices=('json', 'csv', 'tsv'), dest='metadata_format',
+    parser.add_argument('-i', '--in', default=None,
+                        choices=IN_FORMATS, dest='input_format',
                         help='Specify metadata file format. '
                              'By default the format is inferred from the file extension.')
     parser.add_argument('metadata')
 
     args = parser.parse_args()
 
-    data, types = read_metadata(args.metadata, args.metadata_format)
-    data = data.pivot(index='Replicate',
-                      columns='annotationKey',
-                      values='annotationValue').reset_index()
+    metadata_reader = Metadata()
+    if not metadata_reader.read(args.metadata, args.input_format):
+        sys.exit(1)
+
+    data = metadata_reader.df.pivot(index='Replicate',
+                                    columns='annotationKey',
+                                    values='annotationValue').reset_index()
 
     # convert NULL columns to empty string
-    for col, col_type in types.items():
+    for col, col_type in metadata_reader.types.items():
         if col_type is Dtype.NULL:
             data[col] = ''
 
@@ -52,7 +60,7 @@ def main():
 
     # write commands to add annotationd definitions to skyline file
     with open('sky_annotation_definitions.bat', 'w') as outF:
-        for name, dtype in types.items():
+        for name, dtype in metadata_reader.types.items():
             outF.write(f'--annotation-name="{name}" --annotation-targets=replicate')
             outF.write(f' --annotation-type={get_sky_type(dtype)}\n')
 

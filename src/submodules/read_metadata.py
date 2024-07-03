@@ -12,7 +12,7 @@ from .logger import LOGGER
 
 
 # sample metadata json schema
-METADATA_SCHEMA = {
+JSON_SCHEMA = {
     'type': 'object',
     'additionalProperties': {
         'type': 'object',
@@ -28,160 +28,180 @@ METADATA_SCHEMA = {
 }
 
 
-def _metadata_data_to_df(data):
-    df = pd.DataFrame(data)
-    df['Replicate'] = df['Replicate'].apply(lambda x: splitext(x)[0])
-
-    # pivot longer
-    df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
-                 value_vars=[x for x in list(df.columns) if x != 'Replicate'])
-    df['annotationValue'] = df['annotationValue'].astype(str)
-    return df
+class Metadata():
+    def __init__(self):
+        self.df = None
+        self.types = None
+        self.input_format = None
+        self.input_file = None
 
 
-def _infer_types(df):
-    ''' Determine annotationValue types '''
-    types = dict()
-    for row in df.itertuples():
-        if row.annotationKey in types:
-            types[row.annotationKey] = max(types[row.annotationKey],
-                                           Dtype.infer_type(row.annotationValue))
-        else:
-            types[row.annotationKey] = Dtype.infer_type(row.annotationValue)
-    return types
+    @staticmethod
+    def _metadata_data_to_df(data):
+        df = pd.DataFrame(data)
+        df['Replicate'] = df['Replicate'].apply(lambda x: splitext(x)[0])
+
+        # pivot longer
+        df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
+                     value_vars=[x for x in list(df.columns) if x != 'Replicate'])
+        df['annotationValue'] = df['annotationValue'].astype(str)
+        return df
 
 
-def _read_metadata_skyline_csv(rows, exclude_null=True):
-    headers = ['Replicate'] + [re.sub(r'^annotation_', '', h) for h in rows[0][1:]]
-    rows = rows[1:]
-    annotation_objects = set()
-
-    # iterate through rows and remove all annotation objects that are not Replicate
-    new_rows = list()
-    for row in rows:
-        annotation_match = re.search(f'^([A-Z][A-Za-z]+):/', row[0])
-        if annotation_match is None:
-            LOGGER.warning(f'Found unknown annotation object: {row[0]}')
-            continue
-        annotation_object = annotation_match.group(1)
-        annotation_objects.add(annotation_object)
-
-        if annotation_object == 'Replicate':
-            row[0] = re.sub('^Replicate:/', '', row[0])
-            new_rows.append(row)
-
-    if 'Replicate' not in annotation_objects:
-        LOGGER.warning('No Replicate annotations in csv!')
-        return None, None
-
-    for obj in annotation_objects:
-        if obj != 'Replicate':
-            LOGGER.warning(f'Found annotations for: {obj} in csv!')
-
-    data = [dict(zip(headers, row)) for row in new_rows]
-    df = _metadata_data_to_df(data)
-    types = _infer_types(df)
-
-    # set values of Dtype.NULL to NA
-    df['annotationValue'] = df.apply(lambda x: pd.NA if types[x.annotationKey] is Dtype.NULL
-                                                     else x.annotationValue, axis=1)
-
-    if exclude_null:
-        df = df[~pd.isna(df['annotationValue'])].reset_index()
-        types = {k: v for k, v in types.items() if v is not Dtype.NULL}
-
-    # This is an annoying edge case with metadata annotations exported from Skyline
-    # Boolean annotations are either True or blank instead of False
-    # Therefore we will set all blank boolean annotations to False
-    for key, var_type in types.items():
-        if var_type is Dtype.BOOL:
-            sele = df['annotationKey'] == key
-            df.loc[sele, 'annotationValue'] = df[sele]['annotationValue'].apply(lambda x: 'False' if x == '' else x)
-
-    return df, types
-
-
-def read_metadata_json(fname):
-    with open(fname, 'r') as inF:
-        data = json.load(inF)
-        try:
-            validate(data, METADATA_SCHEMA)
-        except ValidationError as e:
-            raise ValidationError(f'Invalid metadata format:\n{e.message}') from e
-
-    # determine metadata types
-    types = dict()
-    for row in data.values():
-        for k, v in row.items():
-            if k in types:
-                types[k] = max(Dtype.var_to_type(v), types[k])
+    @staticmethod
+    def _infer_types(df):
+        ''' Determine annotationValue types '''
+        types = dict()
+        for row in df.itertuples():
+            if row.annotationKey in types:
+                types[row.annotationKey] = max(types[row.annotationKey],
+                                               Dtype.infer_type(row.annotationValue))
             else:
-                types[k] = Dtype.var_to_type(v)
-
-    # reshape data to so it can be converted into a DataFrame
-    data = [{'Replicate':k} | v for k, v in data.items()]
-    df = _metadata_data_to_df(data)
-
-    return df, types
+                types[row.annotationKey] = Dtype.infer_type(row.annotationValue)
+        return types
 
 
-def read_metadata(fname, metadata_format=None, exclude_null_from_skyline=True):
-    '''
-    Read sample metadata file and format dataframe to be added to sampleMetadata table.
+    def _read_metadata_skyline_csv(self, rows, exclude_null=True):
+        self.input_format = 'skyline'
 
-    Parameters
-    ----------
-    fname: str
-        The path to the metadata file.
-    metadata_format: str
-        One of ('tsv', 'csv', 'json')
-    exclude_null_from_skyline: bool
-        Exclude NULL annotations from skyline annotation csv?
-        Default is True.
+        headers = ['Replicate'] + [re.sub(r'^annotation_', '', h) for h in rows[0][1:]]
+        rows = rows[1:]
+        annotation_objects = set()
 
-    Returns
-    -------
-    df: pd.DataFrame
-        The sample metadata dataframe.
-    types: dict
-        A dictionary of metadata keys and Dtypes
-    '''
+        # iterate through rows and remove all annotation objects that are not Replicate
+        new_rows = list()
+        for row in rows:
+            annotation_match = re.search(f'^([A-Z][A-Za-z]+):/', row[0])
+            if annotation_match is None:
+                LOGGER.warning(f'Found unknown annotation object: {row[0]}')
+                continue
+            annotation_object = annotation_match.group(1)
+            annotation_objects.add(annotation_object)
 
-    if metadata_format:
-        _format = metadata_format
-    else:
-        _format = splitext(fname)[1][1:]
+            if annotation_object == 'Replicate':
+                row[0] = re.sub('^Replicate:/', '', row[0])
+                new_rows.append(row)
 
-    if _format == 'tsv':
+        if 'Replicate' not in annotation_objects:
+            LOGGER.warning('No Replicate annotations in csv!')
+            return False
+
+        for obj in annotation_objects:
+            if obj != 'Replicate':
+                LOGGER.warning(f'Found annotations for: {obj} in csv!')
+
+        data = [dict(zip(headers, row)) for row in new_rows]
+        self.df = self._metadata_data_to_df(data)
+        self.types = self._infer_types(self.df)
+
+        # set values of Dtype.NULL to NA
+        self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
+                                                                   else x.annotationValue, axis=1)
+
+        if exclude_null:
+            self.df = self.df[~pd.isna(self.df['annotationValue'])].reset_index()
+            self.types = {k: v for k, v in self.types.items() if v is not Dtype.NULL}
+
+        # This is an annoying edge case with metadata annotations exported from Skyline
+        # Boolean annotations are either True or blank instead of False
+        # Therefore we will set all blank boolean annotations to False
+        for key, var_type in self.types.items():
+            if var_type is Dtype.BOOL:
+                sele = self.df['annotationKey'] == key
+                self.df.loc[sele, 'annotationValue'] = self.df[sele]['annotationValue'].apply(lambda x: 'False' if x == '' else x)
+
+        return True
+
+
+    def _read_metadata_json(self, fname):
         with open(fname, 'r') as inF:
-            data = list(DictReader(inF, delimiter='\t'))
-    elif _format == 'csv':
-        with open(fname, 'r') as inF:
-            rows = list(csv_reader(inF))
+            data = json.load(inF)
+            try:
+                validate(data, JSON_SCHEMA)
+            except ValidationError as e:
+                LOGGER.error(f'Invalid metadata format:\n{e.message}')
+                return False
 
-        # check if file is skyline annotations csv
-        if rows[0][0] == 'ElementLocator':
-            LOGGER.info('Found Skyline annotations csv.')
-            return _read_metadata_skyline_csv(rows, exclude_null=exclude_null_from_skyline)
+        # determine metadata types
+        self.types = dict()
+        for row in data.values():
+            for k, v in row.items():
+                if k in self.types:
+                    self.types[k] = max(Dtype.var_to_type(v), self.types[k])
+                else:
+                    self.types[k] = Dtype.var_to_type(v)
 
-        # Otherwise it is a normal csv
-        if rows[0][0] == 'Replicate':
-            headers = rows[0]
-            rows = rows[1:]
-            data = [dict(zip(headers, row)) for row in rows]
+        # reshape data to so it can be converted into a DataFrame
+        data = [{'Replicate':k} | v for k, v in data.items()]
+        self.df = self._metadata_data_to_df(data)
+
+        return True
+
+
+    def read(self, fname, metadata_format=None, exclude_null_from_skyline=True):
+        '''
+        Read sample metadata file and format dataframe to be added to sampleMetadata table.
+
+        Parameters
+        ----------
+        fname: str
+            The path to the metadata file.
+        metadata_format: str
+            One of ('tsv', 'csv', 'json')
+        exclude_null_from_skyline: bool
+            Exclude NULL annotations from skyline annotation csv?
+            Default is True.
+
+        Returns
+        -------
+        df: pd.DataFrame
+            The sample metadata dataframe.
+        types: dict
+            A dictionary of metadata keys and Dtypes
+        '''
+
+        self.input_format = metadata_format
+        self.input_file = fname
+
+        if metadata_format:
+            self.input_format = metadata_format
         else:
-            raise ValueError('Invalid metadata format!')
+            self.input_format = splitext(fname)[1][1:]
 
-    elif _format == 'json':
-        return read_metadata_json(fname)
-    else:
-        raise ValueError(f'Unknown metadata file format: {_format}')
+        if self.input_format == 'tsv':
+            with open(fname, 'r') as inF:
+                data = list(DictReader(inF, delimiter='\t'))
+        elif self.input_format == 'csv':
+            with open(fname, 'r') as inF:
+                rows = list(csv_reader(inF))
 
-    df = _metadata_data_to_df(data)
-    types = _infer_types(df)
+            # check if file is skyline annotations csv
+            if rows[0][0] == 'ElementLocator':
+                LOGGER.info('Found Skyline annotations csv.')
+                self.input_format = 'skyline'
+                return self._read_metadata_skyline_csv(rows, exclude_null=exclude_null_from_skyline)
 
-    # set values of Dtype.NULL to NA
-    df['annotationValue'] = df.apply(lambda x: pd.NA if types[x.annotationKey] is Dtype.NULL
-                                                     else x.annotationValue, axis=1)
+            # Otherwise it is a normal csv
+            if rows[0][0] == 'Replicate':
+                headers = rows[0]
+                rows = rows[1:]
+                data = [dict(zip(headers, row)) for row in rows]
+            else:
+                LOGGER.error('Invalid metadata format!')
+                return False
 
-    return df, types
+        elif self.input_format == 'json':
+            return self._read_metadata_json(fname)
+        else:
+            LOGGER.error(f'Unknown metadata file format: {self.input_format}')
+            return False
+
+        self.df = self._metadata_data_to_df(data)
+        self.types = self._infer_types(self.df)
+
+        # set values of Dtype.NULL to NA
+        self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
+                                                                   else x.annotationValue, axis=1)
+
+        return True
+
