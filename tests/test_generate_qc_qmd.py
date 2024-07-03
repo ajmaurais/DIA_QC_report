@@ -164,6 +164,55 @@ class TestMissingMetadata(unittest.TestCase):
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
 
+class TestBadMetadataHeaders(unittest.TestCase):
+    TEST_PROJECT = 'Strap'
+    RENDER_QMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_bad_metadata_headers/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
+                                                           cls.work_dir,
+                                                           cls.TEST_PROJECT,
+                                                           metadata_suffix='_bad_headers_metadata.tsv',
+                                                           clear_dir=True)
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+    def test_is_successful(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        qmd_name = 'bad_header_test'
+        command = ['generate_qc_qmd',
+                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
+                   '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
+                   '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir)
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+
+
 class TestAllPrecursorsMissing(unittest.TestCase):
     TEST_PROJECT = 'GFP'
     RENDER_QMD = False

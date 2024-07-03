@@ -269,6 +269,99 @@ class TestMissingMetadata(unittest.TestCase):
                                                         prefix=f'render_{rmd_name}')
             self.assertEqual(render_result.returncode, 0)
 
+            for file in [f'{rmd_name}.html', 'metadata_wide.tsv']:
+                self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
+
+
+class TestBadMetadataHeaders(unittest.TestCase):
+    RENDER_RMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_batch_rmd_bad_metadata_headers/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        # remove tables subdirectory in work_dir if necissary
+        if os.path.isdir(f'{cls.work_dir}/tables'):
+            for file in os.listdir(f'{cls.work_dir}/tables'):
+                os.remove(f'{cls.work_dir}/tables/{file}')
+            os.rmdir(f'{cls.work_dir}/tables')
+
+        cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
+                                                           cls.work_dir,
+                                                           clear_dir=True,
+                                                           metadata_suffix='_bad_headers_metadata.tsv')
+
+        if not all(result.returncode == 0 for result in cls.parse_results):
+            raise RuntimeError('Setup of test db failed!')
+
+        normalize_command = ['normalize_db', cls.db_path]
+        cls.normalize_result = setup_functions.run_command(normalize_command,
+                                                           cls.work_dir,
+                                                           prefix='normalize_db')
+
+        cls.conn = None
+        if cls.normalize_result.returncode == 0:
+            if os.path.isfile(cls.db_path):
+                cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+    def test_space_headers(self):
+        self.assertTrue(self.conn is not None)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        rmd_name = 'space_header_test'
+        command = ['generate_batch_rmd',
+                   '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
+                   '--controlKey', 'string var',
+                   '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
+                   '-o', f'{rmd_name}.rmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
+
+        if self.RENDER_RMD:
+            render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{rmd_name}')
+            self.assertEqual(render_result.returncode, 0)
+
+            for file in [f'{rmd_name}.html',
+                         'proteins_batch_corrected_wide.tsv',
+                         'precursors_batch_corrected_wide.tsv',
+                         'metadata_wide.tsv']:
+                self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
+
+
+    def test_symbol_headers(self):
+        self.assertTrue(self.conn is not None)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        rmd_name = 'symbol_header_test'
+        command = ['generate_batch_rmd',
+                   '-c', 'string var', '-c', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
+                   '--controlKey', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
+                   '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
+                   '-o', f'{rmd_name}.rmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
+
+        if self.RENDER_RMD:
+            render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{rmd_name}')
+            self.assertEqual(render_result.returncode, 0)
+
             for file in [f'{rmd_name}.html',
                          'proteins_batch_corrected_wide.tsv',
                          'precursors_batch_corrected_wide.tsv',
@@ -284,6 +377,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     TestMakeBatchRmd.RENDER_RMD = args.render
+    TestMissingMetadata.RENDER_RMD = args.render
+    TestBadMetadataHeaders.RENDER_RMD = args.render
 
     unittest_args = args.unittest_args
     unittest_args.insert(0, sys.argv[0])

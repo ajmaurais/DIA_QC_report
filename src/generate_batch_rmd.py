@@ -376,7 +376,7 @@ control.reps[[control.key]] <- factor(control.reps[[control.key]])\n'''
         filter_text = '''dplyr::filter(replicate %in% control.reps$replicate) %>%
     dplyr::left_join(control.reps, by='replicate') %>%\n'''
         group_by_text = ', !!rlang::sym(control.key)'
-        facet_text = "facet_wrap(as.formula(paste('~', control.key)), ncol=1) + \n\t"
+        facet_text = "facet_wrap(as.formula(paste0('~ ', '`', control.key, '`')), ncol=1) + \n\t"
 
     text += f'''
 # calculate CV for each precursor

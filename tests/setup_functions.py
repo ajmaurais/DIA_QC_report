@@ -191,16 +191,17 @@ def setup_single_db(data_dir, output_dir, project,
     return run_command(command, output_dir, prefix=output_prefix)
 
 
-def setup_multi_db(data_dir, output_dir, group_by_gene=False, clear_dir=False):
+def setup_multi_db(data_dir, output_dir,
+                   group_by_gene=False, clear_dir=False, metadata_suffix='_metadata.tsv'):
     make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
 
     commands = [['parse_data', '--projectName=Sp3',
-                 '-m', f'{data_dir}/metadata/Sp3_metadata.tsv',
+                 '-m', f'{data_dir}/metadata/Sp3{metadata_suffix}',
                  f'{data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Sp3_{grouping}_precursor_quality.tsv'],
                 ['parse_data', '--overwriteMode=append', '--projectName=Strap',
-                 '-m', f'{data_dir}/metadata/Strap_metadata.tsv',
+                 '-m', f'{data_dir}/metadata/Strap{metadata_suffix}',
                  f'{data_dir}/skyline_reports/Strap_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Strap_{grouping}_precursor_quality.tsv']]
 
