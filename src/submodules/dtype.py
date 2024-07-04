@@ -68,6 +68,16 @@ class Dtype(Enum):
         raise ValueError(f'Unknown type: {str(v)}')
 
 
+    def to_pd_type(self):
+        if self is Dtype.BOOL:
+            return bool
+        if self is Dtype.INT:
+            return 'int32'
+        if self is Dtype.FLOAT:
+            return 'float64'
+        return str
+
+
     @staticmethod
     def infer_type(s):
         '''
