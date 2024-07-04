@@ -36,6 +36,71 @@ class Metadata():
         self.input_file = None
 
 
+    def validate(self):
+        data = dict()
+        for row in self.df.itertuples():
+            if row.Replicate not in data:
+                data[row.Replicate] = dict()
+            if row.annotationKey in data[row.Replicate]:
+                LOGGER.error("Duplicate key: '%s' in '%s'!", row.annotationKey, row.Replicate)
+                return False
+            if row.annotationKey not in self.types:
+                LOGGER.error("Missing key: '%s' in Metadata.types!", row.annotationKey)
+                return False
+            data[row.Replicate][row.annotationKey] = self.types[row.annotationKey]
+
+        return True
+
+
+    def df_to_dict(self):
+        if not self.validate():
+            return None
+
+        ret = dict()
+        for row in self.df.itertuples():
+            if row.Replicate not in ret:
+                ret[row.Replicate] = dict()
+            ret[row.Replicate][row.annotationKey] = self.types[row.annotationKey].convert(row.annotationValue)
+
+        return ret
+
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Metadata):
+            return False
+
+        if len(self.types) != len(rhs.types):
+            return False
+
+        for l_key, l_type in self.types.items():
+            if l_key not in rhs.types:
+                return False
+            if l_type is not rhs.types[l_key]:
+                return False
+
+        l_data = self.df_to_dict()
+        r_data = rhs.df_to_dict()
+
+        if len(l_data) != len(r_data):
+            return False
+
+        for l_key, l_type in l_data.items():
+            if l_key not in r_data:
+                return False
+            if l_type != r_data[l_key]:
+                return False
+
+        return True
+
+
+    def __ne__(self, rhs):
+        return not self.__eq__(rhs)
+
+
+    def __repr__(self):
+        return f'Metadata(input_format={self.input_format})'
+
+
     @staticmethod
     def _metadata_data_to_df(data):
         df = pd.DataFrame(data)
@@ -99,7 +164,7 @@ class Metadata():
                                                                    else x.annotationValue, axis=1)
 
         if exclude_null:
-            self.df = self.df[~pd.isna(self.df['annotationValue'])].reset_index()
+            self.df = self.df[~pd.isna(self.df['annotationValue'])].reset_index(drop=True)
             self.types = {k: v for k, v in self.types.items() if v is not Dtype.NULL}
 
         # This is an annoying edge case with metadata annotations exported from Skyline
@@ -113,14 +178,13 @@ class Metadata():
         return True
 
 
-    def _read_metadata_json(self, fname):
-        with open(fname, 'r') as inF:
-            data = json.load(inF)
-            try:
-                validate(data, JSON_SCHEMA)
-            except ValidationError as e:
-                LOGGER.error(f'Invalid metadata format:\n{e.message}')
-                return False
+    def _read_metadata_json(self, fp):
+        data = json.load(fp)
+        try:
+            validate(data, JSON_SCHEMA)
+        except ValidationError as e:
+            LOGGER.error(f'Invalid metadata format:\n{e.message}')
+            return False
 
         # determine metadata types
         self.types = dict()
@@ -138,14 +202,14 @@ class Metadata():
         return True
 
 
-    def read(self, fname, metadata_format=None, exclude_null_from_skyline=True):
+    def read(self, input_file, metadata_format=None, exclude_null_from_skyline=True):
         '''
         Read sample metadata file and format dataframe to be added to sampleMetadata table.
 
         Parameters
         ----------
-        fname: str
-            The path to the metadata file.
+        input_file: str or file
+            Input file path or file pointer.
         metadata_format: str
             One of ('tsv', 'csv', 'json')
         exclude_null_from_skyline: bool
@@ -160,48 +224,111 @@ class Metadata():
             A dictionary of metadata keys and Dtypes
         '''
 
-        self.input_format = metadata_format
-        self.input_file = fname
+        try:
+            if isinstance(input_file, str):
+                inF = open(input_file, 'r')
 
-        if metadata_format:
-            self.input_format = metadata_format
-        else:
-            self.input_format = splitext(fname)[1][1:]
+                read_from_path = True
+                self.input_file = input_file
 
-        if self.input_format == 'tsv':
-            with open(fname, 'r') as inF:
+                if metadata_format:
+                    self.input_format = metadata_format
+                else:
+                    self.input_format = splitext(input_file)[1][1:]
+            else:
+                inF = input_file
+
+                read_from_path = False
+
+                # check input_format
+                if metadata_format is None:
+                    raise RuntimeError('Must specify metadata_format when input_file is not a string!')
+                self.input_format = metadata_format
+
+
+            if self.input_format == 'tsv':
                 data = list(DictReader(inF, delimiter='\t'))
-        elif self.input_format == 'csv':
-            with open(fname, 'r') as inF:
+            elif self.input_format == 'csv':
                 rows = list(csv_reader(inF))
 
-            # check if file is skyline annotations csv
-            if rows[0][0] == 'ElementLocator':
-                LOGGER.info('Found Skyline annotations csv.')
-                self.input_format = 'skyline'
-                return self._read_metadata_skyline_csv(rows, exclude_null=exclude_null_from_skyline)
+                # check if file is skyline annotations csv
+                if rows[0][0] == 'ElementLocator':
+                    LOGGER.info('Found Skyline annotations csv.')
+                    self.input_format = 'skyline'
+                    return self._read_metadata_skyline_csv(rows, exclude_null=exclude_null_from_skyline)
 
-            # Otherwise it is a normal csv
-            if rows[0][0] == 'Replicate':
-                headers = rows[0]
-                rows = rows[1:]
-                data = [dict(zip(headers, row)) for row in rows]
+                # Otherwise it is a normal csv
+                if rows[0][0] == 'Replicate':
+                    headers = rows[0]
+                    rows = rows[1:]
+                    data = [dict(zip(headers, row)) for row in rows]
+                else:
+                    LOGGER.error('Invalid metadata format!')
+                    return False
+
+            elif self.input_format == 'json':
+                return self._read_metadata_json(inF)
             else:
-                LOGGER.error('Invalid metadata format!')
+                LOGGER.error(f'Unknown metadata file format: {self.input_format}')
                 return False
 
-        elif self.input_format == 'json':
-            return self._read_metadata_json(fname)
-        else:
-            LOGGER.error(f'Unknown metadata file format: {self.input_format}')
-            return False
+            self.df = self._metadata_data_to_df(data)
+            self.types = self._infer_types(self.df)
 
-        self.df = self._metadata_data_to_df(data)
-        self.types = self._infer_types(self.df)
+            # set values of Dtype.NULL to NA
+            self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
+                                                                       else x.annotationValue, axis=1)
 
-        # set values of Dtype.NULL to NA
-        self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
-                                                                   else x.annotationValue, axis=1)
+        finally:
+            if read_from_path:
+                inF.close()
 
         return True
+
+
+    def get_wide_data(self):
+        df_wide =  self.df.pivot(index='Replicate',
+                                 columns='annotationKey',
+                                 values='annotationValue').reset_index().rename_axis(None, axis=1)
+
+        col_types = dict()
+        for var, dtype in self.types.items():
+            col_type = dtype.to_pd_type()
+
+            if dtype is Dtype.INT or dtype is Dtype.BOOL:
+                if any(df_wide[var] == ''):
+                    col_type = str
+
+            elif dtype is Dtype.FLOAT:
+                if any(df_wide[var] == ''):
+                    df_wide.loc[df_wide[var] == '', var] = None
+
+            col_types[var] = col_type
+
+        df_wide = df_wide.astype(col_types)
+
+        return df_wide
+
+
+    def to_tsv(self, out):
+        data = self.get_wide_data()
+        data.to_csv(out, sep='\t', index=False)
+
+
+    def to_csv(self, out):
+        data = self.get_wide_data()
+        data.to_csv(out, index=False)
+
+
+    def to_json(self, out):
+        data = self.df_to_dict()
+        json.dump(data, out, indent='\t')
+
+
+    def to_skyline_annotations(self, out):
+        pass
+
+
+    def to_skyline_definitions(self, out):
+        pass
 
