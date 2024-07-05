@@ -127,3 +127,11 @@ class TestDtype(unittest.TestCase):
 
         for dtype, ret in types:
             self.assertEqual(ret, dtype.to_pd_type())
+
+
+    def test_to_sky_type(self):
+        types = [(Dtype.NULL, 'text'), (Dtype.STRING, 'text'),
+                 (Dtype.BOOL, 'true_false'), (Dtype.INT, 'number'), (Dtype.FLOAT, 'number')]
+
+        for dtype, ret in types:
+            self.assertEqual(ret, dtype.to_sky_type())

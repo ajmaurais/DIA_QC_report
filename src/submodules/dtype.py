@@ -78,6 +78,14 @@ class Dtype(Enum):
         return str
 
 
+    def to_sky_type(self):
+        if self is Dtype.BOOL:
+            return 'true_false'
+        if self is Dtype.INT or self is Dtype.FLOAT:
+            return 'number'
+        return 'text'
+
+
     @staticmethod
     def infer_type(s):
         '''
