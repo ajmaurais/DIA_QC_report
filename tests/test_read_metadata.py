@@ -4,6 +4,7 @@ from unittest import mock
 from io import StringIO
 from itertools import product
 import json
+import re
 from jsonschema import validate
 import pandas as pd
 
@@ -311,9 +312,6 @@ class TestMetadataWriteMethods(unittest.TestCase):
     def do_test(self, write_ext,
                 prefix='HeLa', files=FILES):
 
-        import pudb
-        # pudb.set_trace()
-
         write_method = 'to_skyline_annotations' if write_ext == 'skyline' else f'to_{write_ext}'
 
         for ext in files:
@@ -349,7 +347,7 @@ class TestMetadataWriteMethods(unittest.TestCase):
         self.do_test('json')
 
 
-    def test_to_skyline(self):
+    def test_to_skyline_annotations(self):
         self.do_test('skyline')
 
 
@@ -366,3 +364,57 @@ class TestMetadataWriteMethods(unittest.TestCase):
     def test_to_json_missing(self):
         self.do_test('json', prefix='Strap_missing_multi_var',
                      files=['tsv', 'json'])
+
+
+    # def test_to_skyline_annotations_missing(self):
+    #     self.do_test('skyline', prefix='Strap_missing_multi_var',
+    #                  files=['tsv', 'json'])
+
+
+class TestToSkylineDefinitions(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.metadata_dir = f'{setup_functions.TEST_DIR}/data/metadata'
+
+
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
+    def do_test(self, ext, prefix='HeLa'):
+        command_re = re.compile(r'^--annotation-name="([\w\.\-]+)" --annotation-targets=replicate --annotation-type=([a-z_]+)$')
+
+        suffix = f'metadata.{ext}' if ext != 'skyline' else 'annotations.csv'
+
+        writer = Metadata()
+        self.assertTrue(writer.read(f'{self.metadata_dir}/{prefix}_{suffix}'))
+
+        with StringIO() as sstream:
+            writer.to_skyline_definitions(sstream)
+            sstream.seek(0)
+
+            for line in sstream:
+                self.assertTrue((match := command_re.search(line)) is not None)
+                self.assertTrue(match[1] in writer.types)
+                self.assertEqual(Dtype.to_sky_type(writer.types[match[1]]), match[2])
+
+
+    def test_tsv(self):
+        self.do_test('tsv')
+
+
+    def test_csv(self):
+        self.do_test('csv')
+
+
+    def test_json(self):
+        self.do_test('json')
+
+
+    def test_json(self):
+        self.do_test('skyline')
+
+
+    def test_csv_missing(self):
+        self.do_test('tsv', prefix='Strap_missing_multi_var')
+
+
+    def test_json_missing(self):
+        self.do_test('json', prefix='Strap_missing_multi_var')

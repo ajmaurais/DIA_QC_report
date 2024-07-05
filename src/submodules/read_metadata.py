@@ -375,5 +375,7 @@ class Metadata():
 
 
     def to_skyline_definitions(self, out):
-        pass
+        for name, dtype in self.types.items():
+            out.write(f'--annotation-name="{name}" --annotation-targets=replicate')
+            out.write(f' --annotation-type={dtype.to_sky_type()}\n')
 
