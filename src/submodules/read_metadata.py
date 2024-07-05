@@ -84,11 +84,14 @@ class Metadata():
         if len(l_data) != len(r_data):
             return False
 
-        for l_key, l_type in l_data.items():
-            if l_key not in r_data:
+        for l_rep in l_data:
+            if l_rep not in r_data:
                 return False
-            if l_type != r_data[l_key]:
-                return False
+            for l_key, l_value in l_data[l_rep].items():
+                if l_key not in r_data[l_rep]:
+                    return False
+                if l_value != r_data[l_rep][l_key]:
+                    return False
 
         return True
 
@@ -195,9 +198,27 @@ class Metadata():
                 else:
                     self.types[k] = Dtype.var_to_type(v)
 
+        for var in self.types:
+            # Coerce INT Dtype to string if there are any missing values
+            if self.types[var] is Dtype.INT:
+                for rep in data:
+                    if data[rep][var] is None:
+                        data[rep][var] = ''
+                    else:
+                        data[rep][var] = str(data[rep][var])
+
+            # Coerce Null FLOAT Dtype to string if there are any missing values
+            if self.types[var] is Dtype.FLOAT:
+                for rep in data:
+                    if data[rep][var] is None:
+                        data[rep][var] = ''
+
         # reshape data to so it can be converted into a DataFrame
         data = [{'Replicate':k} | v for k, v in data.items()]
         self.df = self._metadata_data_to_df(data)
+
+        self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
+                                                                   else x.annotationValue, axis=1)
 
         return True
 
@@ -224,6 +245,7 @@ class Metadata():
             A dictionary of metadata keys and Dtypes
         '''
 
+        read_from_path = False
         try:
             if isinstance(input_file, str):
                 inF = open(input_file, 'r')
@@ -238,13 +260,10 @@ class Metadata():
             else:
                 inF = input_file
 
-                read_from_path = False
-
                 # check input_format
                 if metadata_format is None:
                     raise RuntimeError('Must specify metadata_format when input_file is not a string!')
                 self.input_format = metadata_format
-
 
             if self.input_format == 'tsv':
                 data = list(DictReader(inF, delimiter='\t'))
@@ -291,21 +310,27 @@ class Metadata():
                                  columns='annotationKey',
                                  values='annotationValue').reset_index().rename_axis(None, axis=1)
 
-        col_types = dict()
         for var, dtype in self.types.items():
+            if dtype is Dtype.NULL:
+                continue
+
             col_type = dtype.to_pd_type()
 
-            if dtype is Dtype.INT or dtype is Dtype.BOOL:
+            if dtype is Dtype.BOOL:
                 if any(df_wide[var] == ''):
                     col_type = str
+                else:
+                    df_wide[var] = df_wide[var].map({'True': True, 'False': False})
+                    continue
 
+            if dtype is Dtype.INT:
+                if any(df_wide[var] == ''):
+                    col_type = str
             elif dtype is Dtype.FLOAT:
                 if any(df_wide[var] == ''):
                     df_wide.loc[df_wide[var] == '', var] = None
 
-            col_types[var] = col_type
-
-        df_wide = df_wide.astype(col_types)
+            df_wide = df_wide.astype({var: col_type})
 
         return df_wide
 
@@ -326,7 +351,27 @@ class Metadata():
 
 
     def to_skyline_annotations(self, out):
-        pass
+        data = self.df.pivot(index='Replicate',
+                             columns='annotationKey',
+                             values='annotationValue').reset_index()
+
+        def write_csv_row(elems):
+            out.write('"{}"\n'.format('","'.join(elems)))
+
+        # convert NULL columns to empty string
+        for col, col_type in self.types.items():
+            if col_type is Dtype.NULL:
+                data[col] = ''
+
+        annotation_headers = [x for x in data.columns if x != 'Replicate']
+        # write header
+        write_csv_row(['ElementLocator'] + [f'annotation_{x}' for x in annotation_headers])
+
+        for _, row in data.iterrows():
+            line = [f'Replicate:/{row.Replicate}']
+            for header in annotation_headers:
+                line.append(row[header])
+            write_csv_row(line)
 
 
     def to_skyline_definitions(self, out):

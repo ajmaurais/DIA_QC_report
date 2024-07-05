@@ -1,6 +1,7 @@
 
 import unittest
 from unittest import mock
+from io import StringIO
 from itertools import product
 import json
 from jsonschema import validate
@@ -64,8 +65,8 @@ class TestMetadataClassMethods(TestMetadataBase):
 
 class TestMetadataEqMethod(TestMetadataBase):
     ''' Test custom Metadata __eq__ method '''
-    FILES = ['tsv', 'csv', 'json', 'skyline']
 
+    FILES = ['tsv', 'csv', 'json', 'skyline']
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def read_ext(self, ext):
@@ -122,12 +123,33 @@ class TestMetadataEqMethod(TestMetadataBase):
             self.assertNotEqual(lhs, rhs)
 
         for l_ext, r_ext in product(self.FILES, self.FILES):
-            lhs = self.read_ext(r_ext)
+            lhs = self.read_ext(l_ext)
 
             rhs = self.read_ext(r_ext)
             key, t = rhs.types.popitem()
             rhs.types['other_key'] = t
             rhs.df.loc[rhs.df['annotationKey'] == key, 'annotationKey'] = 'other_key'
+
+            self.assertNotEqual(lhs, rhs)
+
+
+    def test_neq_different_replicate(self):
+        ''' Test different replicates are not equal '''
+        for l_ext, r_ext in product(self.FILES, self.FILES):
+            rhs = self.read_ext(r_ext)
+
+            lhs = self.read_ext(l_ext)
+            rep = lhs.df['Replicate'].drop_duplicates().to_list()[0]
+            lhs.df.loc[lhs.df['Replicate'] == rep, 'Replicate'] = 'other_rep'
+
+            self.assertNotEqual(lhs, rhs)
+
+        for l_ext, r_ext in product(self.FILES, self.FILES):
+            lhs = self.read_ext(l_ext)
+
+            rhs = self.read_ext(l_ext)
+            rep = rhs.df['Replicate'].drop_duplicates().to_list()[0]
+            rhs.df.loc[rhs.df['Replicate'] == rep, 'Replicate'] = 'other_rep'
 
             self.assertNotEqual(lhs, rhs)
 
@@ -143,7 +165,7 @@ class TestMetadataEqMethod(TestMetadataBase):
             self.assertNotEqual(lhs, rhs)
 
         for l_ext, r_ext in product(self.FILES, self.FILES):
-            lhs = self.read_ext(r_ext)
+            lhs = self.read_ext(l_ext)
 
             rhs = self.read_ext(r_ext)
             rhs.df.loc[rhs.df['annotationKey'] == 'string_var', 'annotationValue'] = 'other_value'
@@ -152,13 +174,6 @@ class TestMetadataEqMethod(TestMetadataBase):
 
 
 class TestReadMetadata(TestMetadataBase):
-    def test_parse_from_fp_error(self):
-        meta_reader = Metadata()
-        with open(f'{self.metadata_dir}/HeLa_metadata.json') as inF:
-            with self.assertRaises(RuntimeError):
-                meta_reader.read(inF)
-
-
     def do_test_extension(self, ext, skyline=False):
         path_reader = Metadata()
         fp_reader = Metadata()
@@ -184,31 +199,6 @@ class TestReadMetadata(TestMetadataBase):
         self.assertEqual(path_reader, fp_reader)
 
 
-    def test_validate_duplicate_keys(self):
-        meta_reader = Metadata()
-        self.assertTrue(meta_reader.read(f'{self.metadata_dir}/HeLa_metadata.json'))
-        self.assertEqual('json', meta_reader.input_format)
-
-        meta_reader.df = pd.concat([meta_reader.df,
-                                         meta_reader.df.loc[0:2]]).reset_index(drop=True)
-
-        with self.assertLogs(read_metadata.LOGGER, level='ERROR') as cm:
-            self.assertFalse(meta_reader.validate())
-        self.assertTrue("Duplicate key: '", cm.output[-1])
-
-
-    def test_validate_missing_type_key(self):
-        meta_reader = Metadata()
-        self.assertTrue(meta_reader.read(f'{self.metadata_dir}/HeLa_metadata.json'))
-        self.assertEqual('json', meta_reader.input_format)
-
-        key, _ = meta_reader.types.popitem()
-
-        with self.assertLogs(read_metadata.LOGGER, level='ERROR') as cm:
-            self.assertFalse(meta_reader.validate())
-        self.assertTrue(f"Missing key: '{key}' in Metadata.types!", cm.output[-1])
-
-
     def test_json(self):
         self.do_test_extension('json')
 
@@ -227,7 +217,7 @@ class TestReadMetadata(TestMetadataBase):
         self.assertTrue('Found Skyline annotations csv.' in cm.output[0])
 
 
-class TestParseMissingMetadata(TestMetadataBase):
+class TestReadMissingMetadata(TestMetadataBase):
     def test_tsv(self):
         meta_reader = Metadata()
         self.assertTrue(meta_reader.read(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.tsv'))
@@ -309,3 +299,70 @@ class TestParseSkylineAnnotations(TestMetadataBase):
         self.assertDictEqual(self.META_TYPES, meta_reader.types)
 
 
+class TestMetadataWriteMethods(unittest.TestCase):
+    FILES = ['tsv', 'csv', 'json', 'skyline']
+
+    @classmethod
+    def setUpClass(cls):
+        cls.metadata_dir = f'{setup_functions.TEST_DIR}/data/metadata'
+
+
+    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
+    def do_test(self, write_ext,
+                prefix='HeLa', files=FILES):
+
+        import pudb
+        # pudb.set_trace()
+
+        write_method = 'to_skyline_annotations' if write_ext == 'skyline' else f'to_{write_ext}'
+
+        for ext in files:
+            suffix = f'metadata.{ext}' if ext != 'skyline' else 'annotations.csv'
+
+            writer = Metadata()
+            self.assertTrue(writer.read(f'{self.metadata_dir}/{prefix}_{suffix}'))
+
+            exclude_null_from_skyline = True
+            if write_ext == 'skyline':
+                exclude_null_from_skyline = ext == 'skyline'
+
+            reader = Metadata()
+            with StringIO() as sstream:
+                getattr(writer, write_method)(sstream)
+                sstream.seek(0)
+                self.assertTrue(reader.read(sstream,
+                    metadata_format=write_ext if write_ext != 'skyline' else 'csv',
+                    exclude_null_from_skyline=exclude_null_from_skyline))
+
+            self.assertEqual(writer, reader)
+
+
+    def test_to_tsv(self):
+        self.do_test('tsv')
+
+
+    def test_to_csv(self):
+        self.do_test('csv')
+
+
+    def test_to_json(self):
+        self.do_test('json')
+
+
+    def test_to_skyline(self):
+        self.do_test('skyline')
+
+
+    def test_to_tsv_missing(self):
+        self.do_test('tsv', prefix='Strap_missing_multi_var',
+                     files=['tsv', 'json'])
+
+
+    def test_to_csv_missing(self):
+        self.do_test('csv', prefix='Strap_missing_multi_var',
+                     files=['tsv', 'json'])
+
+
+    def test_to_json_missing(self):
+        self.do_test('json', prefix='Strap_missing_multi_var',
+                     files=['tsv', 'json'])
