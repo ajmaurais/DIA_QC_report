@@ -40,7 +40,7 @@ class TestExportTables(unittest.TestCase):
     def test_valid_table_options(self):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        export_command = ['export_tables', '--outputDir=no_norm_tables',
+        export_command = ['dia_qc', 'db_export', '--outputDir=no_norm_tables',
                           '--precursorTables=33', '--proteinTables=33',
                           '--metadataTables=11', self.db_path]
         result = setup_functions.run_command(export_command, self.work_dir)
@@ -57,7 +57,7 @@ class TestExportTables(unittest.TestCase):
         norm_result = setup_functions.run_command(normalize_command, self.work_dir)
         self.assertEqual(norm_result.returncode, 0)
 
-        export_command[1] = '--outputDir=norm_tables'
+        export_command[2] = '--outputDir=norm_tables'
         result = setup_functions.run_command(export_command, self.work_dir)
         self.assertEqual(result.returncode, 0)
 

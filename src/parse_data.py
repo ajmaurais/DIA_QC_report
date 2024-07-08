@@ -21,9 +21,11 @@ from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.read_metadata import Metadata
 
+COMMAND_DESCRIPTION = 'Generate QC and batch correction database from Skyline precursor_quality and replicate_quality reports.'
+DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
+
 PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['modifiedSequence'] + PRECURSOR_QUALITY_NUMERIC_COLUMNS
 
-DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
 
 
 def _initialize(fname):
@@ -469,8 +471,7 @@ def check_duplicate_precursors(precursors, mode):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
-                                                 'Skyline precursor_quality and replicate_quality reports.')
+    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'csv', 'tsv'),
