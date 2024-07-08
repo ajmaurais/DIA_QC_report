@@ -12,6 +12,7 @@ from .submodules.dia_db_utils import get_meta_value, is_normalized
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.logger import LOGGER
 
+COMMAND_DESCRIPTION = 'Export PDC gene tables from batch database.'
 TABLE_TYPES = ('combined', 'split', 'drop')
 
 SPLIT_RE = re.compile(r'\s/\s')
@@ -210,7 +211,7 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
 
     gene_group_args = parser.add_argument_group('Gene grouping',
                                                 description="Choose how to display gene groups in output tables. "

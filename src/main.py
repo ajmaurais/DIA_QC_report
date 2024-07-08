@@ -3,6 +3,7 @@ import sys
 import argparse
 
 from . import parse_data
+from . import export_gene_matrix
 from . import export_tables
 
 # SUBCOMMANDS = ['parse', 'db_export']
@@ -20,8 +21,9 @@ class Main():
                                          usage = f'''dia_qc <command> [<args>]
 
 Available commands:
-   parse        {parse_data.COMMAND_DESCRIPTION}
-   db_export    {export_tables.COMMAND_DESCRIPTION}''')
+   parse                {parse_data.COMMAND_DESCRIPTION}
+   export_gene_matrix   {export_gene_matrix.COMMAND_DESCRIPTION}
+   db_export            {export_tables.COMMAND_DESCRIPTION}''')
 
         parser.add_argument('command', help='Subcommand to run.')
 
@@ -35,6 +37,10 @@ Available commands:
 
     def parse(self):
         parse_data._main(parse_data.parse_args(sys.argv[2:]))
+
+
+    def export_gene_matrix(self):
+        export_gene_matrix._main(export_gene_matrix.parse_args(sys.argv[2:]))
 
 
     def db_export(self):
