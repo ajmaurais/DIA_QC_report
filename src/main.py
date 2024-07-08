@@ -4,6 +4,7 @@ import argparse
 
 from . import parse_data
 from . import normalize_db
+from . import generate_qc_qmd
 from . import export_gene_matrix
 from . import export_tables
 
@@ -24,6 +25,7 @@ class Main():
 Available commands:
    parse                {parse_data.COMMAND_DESCRIPTION}
    normalize            {normalize_db.COMMAND_DESCRIPTION}
+   qc_qmd               {generate_qc_qmd.COMMAND_DESCRIPTION}
    export_gene_matrix   {export_gene_matrix.COMMAND_DESCRIPTION}
    db_export            {export_tables.COMMAND_DESCRIPTION}''')
 
@@ -43,6 +45,10 @@ Available commands:
 
     def normalize(self):
         normalize_db._main(normalize_db.parse_args(sys.argv[2:]))
+
+
+    def qc_qmd(self):
+        generate_qc_qmd._main(generate_qc_qmd.parse_args(sys.argv[2:]))
 
 
     def export_gene_matrix(self):

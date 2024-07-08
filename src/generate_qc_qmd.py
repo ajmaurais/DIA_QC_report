@@ -10,6 +10,8 @@ from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
 
+COMMAND_DESCRIPTION = 'Generate qmd report.'
+
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA QC report'
@@ -421,7 +423,7 @@ def check_std_proteins_exist(conn, proteins):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description='Generate qmd report.')
+    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
     parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',

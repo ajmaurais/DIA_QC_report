@@ -37,7 +37,7 @@ class TestMakeQCqmd(unittest.TestCase):
         self.assertEqual(self.parse_result.returncode, 0)
 
         qmd_name = 'basic_test'
-        command = ['generate_qc_qmd',
+        command = ['dia_qc', 'qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
@@ -56,7 +56,7 @@ class TestMakeQCqmd(unittest.TestCase):
         self.assertEqual(self.parse_result.returncode, 0)
 
         qmd_name = 'failing_test'
-        command = ['generate_qc_qmd', '-a', 'NOT_A_PROTEIN',
+        command = ['dia_qc', 'qc_qmd', '-a', 'NOT_A_PROTEIN',
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
@@ -67,7 +67,7 @@ class TestMakeQCqmd(unittest.TestCase):
 
     def test_missing_color_var_fails(self):
         qmd_name = 'failing_test'
-        command = ['generate_qc_qmd', '-c', 'NOT_A_VAR',
+        command = ['dia_qc', 'qc_qmd', '-c', 'NOT_A_VAR',
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
@@ -148,7 +148,7 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertEqual(self.parse_result.returncode, 0)
 
         qmd_name = 'basic_test'
-        command = ['generate_qc_qmd',
+        command = ['dia_qc', 'qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
                    '-o', f'{qmd_name}.qmd', self.db_path]
@@ -197,7 +197,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertEqual(self.parse_result.returncode, 0)
 
         qmd_name = 'bad_header_test'
-        command = ['generate_qc_qmd',
+        command = ['dia_qc', 'qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
                    '-o', f'{qmd_name}.qmd', self.db_path]
@@ -249,7 +249,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
         # Generate unnormalized qmd
         unorm_qmd_name = 'unnormalized_test'
-        generate_qmd_command = ['generate_qc_qmd', '-o', f'{unorm_qmd_name}.qmd', self.db_path]
+        generate_qmd_command = ['dia_qc', 'qc_qmd', '-o', f'{unorm_qmd_name}.qmd', self.db_path]
         unorm_result = setup_functions.run_command(generate_qmd_command, self.work_dir,
                                                    prefix=unorm_qmd_name)
 
