@@ -447,7 +447,7 @@ class TestMultiProjectStepped(unittest.TestCase):
 
         # make sure make_gene_matrix fails if grouped by protein
         conn = update_meta_value(conn, 'group_precursors_by', 'protein')
-        bad_matrix_result = setup_functions.run_command(['make_gene_matrix', gene_id_path, db_path],
+        bad_matrix_result = setup_functions.run_command(['export_gene_matrix', gene_id_path, db_path],
                                                         work_dir, prefix='failed_matrix')
         self.assertEqual(bad_matrix_result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)

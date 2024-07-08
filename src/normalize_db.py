@@ -12,9 +12,11 @@ from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
 from .submodules.logger import LOGGER
 
+COMMAND_DESCRIPTION = 'Perform DirectLFQ or median normalization on batch database.'
+
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
+    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
     parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
                         help='Normalization method to use. Default is "DirectLFQ"')
     exclude_args = parser.add_argument_group('Filter replicates',

@@ -179,14 +179,14 @@ def setup_single_db(data_dir, output_dir, project,
     make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
 
-    command = ['parse_data', f'--projectName={project}',
+    command = ['dia_qc', 'parse', f'--projectName={project}',
                f'--overwriteMode={overwrite_mode}',
                '-m', f'{data_dir}/metadata/{project}{metadata_suffix}',
                f'{data_dir}/skyline_reports/{project}_replicate_quality.tsv',
                f'{data_dir}/skyline_reports/{project}_{grouping}_precursor_quality.tsv']
 
     if group_by_gene:
-        command.insert(1, '--groupBy=gene')
+        command.insert(2, '--groupBy=gene')
 
     return run_command(command, output_dir, prefix=output_prefix)
 
@@ -196,21 +196,21 @@ def setup_multi_db(data_dir, output_dir,
     make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
 
-    commands = [['parse_data', '--projectName=Sp3',
+    commands = [['dia_qc', 'parse', '--projectName=Sp3',
                  '-m', f'{data_dir}/metadata/Sp3{metadata_suffix}',
                  f'{data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Sp3_{grouping}_precursor_quality.tsv'],
-                ['parse_data', '--overwriteMode=append', '--projectName=Strap',
+                ['dia_qc', 'parse', '--overwriteMode=append', '--projectName=Strap',
                  '-m', f'{data_dir}/metadata/Strap{metadata_suffix}',
                  f'{data_dir}/skyline_reports/Strap_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Strap_{grouping}_precursor_quality.tsv']]
 
     if os.path.isfile(f'{output_dir}/data.db3'):
-        commands[0].insert(1, '--overwriteMode=overwrite')
+        commands[0].insert(2, '--overwriteMode=overwrite')
 
     if group_by_gene:
         for i in range(len(commands)):
-            commands[i].insert(1, '--groupBy=gene')
+            commands[i].insert(2, '--groupBy=gene')
 
     results = list()
     for command in commands:

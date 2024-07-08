@@ -92,7 +92,7 @@ class TestMedianSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['normalize_db', '-m=median', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
         cls.run_commands(normalize_command)
 
 
@@ -126,7 +126,7 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        normalize_command = ['normalize_db', '-m=DirectLFQ', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
         cls.run_commands(normalize_command)
 
 
@@ -261,7 +261,7 @@ class TestMedianMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['normalize_db', '-m=median', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
         cls.run_commands(normalize_command)
 
 
@@ -276,7 +276,7 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        normalize_command = ['normalize_db', '-m=DirectLFQ', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
         cls.run_commands(normalize_command)
 
 
@@ -289,7 +289,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
+        command = ['dia_qc', 'parse', f'--projectName={cls.TEST_PROJECT}',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
@@ -326,7 +326,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             for level in norm_levels:
                 self.assertIsNone(db_utils.get_meta_value(self.conn, level))
 
-        normalize_command = ['normalize_db', '-m=median', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', self.db_path]
         normalize_result = setup_functions.run_command(normalize_command,
                                                        self.work_dir,
                                                        prefix='normalize_db_median')
@@ -337,7 +337,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
 
     def test_DirectLFQ_normalization(self):
-        normalize_command = ['normalize_db', '-m=DirectLFQ', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', self.db_path]
 
         normalize_result = setup_functions.run_command(normalize_command,
                                                        self.work_dir,

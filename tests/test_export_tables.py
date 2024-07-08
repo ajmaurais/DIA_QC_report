@@ -53,7 +53,7 @@ class TestExportTables(unittest.TestCase):
             test_path = f'{self.work_dir}/no_norm_tables/{table}'
             self.assertTrue(os.path.isfile(test_path), test_path)
 
-        normalize_command = ['normalize_db', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', self.db_path]
         norm_result = setup_functions.run_command(normalize_command, self.work_dir)
         self.assertEqual(norm_result.returncode, 0)
 

@@ -3,6 +3,7 @@ import sys
 import argparse
 
 from . import parse_data
+from . import normalize_db
 from . import export_gene_matrix
 from . import export_tables
 
@@ -22,6 +23,7 @@ class Main():
 
 Available commands:
    parse                {parse_data.COMMAND_DESCRIPTION}
+   normalize            {normalize_db.COMMAND_DESCRIPTION}
    export_gene_matrix   {export_gene_matrix.COMMAND_DESCRIPTION}
    db_export            {export_tables.COMMAND_DESCRIPTION}''')
 
@@ -37,6 +39,10 @@ Available commands:
 
     def parse(self):
         parse_data._main(parse_data.parse_args(sys.argv[2:]))
+
+
+    def normalize(self):
+        normalize_db._main(normalize_db.parse_args(sys.argv[2:]))
 
 
     def export_gene_matrix(self):
