@@ -209,7 +209,7 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
     return ret, missing_accessions
 
 
-def main():
+def parse_args(argv):
     parser = argparse.ArgumentParser()
 
     gene_group_args = parser.add_argument_group('Gene grouping',
@@ -232,7 +232,13 @@ def main():
     parser.add_argument('gene_table', help='A tsv with gene data.')
     parser.add_argument('database', help='The precursor database.')
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     if (gene_group_method := unambigious_match(TABLE_TYPES, args.group_method)) is None:
         LOGGER.error(f"Could not unambiguously determine protein table type: '{args.group_method}'\n")
@@ -350,6 +356,10 @@ def main():
         LOGGER.info(f'Writing {fname}...')
         data[method].to_csv(fname, sep='\t', index=False)
         LOGGER.info(f'Done writing {fname}')
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

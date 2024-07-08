@@ -420,7 +420,7 @@ def check_std_proteins_exist(conn, proteins):
     return all_good
 
 
-def main():
+def parse_args(argv):
     parser = argparse.ArgumentParser(description='Generate qmd report.')
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
@@ -434,7 +434,13 @@ def main():
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 
     parser.add_argument('db', help='Path to precursor quality database.')
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # check args
     if os.path.isfile(args.db):
@@ -527,6 +533,11 @@ def main():
         outF.write(close_pannel_tabset())
 
         outF.write(doc_finalize())
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
+
 
 if __name__ == '__main__':
     main()

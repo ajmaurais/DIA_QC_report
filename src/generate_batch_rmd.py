@@ -531,7 +531,7 @@ def remove_bc_tables(table, name=None):
     return table
 
 
-def main():
+def parse_args(argv):
     parser = argparse.ArgumentParser(description='Generate batch correction rmd report.')
 
     file_settings = parser.add_argument_group('R markdown file settings')
@@ -611,7 +611,13 @@ def main():
                                  '0 for false, 1 for true. 10 is the default')
 
     parser.add_argument('db', help='Path to batch database.')
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # string variable args
     string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key']
@@ -736,6 +742,10 @@ def main():
         # Check if there is at least 1 table to be written.
         if sum(int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)) > 0:
             outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

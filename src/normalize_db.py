@@ -13,7 +13,7 @@ from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
 from .submodules.logger import LOGGER
 
 
-def main():
+def parse_args(argv):
     parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
     parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
                         help='Normalization method to use. Default is "DirectLFQ"')
@@ -30,7 +30,13 @@ def main():
                                     'replicates.includeRep values to TRUE.')
     parser.add_argument('db', help='Path to sqlite batch database.')
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     exclude_reps = sum([len(args.excludeRep), len(args.excludeProject)]) > 0
     if exclude_reps and args.useAll:
@@ -134,6 +140,10 @@ def main():
         conn = update_meta_value(conn, key, value)
 
     conn.close()
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

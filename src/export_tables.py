@@ -122,7 +122,8 @@ def write_metadata_tables(conn, dest, tables):
 def _any_tables(table_opts):
     return any(table_opts[d][m] for d in table_opts for m in table_opts[d])
 
-def main():
+
+def parse_data(argv):
     parser = argparse.ArgumentParser(description='Export selected table(s) from precursor database.')
     parser.add_argument('-o', '--outputDir', default=None, dest='output_dir',
                         help=f'Output directory. Default is the current working directory.')
@@ -143,7 +144,13 @@ def main():
                                  '0 for false, 1 for true. 00 is the default')
 
     parser.add_argument('db', help='Path to precursor quality database.')
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # check args
     if not validate_bit_mask(args.precursorTables, 2, 2):
@@ -211,6 +218,10 @@ def main():
         LOGGER.info('Done writing metadata tables.')
 
     conn.close()
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

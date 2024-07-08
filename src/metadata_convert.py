@@ -13,7 +13,7 @@ IN_FORMATS = ('json', 'csv', 'tsv')
 OUT_FORMATS = ('json', 'skyline', 'csv', 'tsv')
 
 
-def main():
+def parse_args(argv):
     parser = argparse.ArgumentParser(description='Convert metadata annotations to specfied '
                                                  'file format.')
     parser.add_argument('-i', '--in', default=None,
@@ -27,7 +27,13 @@ def main():
                         help='Output file prefix. By default the input file basename is used.')
     parser.add_argument('metadata', help='The metadata file to convert.')
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     output_prefix = args.out_prefix if args.out_prefix else splitext(basename(args.metadata))[0]
 
@@ -51,6 +57,10 @@ def main():
     else:
         LOGGER.error('Unknown output format!')
         sys.exit(1)
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

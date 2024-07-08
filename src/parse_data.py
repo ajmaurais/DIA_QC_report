@@ -468,7 +468,7 @@ def check_duplicate_precursors(precursors, mode):
     return ret
 
 
-def main():
+def parse_args(argv):
     parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
                                                  'Skyline precursor_quality and replicate_quality reports.')
     parser.add_argument('-m', '--metadata', default=None,
@@ -496,7 +496,13 @@ def main():
                         help='Project name to use in replicates table.')
     parser.add_argument('replicates', help='Skyline replicate_report')
     parser.add_argument('precursors', help='Skyline precursor_report')
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # read annotations if applicable
     metadata = None
@@ -581,6 +587,10 @@ def main():
         LOGGER.error(f'Failed to {"create" if args.overwriteMode != "append" else "append to"} database!')
         sys.exit(1)
     LOGGER.info('Done writing database...')
+
+
+def main():
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':
