@@ -244,7 +244,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             cls.conn.close()
 
 
-    def test_is_sucessful(self):
+    def test_is_successful(self):
         self.assertEqual(self.parse_result.returncode, 0)
 
         # Generate unnormalized qmd
