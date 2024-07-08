@@ -9,6 +9,8 @@ from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
+COMMAND_DESCRIPTION = 'Generate batch correction rmd report.'
+
 DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA Batch Correction Report'
@@ -532,7 +534,7 @@ def remove_bc_tables(table, name=None):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description='Generate batch correction rmd report.')
+    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
 
     file_settings = parser.add_argument_group('R markdown file settings')
     file_settings.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',

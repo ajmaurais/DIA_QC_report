@@ -75,7 +75,7 @@ class TestMakeBatchRmd(unittest.TestCase):
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['normalize_db', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', cls.db_path]
         cls.normalize_result = setup_functions.run_command(normalize_command,
                                                            cls.work_dir,
                                                            prefix='normalize_db')
@@ -97,7 +97,7 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'basic_test'
-        command = ['generate_batch_rmd',
+        command = ['dia_qc', 'batch_rmd',
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
@@ -126,7 +126,7 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'False')
 
             # make sure generate_batch_rmd fails
-            command = ['generate_batch_rmd', self.db_path]
+            command = ['dia_qc', 'batch_rmd', self.db_path]
             result = setup_functions.run_command(command, self.work_dir)
             self.assertEqual(result.returncode, 1)
             self.assertTrue('Database file it not normalized!' in result.stderr)
@@ -145,7 +145,7 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',)))
 
             rmd_name = 'single_batch'
-            command = ['generate_batch_rmd',
+            command = ['dia_qc', 'batch_rmd',
                        '--proteinTables=00', '--precursorTables=00',
                        '-o', f'{rmd_name}.rmd', self.db_path]
             result = setup_functions.run_command(command, self.work_dir)
@@ -155,7 +155,7 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
 
             for flag in ['precursorTables', 'proteinTables']:
-                command = ['generate_batch_rmd', f'--{flag}=44', self.db_path]
+                command = ['dia_qc', 'batch_rmd', f'--{flag}=44', self.db_path]
                 result = setup_functions.run_command(command, self.work_dir,
                                                      prefix='invalid_table_options')
                 self.assertEqual(result.returncode, 0)
@@ -178,13 +178,13 @@ class TestMakeBatchRmd(unittest.TestCase):
     def test_controlKey_check(self):
         self.assertTrue(self.conn is not None)
 
-        command = ['generate_batch_rmd', '--addControlValue=A549', self.db_path]
+        command = ['dia_qc', 'batch_rmd', '--addControlValue=A549', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
         self.assertTrue('No control key specified!' in result.stderr)
 
         # make sure --skipTests option works
-        command.insert(1, '--skipTests')
+        command.insert(2, '--skipTests')
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='test_controlKey_check_skipTests')
         self.assertEqual(result.returncode, 0)
@@ -193,13 +193,13 @@ class TestMakeBatchRmd(unittest.TestCase):
     def test_addControlValue_check(self):
         self.assertTrue(self.conn is not None)
 
-        command = ['generate_batch_rmd', '--controlKey=cellLine', self.db_path]
+        command = ['dia_qc', 'batch_rmd', '--controlKey=cellLine', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
         self.assertTrue('No control value(s) specified!' in result.stderr)
 
         # make sure --skipTests option works
-        command.insert(1, '--skipTests')
+        command.insert(2, '--skipTests')
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='test_addControlValue_check_skipTests')
         self.assertEqual(result.returncode, 0)
@@ -230,7 +230,7 @@ class TestMissingMetadata(unittest.TestCase):
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['normalize_db', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', cls.db_path]
         cls.normalize_result = setup_functions.run_command(normalize_command,
                                                            cls.work_dir,
                                                            prefix='normalize_db')
@@ -254,7 +254,7 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'basic_test'
-        command = ['generate_batch_rmd',
+        command = ['dia_qc', 'batch_rmd',
                    '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
@@ -296,7 +296,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['normalize_db', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', cls.db_path]
         cls.normalize_result = setup_functions.run_command(normalize_command,
                                                            cls.work_dir,
                                                            prefix='normalize_db')
@@ -318,7 +318,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'space_header_test'
-        command = ['generate_batch_rmd',
+        command = ['dia_qc', 'batch_rmd',
                    '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
                    '--controlKey', 'string var',
                    '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
@@ -346,7 +346,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'symbol_header_test'
-        command = ['generate_batch_rmd',
+        command = ['dia_qc', 'batch_rmd',
                    '-c', 'string var', '-c', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
                    '--controlKey', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
                    '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
