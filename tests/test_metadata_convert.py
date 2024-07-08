@@ -21,7 +21,8 @@ class TestOptions(unittest.TestCase):
 
     def test_prefix_option(self):
         prefix = 'prefix'
-        command = ['metadata_convert', f'--prefix={prefix}', f'{self.metadata_dir}/HeLa_metadata.json']
+        command = ['dia_qc', 'metadata_convert',
+                   f'--prefix={prefix}', f'{self.metadata_dir}/HeLa_metadata.json']
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(0, result.returncode)
 
@@ -78,7 +79,7 @@ class TestToCsv(unittest.TestCase, TestToFileBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
         cls.out_ext = 'csv'
 
-        commands = ['metadata_convert', '--out=csv', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=csv', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -90,7 +91,7 @@ class TestToTsv(unittest.TestCase, TestToFileBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_missing_multi_var_metadata.json'
         cls.out_ext = 'tsv'
 
-        commands = ['metadata_convert', '--out=tsv', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=tsv', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -102,7 +103,7 @@ class TestToJson(unittest.TestCase, TestToFileBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
         cls.out_ext = 'json'
 
-        commands = ['metadata_convert', '--out=json', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=json', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -137,7 +138,7 @@ class TestTsvToSkylineCsv(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['metadata_convert', '--out=skyline', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -149,7 +150,7 @@ class TestCsvToSkylineCsv(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.csv'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['metadata_convert', '--out=skyline', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -161,7 +162,7 @@ class TestJsonToSkylineCsv(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.json'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['metadata_convert', '--out=skyline', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
 
 
@@ -183,5 +184,5 @@ class TestProblamaticHeaders(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['metadata_convert', '--out=skyline', cls.metadata_file]
+        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
         cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)

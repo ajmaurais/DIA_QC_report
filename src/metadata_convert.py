@@ -8,14 +8,13 @@ from .submodules.dtype import Dtype
 from .submodules.read_metadata import Metadata
 from .submodules.logger import LOGGER
 
-
+COMMAND_DESCRIPTION = 'Convert metadata annotations to specfied file format.'
 IN_FORMATS = ('json', 'csv', 'tsv')
 OUT_FORMATS = ('json', 'skyline', 'csv', 'tsv')
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description='Convert metadata annotations to specfied '
-                                                 'file format.')
+    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
     parser.add_argument('-i', '--in', default=None,
                         choices=IN_FORMATS, dest='input_format',
                         help='Specify metadata file format. '

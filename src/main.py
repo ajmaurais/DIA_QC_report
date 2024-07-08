@@ -3,6 +3,7 @@ import sys
 import argparse
 
 from . import parse_data
+from . import metadata_convert
 from . import normalize_db
 from . import generate_qc_qmd
 from . import generate_batch_rmd
@@ -25,6 +26,7 @@ class Main():
 
 Available commands:
    parse                {parse_data.COMMAND_DESCRIPTION}
+   metadata_convert     {metadata_convert.COMMAND_DESCRIPTION}
    normalize            {normalize_db.COMMAND_DESCRIPTION}
    qc_qmd               {generate_qc_qmd.COMMAND_DESCRIPTION}
    batch_rmd            {generate_batch_rmd.COMMAND_DESCRIPTION}
@@ -43,6 +45,10 @@ Available commands:
 
     def parse(self):
         parse_data._main(parse_data.parse_args(sys.argv[2:]))
+
+
+    def metadata_convert(self):
+        metadata_convert._main(metadata_convert.parse_args(sys.argv[2:]))
 
 
     def normalize(self):
