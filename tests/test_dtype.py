@@ -119,3 +119,19 @@ class TestDtype(unittest.TestCase):
         self.assertIs(Dtype.var_to_type(69), Dtype.INT)
         self.assertIs(Dtype.var_to_type(3.14), Dtype.FLOAT)
         self.assertIs(Dtype.var_to_type('Hello there General Kenobi'), Dtype.STRING)
+
+
+    def test_to_pd_type(self):
+        types = [(Dtype.NULL, str), (Dtype.STRING, str),
+                 (Dtype.BOOL, bool), (Dtype.INT, 'int32'), (Dtype.FLOAT, 'float64')]
+
+        for dtype, ret in types:
+            self.assertEqual(ret, dtype.to_pd_type())
+
+
+    def test_to_sky_type(self):
+        types = [(Dtype.NULL, 'text'), (Dtype.STRING, 'text'),
+                 (Dtype.BOOL, 'true_false'), (Dtype.INT, 'number'), (Dtype.FLOAT, 'number')]
+
+        for dtype, ret in types:
+            self.assertEqual(ret, dtype.to_sky_type())

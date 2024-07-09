@@ -19,11 +19,12 @@ from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ran
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
-from .submodules.read_metadata import read_metadata, ValidationError
+from .submodules.read_metadata import Metadata
+
+COMMAND_DESCRIPTION = 'Generate QC and batch correction database from Skyline reports.'
+DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
 
 PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['modifiedSequence'] + PRECURSOR_QUALITY_NUMERIC_COLUMNS
-
-DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
 
 
 def _initialize(fname):
@@ -468,9 +469,8 @@ def check_duplicate_precursors(precursors, mode):
     return ret
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Generate QC and batch correction database from '
-                                                 'Skyline precursor_quality and replicate_quality reports.')
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'csv', 'tsv'),
@@ -481,10 +481,10 @@ def main():
     #                           'If no protein report is given, proteins are quantified in the database '
     #                           'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',
-                        help='Output file name. Default is ./data.db3')
+                        help='Output database name. Default is ./data.db3')
     parser.add_argument('-w', '--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
-                        help='Behavior if output file already exists. '
-                             'By default the script will exit with an error if the file already exists.')
+                        help='Behavior if output database already exists. '
+                             'By default the script will exit with an error if the database file already exists.')
     parser.add_argument('-d', '--duplicatePrecursors', default='e', choices=DUPLICATE_PRECURSOR_CHOICES,
                         help="How to handle precursors with the same sequence and charge, but different area. "
                              "'e' for error, 'm' to use the peak area with user adjusted integration boundaries, "
@@ -494,19 +494,25 @@ def main():
                         help="Choose whether to group precursors by gene or protein. Default is 'protein'")
     parser.add_argument('-n', '--projectName', default=None, dest='project_name',
                         help='Project name to use in replicates table.')
-    parser.add_argument('replicates', help='Skyline replicate_report')
-    parser.add_argument('precursors', help='Skyline precursor_report')
-    args = parser.parse_args()
+    parser.add_argument('replicates', help='Skyline replicate_quality report')
+    parser.add_argument('precursors', help='Skyline precursor_quality report')
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # read annotations if applicable
     metadata = None
     metadata_types = None
     if args.metadata is not None:
-        try:
-            metadata, metadata_types = read_metadata(args.metadata, args.metadataFormat)
-        except (ValueError, ValidationError) as e:
-            LOGGER.error(e)
+        metadata_reader = Metadata()
+        if not metadata_reader.read(args.metadata, args.metadataFormat):
             sys.exit(1)
+        metadata = metadata_reader.df
+        metadata_types = metadata_reader.types
 
     # read replicates
     replicates = read_replicate_report(args.replicates)
@@ -581,6 +587,11 @@ def main():
         LOGGER.error(f'Failed to {"create" if args.overwriteMode != "append" else "append to"} database!')
         sys.exit(1)
     LOGGER.info('Done writing database...')
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc parse" instead.')
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

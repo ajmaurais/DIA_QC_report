@@ -12,9 +12,12 @@ from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
 from .submodules.logger import LOGGER
 
+COMMAND_DESCRIPTION = 'Perform DirectLFQ or median normalization on batch database.'
 
-def main():
-    parser = argparse.ArgumentParser(description='Perform DirectLFQ or median normalization on batch database.')
+
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
+
     norm_settings = parser.add_argument_group('Normalization settings')
     norm_settings.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
                                help='Normalization method to use. Default is "DirectLFQ"')
@@ -22,6 +25,7 @@ def main():
                                help="Don't exclude precursors which are missing in 1 or more "
                                     "replicates from normalization. This option is only compabable "
                                     "with median normalization.")
+
     exclude_args = parser.add_argument_group('Filter replicates',
                                              'Add replicates or projects to exclude from normalization. '
                                              'The replicates.includeRep value will simply be set to FALSE '
@@ -33,9 +37,15 @@ def main():
     exclude_args.add_argument('-a', '--useAll', action='store_true', default=False,
                               help='Use all replicates for normalization and set all '
                                     'replicates.includeRep values to TRUE.')
-    parser.add_argument('db', help='Path to sqlite batch database.')
+    parser.add_argument('db', help='Path to sqlite batch/qc database.')
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     exclude_reps = sum([len(args.excludeRep), len(args.excludeProject)]) > 0
     if exclude_reps and args.useAll:
@@ -142,6 +152,11 @@ def main():
         conn = update_meta_value(conn, key, value)
 
     conn.close()
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc normalize" instead.')
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

@@ -11,6 +11,8 @@ from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
+COMMAND_DESCRIPTION = 'Export selected table(s) from precursor database.'
+
 METHOD_NAMES = ['unnormalized', 'normalized']
 PRECURSOR_METHOD_NAMES = dict(zip(METHOD_NAMES, ['totalAreaFragment', 'normalizedArea']))
 PROTEIN_METHOD_NAMES = dict(zip(METHOD_NAMES, ['abundance', 'normalizedAbundance']))
@@ -122,8 +124,9 @@ def write_metadata_tables(conn, dest, tables):
 def _any_tables(table_opts):
     return any(table_opts[d][m] for d in table_opts for m in table_opts[d])
 
-def main():
-    parser = argparse.ArgumentParser(description='Export selected table(s) from precursor database.')
+
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('-o', '--outputDir', default=None, dest='output_dir',
                         help=f'Output directory. Default is the current working directory.')
 
@@ -142,8 +145,14 @@ def main():
                             help='Tables to write for metadata. Only 0 or 1 are supported. '
                                  '0 for false, 1 for true. 00 is the default')
 
-    parser.add_argument('db', help='Path to precursor quality database.')
-    args = parser.parse_args()
+    parser.add_argument('db', help='Path to sqlite batch/qc database.')
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # check args
     if not validate_bit_mask(args.precursorTables, 2, 2):
@@ -211,6 +220,11 @@ def main():
         LOGGER.info('Done writing metadata tables.')
 
     conn.close()
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc db_export" instead.')
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

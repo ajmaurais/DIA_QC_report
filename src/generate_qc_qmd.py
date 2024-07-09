@@ -10,6 +10,8 @@ from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
 
+COMMAND_DESCRIPTION = 'Generate QC qmd report.'
+
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA QC report'
@@ -420,8 +422,8 @@ def check_std_proteins_exist(conn, proteins):
     return all_good
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Generate qmd report.')
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
     parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
@@ -433,8 +435,14 @@ def main():
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 
-    parser.add_argument('db', help='Path to precursor quality database.')
-    args = parser.parse_args()
+    parser.add_argument('db', help='Path to sqlite qc database.')
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # check args
     if os.path.isfile(args.db):
@@ -527,6 +535,12 @@ def main():
         outF.write(close_pannel_tabset())
 
         outF.write(doc_finalize())
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc qc_qmd" instead.')
+    _main(parse_args(sys.argv[1:]))
+
 
 if __name__ == '__main__':
     main()
