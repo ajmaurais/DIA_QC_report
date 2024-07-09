@@ -2,6 +2,29 @@
 
 The `dia_qc` script contains several sub-commands to generate QC and batch reports from DIA proteomics data. Reports from 1 or more Skyline documents are combined into a single sqlite database which is modified or read by subsequent commands.
 
+To see all the available sub-commands run: `dia_qc -h`
+
+```
+usage: dia_qc <command> [<args>]
+
+Available commands:
+   parse                Generate QC and batch correction database from Skyline reports.
+   metadata_convert     Convert metadata annotations to specified file format.
+   normalize            Perform DirectLFQ or median normalization on batch database.
+   qc_qmd               Generate QC qmd report.
+   batch_rmd            Generate batch correction rmd report.
+   export_gene_matrix   Export PDC gene tables from batch database.
+   db_export            Export selected table(s) from precursor database.
+
+Tools to generate QC and batch reports from DIA proteomics data
+
+positional arguments:
+  command     Subcommand to run.
+
+options:
+  -h, --help  show this help message and exit
+```
+
 ## Parsing Skyline reports
 
 The `parse` sub-command is used to combine .tsv reports exported from one or more Skyline documents into a sqlite database which is used in all subsequent steps. `parse` requires a precursor level and replicate level report from each Skyline document. The templates for both reports are in the `resources` subdirectory.
@@ -35,27 +58,35 @@ dia_qc normalize data.db3
 
 ## QC report
 
-```
-# Generate qmd file
-dia_qc qc_qmd --addStdProtein 'sp|P00924|ENO1_YEAST' data.db3
+Generate qmd file
 
-# Render qmd to html
+```
+dia_qc qc_qmd --addStdProtein 'sp|P00924|ENO1_YEAST' data.db3
+```
+
+Render qmd to html
+
+```
 quarto render qc_report.qmd --to html
 ```
 
 ## Batch correction report
 
-```
-# Generate rmd file
-dia_qc batch_rmd data.db3
+Generate rmd file
 
-# Render rmd to html
+```
+dia_qc batch_rmd data.db3
+```
+
+Render rmd to html
+
+```
 Rscript -e 'rmarkdown::render("bc_report.rmd")'
 ```
 
 ## Other sub-commands
 
-### `db_export`
+### Export databse tables to tsv file(s).
 
 The `db_export` sub-command is used to export precursor, protein, or metadate tables from the batch/qc database to a tsv file.
 
@@ -63,17 +94,24 @@ The `db_export` sub-command is used to export precursor, protein, or metadate ta
 dia_qc db_export data.db3
 ```
 
-### `metadata_convert`
+### Convert between metadata formats
 
 The `metadata_conver` sub-command is used to interconvert between all the metadata file formats which are supported by `dia_qc parse`.
 
+Convert tsv to json
+
 ```
-# Convert tsv to json
 dia_qc metadata_convert -o json <metadata_tsv>
+```
 
-# Convert tsv to Skyline annotation csv
+Convert tsv to Skyline annotation csv
+
+```
 dia_qc metadata_convert -o skyline <metadata_tsv>
+```
 
-# Convert Skyline annotation csv to tsv
+Convert Skyline annotation csv to tsv
+
+```
 dia_qc metadata_convert -o tsv <annotation_csv>
 ```
