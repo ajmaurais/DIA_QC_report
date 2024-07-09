@@ -22,11 +22,4 @@ packages = ['DIA_QC_report', 'DIA_QC_report.submodules']
 package-dir = {'DIA_QC_report' = 'src'}
 
 [project.scripts]
-parse_data = 'DIA_QC_report.parse_data:main'
-generate_batch_rmd = 'DIA_QC_report.generate_batch_rmd:main'
-generate_qc_qmd = 'DIA_QC_report.generate_qc_qmd:main'
-export_gene_matrix = 'DIA_QC_report.export_gene_matrix:main'
-normalize_db = 'DIA_QC_report.normalize_db:main'
-metadata_convert = 'DIA_QC_report.metadata_convert:main'
-export_tables = 'DIA_QC_report.export_tables:main'
 dia_qc = 'DIA_QC_report.main:main'
