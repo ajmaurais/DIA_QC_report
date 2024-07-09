@@ -533,8 +533,8 @@ def remove_bc_tables(table, name=None):
     return table
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     file_settings = parser.add_argument_group('R markdown file settings')
     file_settings.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',

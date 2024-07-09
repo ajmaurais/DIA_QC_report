@@ -422,8 +422,8 @@ def check_std_proteins_exist(conn, proteins):
     return all_good
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
     parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',

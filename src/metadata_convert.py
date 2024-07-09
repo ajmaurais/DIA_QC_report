@@ -13,8 +13,8 @@ IN_FORMATS = ('json', 'csv', 'tsv')
 OUT_FORMATS = ('json', 'skyline', 'csv', 'tsv')
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('-i', '--in', default=None,
                         choices=IN_FORMATS, dest='input_format',
                         help='Specify metadata file format. '

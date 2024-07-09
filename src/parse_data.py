@@ -470,8 +470,8 @@ def check_duplicate_precursors(precursors, mode):
     return ret
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('-m', '--metadata', default=None,
                         help='Annotations corresponding to each file.')
     parser.add_argument('--metadataFormat', default=None, choices=('json', 'csv', 'tsv'),

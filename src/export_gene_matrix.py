@@ -210,8 +210,8 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
     return ret, missing_accessions
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     gene_group_args = parser.add_argument_group('Gene grouping',
                                                 description="Choose how to display gene groups in output tables. "

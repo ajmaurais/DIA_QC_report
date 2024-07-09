@@ -44,31 +44,38 @@ Available commands:
 
 
     def parse(self):
-        parse_data._main(parse_data.parse_args(sys.argv[2:]))
+        args = parse_data.parse_args(sys.argv[2:], prog='dia_qc parse')
+        parse_data._main(args)
 
 
     def metadata_convert(self):
-        metadata_convert._main(metadata_convert.parse_args(sys.argv[2:]))
+        args = metadata_convert.parse_args(sys.argv[2:], prog='dia_qc metadata_convert')
+        metadata_convert._main(args)
 
 
     def normalize(self):
-        normalize_db._main(normalize_db.parse_args(sys.argv[2:]))
+        args = normalize_db.parse_args(sys.argv[2:], prog='dia_qc normalize')
+        normalize_db._main(args)
 
 
     def qc_qmd(self):
-        generate_qc_qmd._main(generate_qc_qmd.parse_args(sys.argv[2:]))
+        args = generate_qc_qmd.parse_args(sys.argv[2:], prog='dia_qc qc_qmd')
+        generate_qc_qmd._main(args)
 
 
     def batch_rmd(self):
-        generate_batch_rmd._main(generate_batch_rmd.parse_args(sys.argv[2:]))
+        args = generate_batch_rmd.parse_args(sys.argv[2:], prog='dia_qc batch_rmd')
+        generate_batch_rmd._main(args)
 
 
     def export_gene_matrix(self):
-        export_gene_matrix._main(export_gene_matrix.parse_args(sys.argv[2:]))
+        args = export_gene_matrix.parse_args(sys.argv[2:], prog='dia_qc export_gene_matrix')
+        export_gene_matrix._main(args)
 
 
     def db_export(self):
-        export_tables._main(export_tables.parse_args(sys.argv[2:]))
+        args = export_tables.parse_args(sys.argv[2:], prog='dia_qc db_export')
+        export_tables._main(args)
 
 
 def main():

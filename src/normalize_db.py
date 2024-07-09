@@ -15,8 +15,8 @@ from .submodules.logger import LOGGER
 COMMAND_DESCRIPTION = 'Perform DirectLFQ or median normalization on batch database.'
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
                         help='Normalization method to use. Default is "DirectLFQ"')
     exclude_args = parser.add_argument_group('Filter replicates',

@@ -125,8 +125,8 @@ def _any_tables(table_opts):
     return any(table_opts[d][m] for d in table_opts for m in table_opts[d])
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('-o', '--outputDir', default=None, dest='output_dir',
                         help=f'Output directory. Default is the current working directory.')
 
