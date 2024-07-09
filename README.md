@@ -14,7 +14,7 @@ Available commands:
    qc_qmd               Generate QC qmd report.
    batch_rmd            Generate batch correction rmd report.
    export_gene_matrix   Export PDC gene tables from batch database.
-   db_export            Export selected table(s) from precursor database.
+   db_export            Export selected table(s) from batch/qc database.
 
 Tools to generate QC and batch reports from DIA proteomics data
 
@@ -24,6 +24,30 @@ positional arguments:
 options:
   -h, --help  show this help message and exit
 ```
+
+## Installation
+
+Clone the repository
+
+```
+git clone --recurse-submodules https://github.com/ajmaurais/DIA_QC_report
+```
+
+The python scripts in DIA_QC_report are bundled into a package which can be installed with pip.
+
+```
+cd DIA_QC_report
+pip install .
+```
+
+In order to render the batch Rmarkdown report, you also need to install the R package in the `rDIAUtils` sub-repository.
+
+```
+cd DIA_QC_report/rDIAUtils
+Rscript -e 'install.packages(".", type="source", repo=NULL)'
+```
+
+</details>
 
 ## Parsing Skyline reports
 
