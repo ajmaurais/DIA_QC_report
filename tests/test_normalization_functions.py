@@ -52,10 +52,23 @@ class TestNormalizationBase(setup_functions.AbstractTestsBase):
             normalization.NormalizationManagerBase(self.conn)
 
 
-    def test_median_normalization(self):
+    def test_median_normalization_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         manager = normalization.MedianNormalizer(self.conn)
+        with self.assertLogs(normalization.LOGGER) as cm:
+            self.assertTrue(manager.normalize())
+
+        precursors, proteins = manager.get_long_tables()
+
+        self.check_medians_equal(precursors, 'area')
+        self.check_medians_equal(proteins, 'abundance')
+
+
+    def test_median_normalization_keep_missing(self):
+        self.assertIsNotNone(self.conn)
+
+        manager = normalization.MedianNormalizer(self.conn, keep_na=True)
         with self.assertLogs(normalization.LOGGER) as cm:
             self.assertTrue(manager.normalize())
 
@@ -186,7 +199,7 @@ class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
         self.assertTrue('Can not perform DirectLFQ normalization with 0 precursors!' in cm.output[-1])
 
 
-    def test_read_precursors(self):
+    def test_read_precursors_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         # read ground truth data
@@ -251,7 +264,7 @@ class TestMultiNormalization(unittest.TestCase, TestNormalizationBase):
                 cls.conn = sqlite3.connect(cls.db_path)
 
 
-    def test_read_precursors(self):
+    def test_read_precursors_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         # read ground truth data
