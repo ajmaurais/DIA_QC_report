@@ -145,7 +145,7 @@ def parse_args(argv, prog=None):
                             help='Tables to write for metadata. Only 0 or 1 are supported. '
                                  '0 for false, 1 for true. 00 is the default')
 
-    parser.add_argument('db', help='Path to precursor quality database.')
+    parser.add_argument('db', help='Path to sqlite batch/qc database.')
     return parser.parse_args(argv)
 
 
@@ -223,6 +223,7 @@ def _main(args):
 
 
 def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc db_export" instead.')
     _main(parse_args(sys.argv[1:]))
 
 

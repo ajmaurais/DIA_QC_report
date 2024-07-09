@@ -30,7 +30,7 @@ def parse_args(argv, prog=None):
     exclude_args.add_argument('-a', '--useAll', action='store_true', default=False,
                               help='Use all replicates for normalization and set all '
                                     'replicates.includeRep values to TRUE.')
-    parser.add_argument('db', help='Path to sqlite batch database.')
+    parser.add_argument('db', help='Path to sqlite batch/qc database.')
 
     return parser.parse_args(argv)
 
@@ -145,6 +145,7 @@ def _main(args):
 
 
 def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc normalize" instead.')
     _main(parse_args(sys.argv[1:]))
 
 

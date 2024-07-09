@@ -10,7 +10,7 @@ from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
 
-COMMAND_DESCRIPTION = 'Generate qmd report.'
+COMMAND_DESCRIPTION = 'Generate QC qmd report.'
 
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
@@ -435,7 +435,7 @@ def parse_args(argv, prog=None):
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 
-    parser.add_argument('db', help='Path to precursor quality database.')
+    parser.add_argument('db', help='Path to sqlite qc database.')
     return parser.parse_args(argv)
 
 
@@ -538,6 +538,7 @@ def _main(args):
 
 
 def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc qc_qmd" instead.')
     _main(parse_args(sys.argv[1:]))
 
 

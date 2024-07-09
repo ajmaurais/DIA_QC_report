@@ -231,7 +231,7 @@ def parse_args(argv, prog=None):
     parser.add_argument('--addGeneUuid', default=False, action='store_true',
                         dest='add_gene_uuid', help='Add column for gene id hash.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
-    parser.add_argument('database', help='The precursor database.')
+    parser.add_argument('database', help='Path to sqlite batch/qc database.')
 
     return parser.parse_args(argv)
 
@@ -360,6 +360,7 @@ def _main(args):
 
 
 def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc export_gene_matrix" instead.')
     _main(parse_args(sys.argv[1:]))
 
 

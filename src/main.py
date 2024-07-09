@@ -10,8 +10,6 @@ from . import generate_batch_rmd
 from . import export_gene_matrix
 from . import export_tables
 
-# SUBCOMMANDS = ['parse', 'db_export']
-
 
 class Main():
     '''

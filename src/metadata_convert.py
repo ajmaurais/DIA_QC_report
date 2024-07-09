@@ -8,7 +8,7 @@ from .submodules.dtype import Dtype
 from .submodules.read_metadata import Metadata
 from .submodules.logger import LOGGER
 
-COMMAND_DESCRIPTION = 'Convert metadata annotations to specfied file format.'
+COMMAND_DESCRIPTION = 'Convert metadata annotations to specified file format.'
 IN_FORMATS = ('json', 'csv', 'tsv')
 OUT_FORMATS = ('json', 'skyline', 'csv', 'tsv')
 
@@ -24,7 +24,7 @@ def parse_args(argv, prog=None):
                         help="Specify metadata output format. 'skyline' is the default.")
     parser.add_argument('-p', '--prefix', default=None, dest='out_prefix',
                         help='Output file prefix. By default the input file basename is used.')
-    parser.add_argument('metadata', help='The metadata file to convert.')
+    parser.add_argument('metadata_file', help='The metadata file to convert.')
 
     return parser.parse_args(argv)
 
@@ -34,10 +34,10 @@ def _main(args):
     Actual main method. `args` Should be initialized argparse namespace.
     '''
 
-    output_prefix = args.out_prefix if args.out_prefix else splitext(basename(args.metadata))[0]
+    output_prefix = args.out_prefix if args.out_prefix else splitext(basename(args.metadata_file))[0]
 
     metadata_reader = Metadata()
-    if not metadata_reader.read(args.metadata, args.input_format):
+    if not metadata_reader.read(args.metadata_file, args.input_format):
         sys.exit(1)
 
     if args.output_format in ('tsv', 'json', 'csv'):
@@ -59,6 +59,7 @@ def _main(args):
 
 
 def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc metadata_convert" instead.')
     _main(parse_args(sys.argv[1:]))
 
 
