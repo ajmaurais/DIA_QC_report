@@ -131,7 +131,7 @@ class TestDBHelperFunctions(unittest.TestCase):
         self.assertTrue(self.conn is not None)
 
         self.assertFalse(db_utils.is_normalized(self.conn))
-        normalize_command = ['normalize_db', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', self.db_path]
         normalize_result = setup_functions.run_command(normalize_command,
                                                        self.work_dir,
                                                        prefix='normalize_single_proj')
@@ -178,7 +178,7 @@ class TestDBHelperFunctions(unittest.TestCase):
         self.assertEqual('protein', db_utils.get_meta_value(self.conn, 'group_precursors_by'))
 
         gene_id_path = f'{self.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
-        command = ['make_gene_matrix', gene_id_path, self.db_path]
+        command = ['dia_qc', 'export_gene_matrix', gene_id_path, self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr)

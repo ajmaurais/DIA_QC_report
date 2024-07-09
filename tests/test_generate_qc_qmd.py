@@ -223,7 +223,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
+        command = ['dia_qc', 'parse', f'--projectName={cls.TEST_PROJECT}',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
@@ -263,9 +263,9 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.html'))
 
         # Normalize database
-        normalize_command = ['normalize_db', '-m=median', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', self.db_path]
         norm_db_result = setup_functions.run_command(normalize_command, self.work_dir,
-                                                  prefix='normalize_db')
+                                                  prefix='normalize')
         self.assertEqual(norm_db_result.returncode, 0)
 
         # Generate normalized qmd
