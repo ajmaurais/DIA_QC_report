@@ -41,8 +41,8 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
 
     # rank peptides by mean RT across replicates
     df['meanRT'] = df.groupby('modifiedSequence')['rt'].transform('mean')
-    df['peptideLabel'] = df[["modifiedSequence", "precursorCharge"]].apply(lambda x: f'{x[0]}{"+" * x[1]}', axis = 1)
-    ranks = {row['peptideLabel']: row['meanRT'] for _, row in df[['meanRT', 'peptideLabel']].drop_duplicates().iterrows()}
+    df['peptideLabel'] = df[["modifiedSequence", "precursorCharge"]].apply(lambda x: f'{x[0]}{"+" * x[1]}', axis=1)
+    ranks = {row.peptideLabel: row.meanRT for row in df[['meanRT', 'peptideLabel']].drop_duplicates().itertuples()}
 
     # generate color scale
     cmap = plt.get_cmap('viridis')
@@ -54,12 +54,12 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
 
     line_width = 0.4
     for i, replicate in enumerate(df['acquiredRank'].drop_duplicates()):
-        for _, row in df[df['acquiredRank'] == replicate].iterrows():
-            ax.add_patch(Rectangle((i - (line_width / 2), row['minStartTime']),
-                                    line_width, row['maxEndTime'] - row['minStartTime'],
-                                    color=colors[row['peptideLabel']]))
+        for row in df[df['acquiredRank'] == replicate].itertuples():
+            ax.add_patch(Rectangle((i - (line_width / 2), row.minStartTime),
+                                    line_width, row.maxEndTime - row.minStartTime,
+                                    color=colors[row.peptideLabel]))
 
-    ax.legend(handles = [Patch(color=color, label=label) for label, color in colors.items()],
+    ax.legend(handles=[Patch(color=color, label=label) for label, color in colors.items()],
               bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
 
     ax.set_xlabel('Acquisition number')
