@@ -44,7 +44,7 @@ query = \'\'\'SELECT
     p.precursorCharge,
     p.totalAreaFragment,
     p.totalAreaMs1,
-    p.rt,
+    p.rt * 60 as rt,
     p.maxFwhm * 60 as maxFwhm,
     p.averageMassErrorPPM as massError,
     p.libraryDotProduct,
@@ -180,11 +180,15 @@ bar_chart(agg, 'Number of precursors', legend_title='Precursor charge', dpi=%i)
 
 
 def rep_rt_sd(do_query=True, dpi=DEFAULT_DPI):
-    text = '''\n%s\n%s\n
+    text = '''\n%s\n%s
 # replicate RT cor histogram
-agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
-histogram(agg, 'Replicate RT SD (min)', dpi=%i,
-          limits=(agg.quantile(0.05) * -3, agg.quantile(0.95) * 3))
+agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg('std')
+
+if all(np.isnan(agg)):
+    print('Can not plot histogram! 0 precursors found in all replicates.')
+else:
+    histogram(agg, 'Replicate RT SD (seconds)', dpi=%i,
+              limits=(0, agg.quantile(0.95) * 3))
 ```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
 
     return text
@@ -484,8 +488,11 @@ def _main(args):
             outF.write(add_header('Standard retention times across replicates', level=2))
             outF.write(std_rt_dist(args.std_proteins, dpi=args.dpi))
 
+        outF.write(add_header('Standard deviation of precursor RT across replicates', level=2))
+        outF.write(rep_rt_sd(dpi=args.dpi, do_query=True))
+
         outF.write(add_header('Number of missed cleavages', level=2))
-        outF.write(missed_cleavages(do_query=True, dpi=args.dpi))
+        outF.write(missed_cleavages(do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Precursor charges', level=2))
         outF.write(precursor_charges(do_query=False, dpi=args.dpi))
