@@ -373,13 +373,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_batch_rmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,
                         help='Also test if rmd file can be rendered?')
-    parser.add_argument('unittest_args', nargs='*')
-    args = parser.parse_args()
+    args, unittest_args = parser.parse_known_args()
 
     TestMakeBatchRmd.RENDER_RMD = args.render
     TestMissingMetadata.RENDER_RMD = args.render
     TestBadMetadataHeaders.RENDER_RMD = args.render
 
-    unittest_args = args.unittest_args
-    unittest_args.insert(0, sys.argv[0])
+    unittest_args.insert(0, __file__)
     unittest.main(argv=unittest_args, verbosity=2)

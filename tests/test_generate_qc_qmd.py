@@ -258,40 +258,42 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
         if self.RENDER_QMD:
             render_command = ['quarto', 'render', f'{unorm_qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{unorm_qmd_name}')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.html'))
 
         # Normalize database
         normalize_command = ['dia_qc', 'normalize', '-m=median', self.db_path]
         norm_db_result = setup_functions.run_command(normalize_command, self.work_dir,
-                                                  prefix='normalize')
+                                                     prefix='normalize')
         self.assertEqual(norm_db_result.returncode, 0)
 
         # Generate normalized qmd
+        norm_qmd_name = 'normalized_test'
+        generate_qmd_command = ['dia_qc', 'qc_qmd', '-o', f'{norm_qmd_name}.qmd', self.db_path]
         norm_db_result = setup_functions.run_command(generate_qmd_command, self.work_dir,
-                                                     prefix=unorm_qmd_name)
+                                                     prefix=norm_qmd_name)
         self.assertEqual(norm_db_result.returncode, 0)
-        self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.qmd'))
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{norm_qmd_name}.qmd'))
 
         if self.RENDER_QMD:
-            render_command = ['quarto', 'render', f'{unorm_qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_command = ['quarto', 'render', f'{norm_qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{norm_qmd_name}')
             self.assertEqual(render_result.returncode, 0)
-            self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.html'))
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{norm_qmd_name}.html'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Tests for generate_qc_qmd')
     parser.add_argument('-r', '--render', action='store_true', default=False,
                         help='Also test if qmd file can be rendered?')
-    parser.add_argument('unittest_args', nargs='*')
-    args = parser.parse_args()
+    args, unittest_args = parser.parse_known_args()
 
     TestMakeQCqmd.RENDER_QMD = args.render
     TestMissingMetadata.RENDER_QMD = args.render
     TestAllPrecursorsMissing.RENDER_QMD = args.render
 
-    unittest_args = args.unittest_args
-    unittest_args.insert(0, sys.argv[0])
+    unittest_args.insert(0, __file__)
     unittest.main(argv=unittest_args, verbosity=2)
