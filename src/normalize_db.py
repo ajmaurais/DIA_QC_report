@@ -11,6 +11,7 @@ from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
 from .submodules.logger import LOGGER
+from . import __version__ as PROGRAM_VERSION
 
 COMMAND_DESCRIPTION = 'Perform DirectLFQ or median normalization on batch database.'
 

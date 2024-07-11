@@ -20,6 +20,7 @@ from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.read_metadata import Metadata
+from . import __version__ as PROGRAM_VERSION
 
 COMMAND_DESCRIPTION = 'Generate QC and batch correction database from Skyline reports.'
 DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
@@ -121,6 +122,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     log_metadata = {'command_log': current_command}
     log_metadata['group_precursors_by'] = group_precursors_by
     log_metadata['schema_version'] = SCHEMA_VERSION
+    log_metadata['dia_qc version'] = PROGRAM_VERSION
 
     if sample_metadata is not None and sample_metadata_types is None:
         LOGGER.error('Must specify both sample_metadata and sample_metadata_types!')

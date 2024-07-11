@@ -7,6 +7,7 @@ import pandas as pd
 
 from .dtype import Dtype
 from .logger import LOGGER
+from .. import __version__ as PROGRAM_VERSION
 
 METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
@@ -130,10 +131,35 @@ def is_normalized(conn):
 
 
 def check_schema_version(conn):
+    '''
+    Check the databse schema version and the version of dia_qc used to build the database.
+
+    If the version of dia_qc does not match the current verision, a warning is printed to the log.
+    If the SCHEMA_VERSION is diffent an error is printed to the log and the function returns False.
+
+    Parameters
+    ----------
+    conn: sqlite.Connection
+        A connection to the database.
+
+    Returns
+    -------
+    schema_matches: bool
+    '''
+
+    # check the version of dia_qc used to build database
+    db_program_version = get_meta_value(conn, 'dia_qc version')
+    if db_program_version != PROGRAM_VERSION:
+        LOGGER.warning('The database was created with dia_qc version %s but the current version is %s',
+                       db_program_version, PROGRAM_VERSION)
+
+    # check the database schema version
     db_version = get_meta_value(conn, 'schema_version')
     if db_version is None or db_version != SCHEMA_VERSION:
-        LOGGER.error(f'Database schema version ({db_version}) does not match program ({SCHEMA_VERSION})')
+        LOGGER.error(f'Database schema version (%s) does not match program (%s)',
+                     db_version, SCHEMA_VERSION)
         return False
+
     return True
 
 

@@ -10,6 +10,7 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 from DIA_QC_report.submodules.dtype import Dtype
+from DIA_QC_report import __version__ as PROGRAM_VERSION
 
 
 class TestDBHelperFunctions(unittest.TestCase):
@@ -104,7 +105,6 @@ class TestDBHelperFunctions(unittest.TestCase):
             db_utils.mark_all_reps_includced(self.conn)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_metadata_functions(self):
         self.assertTrue(self.conn is not None)
 
@@ -114,11 +114,32 @@ class TestDBHelperFunctions(unittest.TestCase):
         # test get_meta_value
         schema_version = db_utils.get_meta_value(self.conn, 'schema_version')
         self.assertEqual(db_utils.SCHEMA_VERSION, schema_version)
+        dia_qc_version = db_utils.get_meta_value(self.conn, 'dia_qc version')
+        self.assertEqual(PROGRAM_VERSION, dia_qc_version)
+
+        # set dia_qc version to NULL and check that we get a warning.
+        self.conn = db_utils.update_meta_value(self.conn, 'dia_qc version', 'NULL')
+        with self.assertLogs(db_utils.LOGGER, level='WARNING') as cm:
+            self.assertTrue(db_utils.check_schema_version(self.conn))
+        self.assertTrue(any(f'The database was created with dia_qc version NULL but the current version is {PROGRAM_VERSION}' in out
+                            for out in cm.output))
+        self.assertEqual(db_utils.get_meta_value(self.conn, 'dia_qc version'), 'NULL')
+        self.assertEqual(len(cm.output), 1)
+
+        # set dia_qc version back to correct version
+        self.conn = db_utils.update_meta_value(self.conn, 'dia_qc version', dia_qc_version)
+        self.assertEqual(db_utils.get_meta_value(self.conn, 'dia_qc version'), dia_qc_version)
+        with self.assertNoLogs(db_utils.LOGGER) as cm:
+            self.assertTrue(db_utils.check_schema_version(self.conn))
 
         # set current version to 'NULL' and make sure validation fails
         self.conn = db_utils.update_meta_value(self.conn, 'schema_version', 'NULL')
-        self.assertFalse(db_utils.check_schema_version(self.conn))
+        with self.assertLogs(db_utils.LOGGER, level='ERROR') as cm:
+            self.assertFalse(db_utils.check_schema_version(self.conn))
         self.assertEqual(db_utils.get_meta_value(self.conn, 'schema_version'), 'NULL')
+        self.assertEqual(len(cm.output), 1)
+        self.assertTrue(any(f'Database schema version (NULL) does not match program ({db_utils.SCHEMA_VERSION})' in out
+                            for out in cm.output))
 
         # set schema back to correct version
         self.conn = db_utils.update_meta_value(self.conn, 'schema_version', schema_version)
@@ -207,28 +228,27 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
                                          sep='\t')
         cls.acquired_ranks = {row.replicate: row.acquiredRank for row in cls.acquired_ranks.itertuples()}
 
+        # find replicate and metadata table commands in db_utils.SCHEMA
+        cls.replicate_table_command = None
+        cls.metadata_table_command = None
+        for command in db_utils.SCHEMA:
+            if command.strip().startswith('CREATE TABLE replicates'):
+                cls.replicate_table_command = command
+                continue
+            if command.strip().startswith('CREATE TABLE metadata'):
+                cls.metadata_table_command = command
+                continue
+
 
     def setUp(self):
-        self.conn = sqlite3.connect('file::memory:?cache=shared', uri=True)
+        self.assertIsNotNone(self.replicate_table_command)
+        self.assertIsNotNone(self.metadata_table_command)
 
+        # create in memory database
+        self.conn = sqlite3.connect('file::memory:?cache=shared', uri=True)
         cur = self.conn.cursor()
-        cur.execute('''
-            CREATE TABLE replicates (
-                id INTEGER PRIMARY KEY,
-                replicate TEXT NOT NULL,
-                project TEXT NOT NULL,
-                includeRep BOOL NOT NULL DEFAULT TRUE,
-                acquiredTime BLOB NOT NULL,
-                acquiredRank INTEGER NOT NULL,
-                ticArea REAL NOT NULL,
-                UNIQUE(replicate, project) ON CONFLICT FAIL
-            );''')
-        cur.execute('''
-            CREATE TABLE metadata (
-                key TEXT NOT NULL,
-                value TEXT,
-                PRIMARY KEY (key)
-            ); ''')
+        cur.execute(self.replicate_table_command)
+        cur.execute(self.metadata_table_command)
         self.conn.commit()
 
 
