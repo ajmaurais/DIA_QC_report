@@ -10,13 +10,39 @@ from . import generate_batch_rmd
 from . import export_gene_matrix
 from . import export_tables
 
+from . import __version__ as PACKAGE_VERSION
+
+SUBCOMMANDS = {'parse', 'metadata_convert', 'normalize', 'qc_qmd',
+               'batch_rmd', 'export_gene_matrix', 'db_export'}
+
+
+def _first_subcommand(argv):
+    for i in range(1, len(argv)):
+        if argv[i] in SUBCOMMANDS:
+            return i
+    return len(argv)
+
+
+class VersionAction(argparse.Action):
+    def __init__(self, option_strings,
+                 dest=argparse.SUPPRESS, default=argparse.SUPPRESS,
+                 help='Show program version and exit.', **kwargs):
+        super().__init__(option_strings=option_strings, dest=dest, default=default,
+                         nargs=0, help=help, **kwargs)
+        self.version = PACKAGE_VERSION
+
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if self.version is None:
+            parser.exit(status=1)
+        parser.exit(message=f"dia_qc version {self.version}\n")
+
 
 class Main():
     '''
     A class to parse subcommands.
     Inspired by this blog post: https://chase-seibert.github.io/blog/2014/03/21/python-multilevel-argparse.html
     '''
-
 
     def __init__(self):
         parser = argparse.ArgumentParser(description='Tools to generate QC and batch reports from DIA proteomics data',
@@ -31,48 +57,52 @@ Available commands:
    export_gene_matrix   {export_gene_matrix.COMMAND_DESCRIPTION}
    db_export            {export_tables.COMMAND_DESCRIPTION}''')
 
+        parser.add_argument('-v', '--version', action=VersionAction)
         parser.add_argument('command', help='Subcommand to run.')
 
-        args = parser.parse_args(sys.argv[1:2])
+        subcommand_start = _first_subcommand(sys.argv)
+        args = parser.parse_args(sys.argv[1:(subcommand_start + 1)])
+        argv = sys.argv[subcommand_start + 1:]
+
         if not hasattr(self, args.command):
             sys.stderr.write(f"dia_qc: '{args.command}' is not a valid command!\n")
             sys.exit(1)
 
-        getattr(self, args.command)()
+        getattr(self, args.command)(argv)
 
 
-    def parse(self):
-        args = parse_data.parse_args(sys.argv[2:], prog='dia_qc parse')
+    def parse(self, argv):
+        args = parse_data.parse_args(argv, prog='dia_qc parse')
         parse_data._main(args)
 
 
-    def metadata_convert(self):
-        args = metadata_convert.parse_args(sys.argv[2:], prog='dia_qc metadata_convert')
+    def metadata_convert(self, argv):
+        args = metadata_convert.parse_args(argv, prog='dia_qc metadata_convert')
         metadata_convert._main(args)
 
 
-    def normalize(self):
-        args = normalize_db.parse_args(sys.argv[2:], prog='dia_qc normalize')
+    def normalize(self, argv):
+        args = normalize_db.parse_args(argv, prog='dia_qc normalize')
         normalize_db._main(args)
 
 
-    def qc_qmd(self):
-        args = generate_qc_qmd.parse_args(sys.argv[2:], prog='dia_qc qc_qmd')
+    def qc_qmd(self, argv):
+        args = generate_qc_qmd.parse_args(argv, prog='dia_qc qc_qmd')
         generate_qc_qmd._main(args)
 
 
-    def batch_rmd(self):
-        args = generate_batch_rmd.parse_args(sys.argv[2:], prog='dia_qc batch_rmd')
+    def batch_rmd(self, argv):
+        args = generate_batch_rmd.parse_args(argv, prog='dia_qc batch_rmd')
         generate_batch_rmd._main(args)
 
 
-    def export_gene_matrix(self):
-        args = export_gene_matrix.parse_args(sys.argv[2:], prog='dia_qc export_gene_matrix')
+    def export_gene_matrix(self, argv):
+        args = export_gene_matrix.parse_args(argv, prog='dia_qc export_gene_matrix')
         export_gene_matrix._main(args)
 
 
-    def db_export(self):
-        args = export_tables.parse_args(sys.argv[2:], prog='dia_qc db_export')
+    def db_export(self, argv):
+        args = export_tables.parse_args(argv, prog='dia_qc db_export')
         export_tables._main(args)
 
 

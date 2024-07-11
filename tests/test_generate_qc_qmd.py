@@ -1,10 +1,8 @@
 
 import unittest
 import argparse
-import sys
 import os
 import sqlite3
-import random
 import pandas as pd
 from numpy import isnan
 
