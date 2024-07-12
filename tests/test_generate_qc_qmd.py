@@ -212,7 +212,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
 
 
 class TestAllPrecursorsMissing(unittest.TestCase):
-    TEST_PROJECT = 'GFP'
+    TEST_PROJECT = 'GPF'
     RENDER_QMD = False
 
     @classmethod

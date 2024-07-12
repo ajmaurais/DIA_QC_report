@@ -167,7 +167,7 @@ class TestSingleNormalization(unittest.TestCase, TestNormalizationBase):
 
 
 class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
-    TEST_PROJECT = 'GFP'
+    TEST_PROJECT = 'GPF'
 
     @classmethod
     def setUpClass(cls):
