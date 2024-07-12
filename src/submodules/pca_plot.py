@@ -30,9 +30,6 @@ def pca_plot(pc, label_col, pc_var, label_type='discrete',
         colors = {label: color for color, label in zip(cmap(np.linspace(0, 1, len(pc[label_col].drop_duplicates()))),
                                                        pc[label_col].drop_duplicates())}
 
-        # if '<NA>' in colors:
-        #     raise RuntimeError('poop')
-
         fig = plt.figure(figsize = (6, 4), dpi=dpi)
         ax = fig.add_axes([0.1, 0.15, 0.65, 0.75])
 

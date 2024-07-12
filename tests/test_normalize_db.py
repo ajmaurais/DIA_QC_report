@@ -302,7 +302,7 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
 
 
 class TestAllPrecursorsMissing(unittest.TestCase):
-    TEST_PROJECT = 'GFP'
+    TEST_PROJECT = 'GPF'
 
     @classmethod
     def setUpClass(cls):
