@@ -17,7 +17,6 @@ PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'AverageMassErrorPPM': 'averageMassErrorPPM',
                                       'TotalAreaFragment': 'totalAreaFragment',
                                       'TotalAreaMs1': 'totalAreaMs1',
-                                      'NormalizedArea': 'normalizedArea',
                                       'BestRetentionTime': 'rt',
                                       'MinStartTime': 'minStartTime',
                                       'MaxEndTime': 'maxEndTime',
@@ -26,8 +25,8 @@ PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
                                       'IsotopeDotProduct': 'isotopeDotProduct'}
 
 PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
-                                     'totalAreaMs1', 'normalizedArea', 'rt', 'minStartTime',
-                                     'maxEndTime', 'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
+                                     'totalAreaMs1', 'rt', 'minStartTime', 'maxEndTime',
+                                     'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
 
 
 REPLICATE_QUALITY_REQUIRED_COLUMNS = {'Replicate': 'replicate',
