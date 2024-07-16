@@ -107,9 +107,6 @@ class TestReadReportsBase(AbstractTestsBase):
         if language == 'English':
             suffix = '_english'
 
-        import pudb
-        # pudb.set_trace()
-
         with self.assertLogs(skyline_reports.LOGGER) as cm:
             df = self.report_class.read_report(f'{self.report_basename}_quality{suffix}.{ext}')
 
@@ -177,17 +174,17 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
         self.report_type = 'precursor'
         self.report_basename = f'{TEST_DIR}/data/skyline_reports/{self.TEST_PROJECT}_by_protein_{self.report_type}'
 
+        # setup SkylineReport class
+        self.report_class = skyline_reports.PrecursorReport()
+
         # report column vars
-        self.df_keys = ['replicateName', 'proteinAccession', 'modifiedSequence', 'precursorCharge']
-        self.df_values = list(skyline_reports.PRECURSOR_QUALITY_NUMERIC_COLUMNS)
+        self.df_keys = ['replicateName', 'proteinName', 'modifiedSequence', 'precursorCharge']
+        self.df_values = [col.name for col in self.report_class.required_columns()]
 
         # setup gt data
         df = pd.read_csv(f'{TEST_DIR}/data/intermediate_files/{self.TEST_PROJECT}_precursors_df.tsv', sep='\t')
 
         self.data = self.df_to_dict(df, self.df_keys, self.df_values)
-
-        # setup read_report fxn
-        self.read_report = skyline_reports.read_precursor_report
 
 
     def test_read_invariant_tsv(self):

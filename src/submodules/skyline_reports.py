@@ -151,7 +151,7 @@ class SkylineReport(ABC):
             # If multiple language matches, report invariant or first match
             if all('invariant' in langs for langs in df_languages.values()):
                 return 'invariant'
-            for lang in LANGUAGES:
+            for lang in self._languages:
                 if all(lang in langs for langs in df_languages.values()):
                     return lang
 
@@ -164,57 +164,57 @@ class SkylineReport(ABC):
 
 
 
-PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
-                                      'ProteinAccession': 'proteinAccession',
-                                      'ProteinName': 'proteinName',
-                                      'ModifiedSequence': 'modifiedSequence',
-                                      'PrecursorCharge': 'precursorCharge',
-                                      'PrecursorMz': 'precursorMz',
-                                      'AverageMassErrorPPM': 'averageMassErrorPPM',
-                                      'TotalAreaFragment': 'totalAreaFragment',
-                                      'TotalAreaMs1': 'totalAreaMs1',
-                                      'BestRetentionTime': 'rt',
-                                      'MinStartTime': 'minStartTime',
-                                      'MaxEndTime': 'maxEndTime',
-                                      'MaxFwhm': 'maxFwhm',
-                                      'LibraryDotProduct': 'libraryDotProduct',
-                                      'IsotopeDotProduct': 'isotopeDotProduct'}
-
-PRECURSOR_QUALITY_OPTIONAL_COLUMNS = {'NormalizedArea': 'normalizedArea',
-                                      }
-
-PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
-                                     'totalAreaMs1', 'rt', 'minStartTime', 'maxEndTime',
-                                     'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
-
-# PROTEIN_QUANTS_REQUIRED_COLUMNS = {'ProteinAccession': 'accession',
-#                                    'Protein': 'name',
-#                                    'ProteinDescription': 'description',
-#                                    'ReplicateName': 'replicateName',
-#                                    'ProteinAbundance': 'abundance'}
-
-LANGUAGES = ('English',)
-
-PRECURSOR_LANGUAGE_TO_INVARIANT = {'ProteinAccession': {LANGUAGES[0]: 'Protein Accession'},
-                                  'ProteinName': {LANGUAGES[0]: 'Protein Name'},
-                                  'ProteinGene': {LANGUAGES[0]: 'Protein Gene'},
-                                  'Precursor': {LANGUAGES[0]: 'Precursor'},
-                                  'Peptide': {LANGUAGES[0]: 'Peptide'},
-                                  'PrecursorCharge': {LANGUAGES[0]: 'Precursor Charge'},
-                                  'PrecursorMz': {LANGUAGES[0]: 'Precursor Mz'},
-                                  'ModifiedSequence': {LANGUAGES[0]: 'Modified Sequence'},
-                                  'ReplicateName': {LANGUAGES[0]: 'Replicate Name'},
-                                  'AverageMassErrorPPM': {LANGUAGES[0]: 'Average Mass Error PPM'},
-                                  'TotalAreaFragment': {LANGUAGES[0]: 'Total Area Fragment'},
-                                  'TotalAreaMs1': {LANGUAGES[0]: 'Total Area MS1'},
-                                  'BestRetentionTime': {LANGUAGES[0]: 'Best Retention Time'},
-                                  'MinStartTime': {LANGUAGES[0]: 'Min Start Time'},
-                                  'MaxEndTime': {LANGUAGES[0]: 'Max End Time'},
-                                  'UserSetTotal': {LANGUAGES[0]: 'User Set Total'},
-                                  'MaxFwhm': {LANGUAGES[0]: 'Max Fwhm'},
-                                  'NormalizedArea': {LANGUAGES[0]: 'Normalized Area'},
-                                  'LibraryDotProduct': {LANGUAGES[0]: 'Library Dot Product'},
-                                  'IsotopeDotProduct': {LANGUAGES[0]: 'Isotope Dot Product'}}
+# PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
+#                                       'ProteinAccession': 'proteinAccession',
+#                                       'ProteinName': 'proteinName',
+#                                       'ModifiedSequence': 'modifiedSequence',
+#                                       'PrecursorCharge': 'precursorCharge',
+#                                       'PrecursorMz': 'precursorMz',
+#                                       'AverageMassErrorPPM': 'averageMassErrorPPM',
+#                                       'TotalAreaFragment': 'totalAreaFragment',
+#                                       'TotalAreaMs1': 'totalAreaMs1',
+#                                       'BestRetentionTime': 'rt',
+#                                       'MinStartTime': 'minStartTime',
+#                                       'MaxEndTime': 'maxEndTime',
+#                                       'MaxFwhm': 'maxFwhm',
+#                                       'LibraryDotProduct': 'libraryDotProduct',
+#                                       'IsotopeDotProduct': 'isotopeDotProduct'}
+# 
+# PRECURSOR_QUALITY_OPTIONAL_COLUMNS = {'NormalizedArea': 'normalizedArea',
+#                                       }
+# 
+# PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
+#                                      'totalAreaMs1', 'rt', 'minStartTime', 'maxEndTime',
+#                                      'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
+# 
+# # PROTEIN_QUANTS_REQUIRED_COLUMNS = {'ProteinAccession': 'accession',
+# #                                    'Protein': 'name',
+# #                                    'ProteinDescription': 'description',
+# #                                    'ReplicateName': 'replicateName',
+# #                                    'ProteinAbundance': 'abundance'}
+# 
+# LANGUAGES = ('English',)
+# 
+# PRECURSOR_LANGUAGE_TO_INVARIANT = {'ProteinAccession': {LANGUAGES[0]: 'Protein Accession'},
+#                                   'ProteinName': {LANGUAGES[0]: 'Protein Name'},
+#                                   'ProteinGene': {LANGUAGES[0]: 'Protein Gene'},
+#                                   'Precursor': {LANGUAGES[0]: 'Precursor'},
+#                                   'Peptide': {LANGUAGES[0]: 'Peptide'},
+#                                   'PrecursorCharge': {LANGUAGES[0]: 'Precursor Charge'},
+#                                   'PrecursorMz': {LANGUAGES[0]: 'Precursor Mz'},
+#                                   'ModifiedSequence': {LANGUAGES[0]: 'Modified Sequence'},
+#                                   'ReplicateName': {LANGUAGES[0]: 'Replicate Name'},
+#                                   'AverageMassErrorPPM': {LANGUAGES[0]: 'Average Mass Error PPM'},
+#                                   'TotalAreaFragment': {LANGUAGES[0]: 'Total Area Fragment'},
+#                                   'TotalAreaMs1': {LANGUAGES[0]: 'Total Area MS1'},
+#                                   'BestRetentionTime': {LANGUAGES[0]: 'Best Retention Time'},
+#                                   'MinStartTime': {LANGUAGES[0]: 'Min Start Time'},
+#                                   'MaxEndTime': {LANGUAGES[0]: 'Max End Time'},
+#                                   'UserSetTotal': {LANGUAGES[0]: 'User Set Total'},
+#                                   'MaxFwhm': {LANGUAGES[0]: 'Max Fwhm'},
+#                                   'NormalizedArea': {LANGUAGES[0]: 'Normalized Area'},
+#                                   'LibraryDotProduct': {LANGUAGES[0]: 'Library Dot Product'},
+#                                   'IsotopeDotProduct': {LANGUAGES[0]: 'Isotope Dot Product'}}
 
 
 class ReplicateReport(SkylineReport):
@@ -267,39 +267,85 @@ class PrecursorReport(SkylineReport):
     def __init__(self):
         super().__init__(report_name='precursor')
 
+        columns = [ReportColumn('replicateName', 'ReplicateName'),
+                   ReportColumn('proteinAccession', 'ProteinAccession', is_required=False),
+                   ReportColumn('proteinName', 'ProteinName'),
+                   ReportColumn('proteinGene', 'ProteinGene', is_required=False),
+                   ReportColumn('modifiedSequence', 'ModifiedSequence'),
+                   ReportColumn('precursorCharge', 'PrecursorCharge', is_numeric=True),
+                   ReportColumn('precursorMz', 'PrecursorMz', is_numeric=True),
+                   ReportColumn('averageMassErrorPPM', 'AverageMassErrorPPM', is_numeric=True),
+                   ReportColumn('totalAreaFragment', 'TotalAreaFragment', is_numeric=True),
+                   # ReportColumn('normalizedArea', '', is_numeric=True, is_required=False),
+                   ReportColumn('userSetTotal', 'UserSetTotal', is_required=False),
+                   ReportColumn('totalAreaMs1', 'TotalAreaMs1', is_numeric=True),
+                   ReportColumn('rt', 'BestRetentionTime', is_numeric=True),
+                   ReportColumn('minStartTime', 'MinStartTime', is_numeric=True),
+                   ReportColumn('maxEndTime', 'MaxEndTime', is_numeric=True),
+                   ReportColumn('maxFwhm', 'MaxFwhm', is_numeric=True),
+                   ReportColumn('libraryDotProduct', 'LibraryDotProduct', is_numeric=True),
+                   ReportColumn('isotopeDotProduct', 'IsotopeDotProduct', is_numeric=True)]
+
+        english_col_names = {'proteinAccession': 'Protein Accession',
+                             'proteinName': 'Protein Name',
+                             'proteinGene': 'Protein Gene',
+                             'precursor': 'Precursor',
+                             'peptide': 'Peptide',
+                             'precursorCharge': 'Precursor Charge',
+                             'precursorMz': 'Precursor Mz',
+                             'modifiedSequence': 'Modified Sequence',
+                             'replicateName': 'Replicate Name',
+                             'averageMassErrorPPM': 'Average Mass Error PPM',
+                             'totalAreaFragment': 'Total Area Fragment',
+                             'totalAreaMs1': 'Total Area MS1',
+                             'rt': 'Best Retention Time',
+                             'minStartTime': 'Min Start Time',
+                             'maxEndTime': 'Max End Time',
+                             'userSetTotal': 'User Set Total',
+                             'maxFwhm': 'Max Fwhm',
+                             # 'normalizedArea': 'Normalized Area',
+                             'libraryDotProduct': 'Library Dot Product',
+                             'isotopeDotProduct': 'Isotope Dot Product'}
+
+        for i in range(len(columns)):
+            columns[i].skyline_aliases['English'] = english_col_names[columns[i].name]
+
+        self.set_columns(columns)
+
+
     def read_report(self, fname, by_gene=False):
-        # create dict of precursor report column types
-        col_types = dict()
-        for sky_col, my_col in PRECURSOR_QUALITY_REQUIRED_COLUMNS.items():
-            col_types[sky_col] = float64 if my_col in PRECURSOR_QUALITY_NUMERIC_COLUMNS else str
-        col_types['PrecursorCharge'] = int8
-        col_types['UserSetTotal'] = bool
-        for col in ['ProteinGene', 'Precursor', 'Peptide']:
-            col_types[col] = str
+
+        # for col in ['ProteinGene', 'Precursor', 'Peptide']:
+        #     col_types[col] = str
 
         # read report df
         with open(fname, 'r') as inF:
-            df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
+            df = pd.read_csv(inF, sep=detect_delim(inF))
 
         # Translate report into invariant format
-        report_language = _detect_language(df, PRECURSOR_LANGUAGE_TO_INVARIANT)
+        report_language = self._detect_language(df)
         LOGGER.info(f'Found {report_language} {self.report_name} report...')
         if report_language != 'invariant':
             col_dict = {}
-            for inv_col, langs in PRECURSOR_LANGUAGE_TO_INVARIANT.items():
-                col_dict[langs[report_language]] = inv_col
+            for col in self.columns():
+                col_dict[col.skyline_aliases[report_language]] = col.skyline_name
             df = df.rename(columns=col_dict)
 
-            for col in df.columns:
-                if col in col_types:
-                    df[col] = df[col].astype(col_types[col])
-
         # rename columns
-        df = df.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
+        df = df.rename(columns={col.skyline_name: col.name for col in self.columns()})
 
-        precursor_cols = list(PRECURSOR_QUALITY_REQUIRED_COLUMNS.values())
+        # create dict of precursor report column types
+        col_types = dict()
+        for col in self.columns():
+            col_types[col.name] = float64 if col.is_numeric else str
+        col_types['precursorCharge'] = int8
+        col_types['userSetTotal'] = bool
+
+        # convert columns to correct datatypes
+        df = df.astype(col_types)
+
         if by_gene == 'gene':
-            precursor_cols.append('ProteinGene')
+            self._columns['proteinGene'].is_required = True
 
         if not self.check_df_columns(df):
             return None
