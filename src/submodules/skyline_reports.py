@@ -163,60 +163,6 @@ class SkylineReport(ABC):
         pass
 
 
-
-# PRECURSOR_QUALITY_REQUIRED_COLUMNS = {'ReplicateName': 'replicateName',
-#                                       'ProteinAccession': 'proteinAccession',
-#                                       'ProteinName': 'proteinName',
-#                                       'ModifiedSequence': 'modifiedSequence',
-#                                       'PrecursorCharge': 'precursorCharge',
-#                                       'PrecursorMz': 'precursorMz',
-#                                       'AverageMassErrorPPM': 'averageMassErrorPPM',
-#                                       'TotalAreaFragment': 'totalAreaFragment',
-#                                       'TotalAreaMs1': 'totalAreaMs1',
-#                                       'BestRetentionTime': 'rt',
-#                                       'MinStartTime': 'minStartTime',
-#                                       'MaxEndTime': 'maxEndTime',
-#                                       'MaxFwhm': 'maxFwhm',
-#                                       'LibraryDotProduct': 'libraryDotProduct',
-#                                       'IsotopeDotProduct': 'isotopeDotProduct'}
-# 
-# PRECURSOR_QUALITY_OPTIONAL_COLUMNS = {'NormalizedArea': 'normalizedArea',
-#                                       }
-# 
-# PRECURSOR_QUALITY_NUMERIC_COLUMNS = ['precursorMz', 'averageMassErrorPPM', 'totalAreaFragment',
-#                                      'totalAreaMs1', 'rt', 'minStartTime', 'maxEndTime',
-#                                      'maxFwhm', 'libraryDotProduct', 'isotopeDotProduct']
-# 
-# # PROTEIN_QUANTS_REQUIRED_COLUMNS = {'ProteinAccession': 'accession',
-# #                                    'Protein': 'name',
-# #                                    'ProteinDescription': 'description',
-# #                                    'ReplicateName': 'replicateName',
-# #                                    'ProteinAbundance': 'abundance'}
-# 
-# LANGUAGES = ('English',)
-# 
-# PRECURSOR_LANGUAGE_TO_INVARIANT = {'ProteinAccession': {LANGUAGES[0]: 'Protein Accession'},
-#                                   'ProteinName': {LANGUAGES[0]: 'Protein Name'},
-#                                   'ProteinGene': {LANGUAGES[0]: 'Protein Gene'},
-#                                   'Precursor': {LANGUAGES[0]: 'Precursor'},
-#                                   'Peptide': {LANGUAGES[0]: 'Peptide'},
-#                                   'PrecursorCharge': {LANGUAGES[0]: 'Precursor Charge'},
-#                                   'PrecursorMz': {LANGUAGES[0]: 'Precursor Mz'},
-#                                   'ModifiedSequence': {LANGUAGES[0]: 'Modified Sequence'},
-#                                   'ReplicateName': {LANGUAGES[0]: 'Replicate Name'},
-#                                   'AverageMassErrorPPM': {LANGUAGES[0]: 'Average Mass Error PPM'},
-#                                   'TotalAreaFragment': {LANGUAGES[0]: 'Total Area Fragment'},
-#                                   'TotalAreaMs1': {LANGUAGES[0]: 'Total Area MS1'},
-#                                   'BestRetentionTime': {LANGUAGES[0]: 'Best Retention Time'},
-#                                   'MinStartTime': {LANGUAGES[0]: 'Min Start Time'},
-#                                   'MaxEndTime': {LANGUAGES[0]: 'Max End Time'},
-#                                   'UserSetTotal': {LANGUAGES[0]: 'User Set Total'},
-#                                   'MaxFwhm': {LANGUAGES[0]: 'Max Fwhm'},
-#                                   'NormalizedArea': {LANGUAGES[0]: 'Normalized Area'},
-#                                   'LibraryDotProduct': {LANGUAGES[0]: 'Library Dot Product'},
-#                                   'IsotopeDotProduct': {LANGUAGES[0]: 'Isotope Dot Product'}}
-
-
 class ReplicateReport(SkylineReport):
     def __init__(self):
         super().__init__(report_name='replicate')
@@ -272,7 +218,7 @@ class PrecursorReport(SkylineReport):
                    ReportColumn('proteinName', 'ProteinName'),
                    ReportColumn('proteinGene', 'ProteinGene', is_required=False),
                    ReportColumn('modifiedSequence', 'ModifiedSequence'),
-                   ReportColumn('precursorCharge', 'PrecursorCharge', is_numeric=True),
+                   ReportColumn('precursorCharge', 'PrecursorCharge', is_numeric=False),
                    ReportColumn('precursorMz', 'PrecursorMz', is_numeric=True),
                    ReportColumn('averageMassErrorPPM', 'AverageMassErrorPPM', is_numeric=True),
                    ReportColumn('totalAreaFragment', 'TotalAreaFragment', is_numeric=True),
@@ -314,10 +260,6 @@ class PrecursorReport(SkylineReport):
 
 
     def read_report(self, fname, by_gene=False):
-
-        # for col in ['ProteinGene', 'Precursor', 'Peptide']:
-        #     col_types[col] = str
-
         # read report df
         with open(fname, 'r') as inF:
             df = pd.read_csv(inF, sep=detect_delim(inF))
@@ -342,10 +284,18 @@ class PrecursorReport(SkylineReport):
         col_types['userSetTotal'] = bool
 
         # convert columns to correct datatypes
+        for col, col_type in col_types.items():
+            if col in df.columns and col_type is str:
+                df.loc[df[col].isnull(), col] = ''
         df = df.astype(col_types)
+        for col, col_type in col_types.items():
+            if col in df.columns and col_type is str:
+                df.loc[df[col] == '', col] = pd.NA
 
-        if by_gene == 'gene':
-            self._columns['proteinGene'].is_required = True
+        if by_gene:
+            def protein_uid(row):
+                return row.proteinName if pd.isna(row.proteinGene) else row.proteinGene
+            df['proteinName'] = df.apply(protein_uid, axis=1)
 
         if not self.check_df_columns(df):
             return None

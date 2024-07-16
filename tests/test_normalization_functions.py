@@ -10,7 +10,8 @@ import setup_functions
 
 import DIA_QC_report.submodules.normalization as normalization
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-from DIA_QC_report.parse_data import PRECURSOR_QUALITY_REQUIRED_COLUMNS
+# from DIA_QC_report.parse_data import PRECURSOR_QUALITY_REQUIRED_COLUMNS
+from DIA_QC_report.submodules.skyline_reports import PrecursorReport
 
 
 class TestCammelCase(unittest.TestCase):
@@ -204,8 +205,9 @@ class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
 
         # read ground truth data
         df = pd.read_csv(f'{self.data_dir}/skyline_reports/{self.TEST_PROJECT}_precursor_quality.tsv', sep='\t')
-        df = df.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-        df = df[PRECURSOR_QUALITY_REQUIRED_COLUMNS.values()]
+        cols = {col.skyline_name: col.name for col in PrecursorReport().required_columns()}
+        df = df.rename(columns=cols)
+        df = df[cols.values()]
         df = df[['replicateName', 'modifiedSequence', 'precursorCharge',
                  'totalAreaFragment']].drop_duplicates()
         df_w = df.pivot(index=['modifiedSequence', 'precursorCharge'],
@@ -270,10 +272,11 @@ class TestMultiNormalization(unittest.TestCase, TestNormalizationBase):
         # read ground truth data
         dfs = [f'{self.data_dir}/skyline_reports/Sp3_by_protein_precursor_quality.tsv',
                f'{self.data_dir}/skyline_reports/Strap_by_protein_precursor_quality.tsv']
+        cols = {col.skyline_name: col.name for col in PrecursorReport().required_columns()}
         for i in range(len(dfs)):
             dfs[i] = pd.read_csv(dfs[i], sep='\t')
-            dfs[i] = dfs[i].rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-            dfs[i] = dfs[i][PRECURSOR_QUALITY_REQUIRED_COLUMNS.values()]
+            dfs[i] = dfs[i].rename(columns=cols)
+            dfs[i] = dfs[i][cols.values()]
             dfs[i] = dfs[i][['replicateName', 'modifiedSequence', 'precursorCharge',
                              'totalAreaFragment']].drop_duplicates()
         df = pd.concat(dfs)

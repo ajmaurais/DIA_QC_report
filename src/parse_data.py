@@ -10,10 +10,7 @@ import pandas as pd
 
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import SCHEMA, SCHEMA_VERSION
-from .submodules.skyline_reports import PRECURSOR_QUALITY_REQUIRED_COLUMNS
-from .submodules.skyline_reports import PRECURSOR_QUALITY_NUMERIC_COLUMNS
-from .submodules.skyline_reports import REPLICATE_QUALITY_REQUIRED_COLUMNS
-from .submodules.skyline_reports import read_replicate_report, read_precursor_report
+from .submodules.skyline_reports import ReplicateReport, PrecursorReport
 from .submodules.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
 from .submodules.dia_db_utils import update_meta_value
@@ -24,8 +21,6 @@ from . import __version__ as PROGRAM_VERSION
 
 COMMAND_DESCRIPTION = 'Generate QC and batch correction database from Skyline reports.'
 DUPLICATE_PRECURSOR_CHOICES = ('e', 'm', 'f', 'i')
-
-PRECURSOR_QUALITY_COLUMNS = list(PRECURSOR_KEY_COLS) + ['modifiedSequence'] + PRECURSOR_QUALITY_NUMERIC_COLUMNS
 
 
 def _initialize(fname):
@@ -276,7 +271,11 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     precursors['peptideId'] = pep_id_col
 
     # Drop duplicate precursors here
-    precursors = precursors[PRECURSOR_QUALITY_COLUMNS].drop_duplicates()
+    precursor_quality_columns = list(PRECURSOR_KEY_COLS)
+    precursor_quality_columns.append('modifiedSequence')
+    precursor_quality_columns += [col.name for col in PrecursorReport().numeric_columns()]
+
+    precursors = precursors[precursor_quality_columns].drop_duplicates()
 
     # add proteinId column to peptide_to_protein
     if (prot_id_col := _add_index_column(peptide_to_protein['proteinName'], proteinIndex,
@@ -357,13 +356,17 @@ def check_duplicate_precursors(precursors, mode):
 
     LOGGER.info('Checking that all precursors are unique...')
 
-    key_cols = [PRECURSOR_QUALITY_REQUIRED_COLUMNS[k] for k in ('ReplicateName', 'ModifiedSequence', 'PrecursorCharge')]
+    precursor_cols = list(PrecursorReport().columns())
+
+    key_cols = [col.name for col in precursor_cols
+                if col.skyline_name in ('ReplicateName', 'ModifiedSequence', 'PrecursorCharge')]
     n_unique = len(precursors[key_cols].drop_duplicates().index)
 
     unique_precursors = precursors.drop_duplicates(subset=key_cols + ['totalAreaFragment'])
     n_unique_areas = len(unique_precursors.index)
 
-    all_cols = [v for v in PRECURSOR_QUALITY_REQUIRED_COLUMNS.values() if v not in ['proteinAccession', 'proteinName']]
+    all_cols = [col.name for col in precursor_cols
+                if col.skyline_name not in ['ProteinAccession', 'ProteinName', 'ProteinGene']]
     n_unique_rows = len(precursors[all_cols].drop_duplicates().index)
 
     if n_unique_areas != n_unique_rows:
@@ -381,12 +384,13 @@ def check_duplicate_precursors(precursors, mode):
     LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursor areas!')
 
     precursors = precursors.set_index(keys=key_cols)
-    keep_cols = [x for x in precursors.columns if x not in PRECURSOR_QUALITY_NUMERIC_COLUMNS]
+    keep_cols = [col.name for col in precursor_cols
+                 if col.name in precursors.columns and not col.is_numeric]
 
     # Select first precursor
     if mode == 'f':
         LOGGER.warning(f'Selecting first occurrence of duplicate precursors...')
-        areas = precursors[PRECURSOR_QUALITY_NUMERIC_COLUMNS].loc[~precursors.index.duplicated()]
+        areas = precursors[[col.name for col in precursor_cols if col.is_numeric]].loc[~precursors.index.duplicated()]
 
         ret = precursors[keep_cols].merge(areas, how='left', left_index=True, right_index=True)
         return ret.reset_index()
@@ -398,22 +402,22 @@ def check_duplicate_precursors(precursors, mode):
     # Use precursor peak areas that were manually set.
     if mode == 'm':
         # check UserSetTotal column
-        if 'UserSetTotal' not in precursors.columns:
+        if 'userSetTotal' not in precursors.columns:
             LOGGER.error('Need "UserSetTotal" column to select precursors with user set peak boundaries!')
             return None
         LOGGER.info('Found "UserSetTotal" column.')
-        if precursors.dtypes['UserSetTotal'] != 'bool':
+        if precursors.dtypes['userSetTotal'] != 'bool':
             LOGGER.error('"UserSetTotal" column must be type bool!')
             return None
 
         # check that each group has at least 1 precursor area that was manually set
-        manually_adj = non_unique.groupby(key_cols)['UserSetTotal'].agg(lambda x: any(x))
+        manually_adj = non_unique.groupby(key_cols)['userSetTotal'].agg(lambda x: any(x))
         if not all(manually_adj):
             LOGGER.error(f'{sum(~manually_adj)} precursor groups have no user set peak boundaries!')
             return None
 
         # remove precursors which were not manually set
-        selections = non_unique[non_unique['UserSetTotal']]
+        selections = non_unique[non_unique['userSetTotal']]
         non_unique_len = len(selections.index)
         selections = selections[~selections.index.duplicated(keep='first')]
 
@@ -423,7 +427,7 @@ def check_duplicate_precursors(precursors, mode):
 
     # Interactive selection mode
     if mode == 'i':
-        have_user_set_col = 'UserSetTotal' in non_unique.columns
+        have_user_set_col = 'userSetTotal' in non_unique.columns
         groups = non_unique.groupby(key_cols)
         n_groups = len(groups)
         int_re = re.compile('[0-9]+')
@@ -439,7 +443,7 @@ def check_duplicate_precursors(precursors, mode):
                 for i, row in enumerate(group.itertuples()):
                     options.append([f'{i})', row.proteinName, name[1], str(name[2]), str(row.totalAreaFragment)])
                     if have_user_set_col:
-                        options[-1].append(str(row.UserSetTotal))
+                        options[-1].append(str(row.userSetTotal))
                 col_widths = [max([len(options[row][col]) for row in range(len(options))]) for col in range(len(options[0]))]
 
                 # write precursor options
@@ -461,7 +465,7 @@ def check_duplicate_precursors(precursors, mode):
         selections.index = selections.index.set_names(key_cols)
 
     # overwrite duplicate precursors with selections
-    non_unique = non_unique[keep_cols].merge(selections[PRECURSOR_QUALITY_NUMERIC_COLUMNS],
+    non_unique = non_unique[keep_cols].merge(selections[[col.name for col in precursor_cols if col.is_numeric]],
                                              how='left', left_index=True, right_index=True)
 
     # Merge duplicates back into main dataframe
@@ -517,19 +521,14 @@ def _main(args):
         metadata_types = metadata_reader.types
 
     # read replicates
-    replicates = read_replicate_report(args.replicates)
+    replicates = ReplicateReport().read_report(args.replicates)
     if replicates is None:
         sys.exit(1)
 
     # read precursor quality report
-    precursors = read_precursor_report(args.precursors, by_gene=(args.group_precursors_by=='gene'))
+    precursors = PrecursorReport().read_report(args.precursors, by_gene=(args.group_precursors_by=='gene'))
     if precursors is None:
         sys.exit(1)
-
-    if args.group_precursors_by == 'gene':
-        def protein_uid(row):
-            return row.proteinName if pd.isna(row.ProteinGene) else row.ProteinGene
-        precursors['proteinName'] = precursors.apply(protein_uid, axis=1)
 
     if (precursors := check_duplicate_precursors(precursors, args.duplicatePrecursors)) is None:
         sys.exit(1)
@@ -576,7 +575,7 @@ def _main(args):
     else:
         LOGGER.warning('"FileName" column not found in replciate report, could not check that replicate names match!')
 
-    replicates = replicates[REPLICATE_QUALITY_REQUIRED_COLUMNS.values()]
+    replicates = replicates[[col.name for col in ReplicateReport().required_columns()]]
     replicates['acquiredRank'] = -1 # this will be populated later
 
     # build database
