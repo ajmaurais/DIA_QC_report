@@ -495,13 +495,13 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
                 continue
 
             for row in group.itertuples():
+                assert rep not in data[precursor]
+
                 if not use_user_set_total:
-                    assert rep not in data[precursor]
                     data[precursor][rep] = row.TotalAreaFragment
                     break
 
                 if row.UserSetTotal:
-                    assert rep not in data[precursor]
                     data[precursor][rep] = row.TotalAreaFragment
                     break
 

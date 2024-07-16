@@ -395,7 +395,7 @@ def check_duplicate_precursors(precursors, mode):
         ret = precursors[keep_cols].merge(areas, how='left', left_index=True, right_index=True)
         return ret.reset_index()
 
-    counts = unique_precursors.groupby(key_cols).apply(lambda x: len(x))
+    counts = unique_precursors.groupby(key_cols).apply(len, include_groups=False)
     non_unique = precursors[precursors.index.isin(counts[counts > 1].index)]
     unique = precursors[precursors.index.isin(counts[counts == 1].index)]
 
