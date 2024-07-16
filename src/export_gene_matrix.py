@@ -12,6 +12,7 @@ from .submodules.dia_db_utils import get_meta_value, is_normalized
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.logger import LOGGER
 
+COMMAND_DESCRIPTION = 'Export PDC gene tables from batch database.'
 TABLE_TYPES = ('combined', 'split', 'drop')
 
 SPLIT_RE = re.compile(r'\s/\s')
@@ -209,8 +210,8 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
     return ret, missing_accessions
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     gene_group_args = parser.add_argument_group('Gene grouping',
                                                 description="Choose how to display gene groups in output tables. "
@@ -230,9 +231,15 @@ def main():
     parser.add_argument('--addGeneUuid', default=False, action='store_true',
                         dest='add_gene_uuid', help='Add column for gene id hash.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
-    parser.add_argument('database', help='The precursor database.')
+    parser.add_argument('database', help='Path to sqlite batch/qc database.')
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     if (gene_group_method := unambigious_match(TABLE_TYPES, args.group_method)) is None:
         LOGGER.error(f"Could not unambiguously determine protein table type: '{args.group_method}'\n")
@@ -350,6 +357,11 @@ def main():
         LOGGER.info(f'Writing {fname}...')
         data[method].to_csv(fname, sep='\t', index=False)
         LOGGER.info(f'Done writing {fname}')
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc export_gene_matrix" instead.')
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

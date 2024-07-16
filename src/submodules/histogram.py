@@ -1,13 +1,28 @@
 
-import sqlite3
-import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 import numpy as np
 
 
 def histogram(dat, xlab, ylab='Count', limits=None, fname=None, dpi=250):
-    fig, ax = plt.subplots(1, 1, figsize = (6, 4), dpi=dpi)
+    '''
+    Draw histogram.
+
+    Parameters
+    ----------
+    dat: pd.Series
+        A series with values to plot in histogram.
+    xlab: str
+        X axis label
+    ylab: str
+        Y axis label
+    fname: str
+        The name of the file to save the plot.
+        If None plt.show is called to display the plot.
+    dpi: int
+        250 is the default.
+    '''
+
+    fig, ax = plt.subplots(1, 1, figsize = (6, 3), dpi=dpi)
     ax.hist(dat, bins = 100)
     ax.set_xlabel(xlab)
     ax.set_ylabel(ylab)
@@ -22,7 +37,25 @@ def histogram(dat, xlab, ylab='Count', limits=None, fname=None, dpi=250):
     plt.close()
 
 
-def box_plot(data, ylab, xlab='Acquisition number', fname=None, hline=None, limits=None, dpi=250):
+def box_plot(data, ylab, xlab='Acquisition number',
+             fname=None, hline=None, limits=None, dpi=250):
+    '''
+    Draw box plot.
+
+    Parameters
+    ----------
+    dat: pd.DataFrame
+        A wide formatted pd.DataFrame with a column for each box.
+    xlab: str
+        X axis label
+    ylab: str
+        Y axis label
+    fname: str
+        The name of the file to save the plot.
+        If None plt.show is called to display the plot.
+    dpi: int
+        250 is the default.
+    '''
 
     # init plot
     fig, ax = plt.subplots(1, 1, figsize = (10, 4), dpi=dpi)
@@ -68,7 +101,7 @@ def multi_boxplot(dats, data_levels,
     ----------
     dats: dict
         A dict where the key is the data level name and the value is a
-        wide formatted pd.DataFrame
+        wide formatted pd.DataFrame with a column for each box.
     data_levels: dict
         A dict where the key is the data level name and the value is the
         index of the level.
@@ -78,6 +111,7 @@ def multi_boxplot(dats, data_levels,
         Y axis label
     fname: str
         The name of the file to save the plot.
+        If None plt.show is called to display the plot.
     dpi: int
         250 is the default.
     '''

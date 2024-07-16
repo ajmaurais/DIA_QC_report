@@ -1,3 +1,1 @@
-
-# from .parse_data import main as parse_data
-
+__version__ = '2.1.0'

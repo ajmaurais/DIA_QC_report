@@ -10,6 +10,8 @@ from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
 
+COMMAND_DESCRIPTION = 'Generate QC qmd report.'
+
 DEFAULT_OFNAME = 'qc_report.qmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA QC report'
@@ -42,7 +44,7 @@ query = \'\'\'SELECT
     p.precursorCharge,
     p.totalAreaFragment,
     p.totalAreaMs1,
-    p.rt,
+    p.rt * 60 as rt,
     p.maxFwhm * 60 as maxFwhm,
     p.averageMassErrorPPM as massError,
     p.libraryDotProduct,
@@ -178,11 +180,15 @@ bar_chart(agg, 'Number of precursors', legend_title='Precursor charge', dpi=%i)
 
 
 def rep_rt_sd(do_query=True, dpi=DEFAULT_DPI):
-    text = '''\n%s\n%s\n
+    text = '''\n%s\n%s
 # replicate RT cor histogram
-agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg(np.std)
-histogram(agg, 'Replicate RT SD (min)', dpi=%i,
-          limits=(agg.quantile(0.05) * -3, agg.quantile(0.95) * 3))
+agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg('std')
+
+if all(np.isnan(agg)):
+    print('Can not plot histogram! 0 precursors found in all replicates.')
+else:
+    histogram(agg, 'Replicate RT SD (seconds)', dpi=%i,
+              limits=(0, agg.quantile(0.95) * 3))
 ```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
 
     return text
@@ -420,8 +426,8 @@ def check_std_proteins_exist(conn, proteins):
     return all_good
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Generate qmd report.')
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
     parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
@@ -433,8 +439,14 @@ def main():
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 
-    parser.add_argument('db', help='Path to precursor quality database.')
-    args = parser.parse_args()
+    parser.add_argument('db', help='Path to sqlite qc database.')
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # check args
     if os.path.isfile(args.db):
@@ -476,8 +488,11 @@ def main():
             outF.write(add_header('Standard retention times across replicates', level=2))
             outF.write(std_rt_dist(args.std_proteins, dpi=args.dpi))
 
+        outF.write(add_header('Standard deviation of precursor RT across replicates', level=2))
+        outF.write(rep_rt_sd(dpi=args.dpi, do_query=True))
+
         outF.write(add_header('Number of missed cleavages', level=2))
-        outF.write(missed_cleavages(do_query=True, dpi=args.dpi))
+        outF.write(missed_cleavages(do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Precursor charges', level=2))
         outF.write(precursor_charges(do_query=False, dpi=args.dpi))
@@ -527,6 +542,12 @@ def main():
         outF.write(close_pannel_tabset())
 
         outF.write(doc_finalize())
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc qc_qmd" instead.')
+    _main(parse_args(sys.argv[1:]))
+
 
 if __name__ == '__main__':
     main()

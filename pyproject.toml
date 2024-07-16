@@ -4,8 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = 'DIA_QC_report'
-version='1.16'
 authors=[{name='Aaron Maurais', email='maurais@uw.edu'}]
+description = 'Tools to generate QC and batch reports from DIA proteomics data.'
+readme = 'README.md'
+dynamic=['version']
 dependencies = [
     'matplotlib>=0.1.6',
     'scikit-learn>=1.3.2',
@@ -21,11 +23,15 @@ requires-python = '>=3.8'
 packages = ['DIA_QC_report', 'DIA_QC_report.submodules']
 package-dir = {'DIA_QC_report' = 'src'}
 
+[tools.setuptools.dynamic]
+version = { attr = 'DIA_QC_report.__version__' }
+
 [project.scripts]
 parse_data = 'DIA_QC_report.parse_data:main'
 generate_batch_rmd = 'DIA_QC_report.generate_batch_rmd:main'
 generate_qc_qmd = 'DIA_QC_report.generate_qc_qmd:main'
-make_gene_matrix = 'DIA_QC_report.make_gene_matrix:main'
+export_gene_matrix = 'DIA_QC_report.export_gene_matrix:main'
 normalize_db = 'DIA_QC_report.normalize_db:main'
-metadata_to_sky_annotations = 'DIA_QC_report.metadata_to_sky_annotations:main'
+metadata_convert = 'DIA_QC_report.metadata_convert:main'
 export_tables = 'DIA_QC_report.export_tables:main'
+dia_qc = 'DIA_QC_report.main:main'

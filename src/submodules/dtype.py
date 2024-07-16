@@ -68,6 +68,24 @@ class Dtype(Enum):
         raise ValueError(f'Unknown type: {str(v)}')
 
 
+    def to_pd_type(self):
+        if self is Dtype.BOOL:
+            return bool
+        if self is Dtype.INT:
+            return 'int32'
+        if self is Dtype.FLOAT:
+            return 'float64'
+        return str
+
+
+    def to_sky_type(self):
+        if self is Dtype.BOOL:
+            return 'true_false'
+        if self is Dtype.INT or self is Dtype.FLOAT:
+            return 'number'
+        return 'text'
+
+
     @staticmethod
     def infer_type(s):
         '''

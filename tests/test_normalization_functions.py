@@ -10,7 +10,8 @@ import setup_functions
 
 import DIA_QC_report.submodules.normalization as normalization
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-from DIA_QC_report.parse_data import PRECURSOR_QUALITY_REQUIRED_COLUMNS
+# from DIA_QC_report.parse_data import PRECURSOR_QUALITY_REQUIRED_COLUMNS
+from DIA_QC_report.submodules.skyline_reports import PrecursorReport
 
 
 class TestCammelCase(unittest.TestCase):
@@ -52,10 +53,23 @@ class TestNormalizationBase(setup_functions.AbstractTestsBase):
             normalization.NormalizationManagerBase(self.conn)
 
 
-    def test_median_normalization(self):
+    def test_median_normalization_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         manager = normalization.MedianNormalizer(self.conn)
+        with self.assertLogs(normalization.LOGGER) as cm:
+            self.assertTrue(manager.normalize())
+
+        precursors, proteins = manager.get_long_tables()
+
+        self.check_medians_equal(precursors, 'area')
+        self.check_medians_equal(proteins, 'abundance')
+
+
+    def test_median_normalization_keep_missing(self):
+        self.assertIsNotNone(self.conn)
+
+        manager = normalization.MedianNormalizer(self.conn, keep_na=True)
         with self.assertLogs(normalization.LOGGER) as cm:
             self.assertTrue(manager.normalize())
 
@@ -154,7 +168,7 @@ class TestSingleNormalization(unittest.TestCase, TestNormalizationBase):
 
 
 class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
-    TEST_PROJECT = 'GFP'
+    TEST_PROJECT = 'GPF'
 
     @classmethod
     def setUpClass(cls):
@@ -162,7 +176,7 @@ class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
+        command = ['dia_qc', 'parse', f'--projectName={cls.TEST_PROJECT}',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
@@ -186,13 +200,14 @@ class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
         self.assertTrue('Can not perform DirectLFQ normalization with 0 precursors!' in cm.output[-1])
 
 
-    def test_read_precursors(self):
+    def test_read_precursors_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         # read ground truth data
         df = pd.read_csv(f'{self.data_dir}/skyline_reports/{self.TEST_PROJECT}_precursor_quality.tsv', sep='\t')
-        df = df.rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-        df = df[PRECURSOR_QUALITY_REQUIRED_COLUMNS.values()]
+        cols = {col.skyline_name: col.name for col in PrecursorReport().required_columns()}
+        df = df.rename(columns=cols)
+        df = df[cols.values()]
         df = df[['replicateName', 'modifiedSequence', 'precursorCharge',
                  'totalAreaFragment']].drop_duplicates()
         df_w = df.pivot(index=['modifiedSequence', 'precursorCharge'],
@@ -251,16 +266,17 @@ class TestMultiNormalization(unittest.TestCase, TestNormalizationBase):
                 cls.conn = sqlite3.connect(cls.db_path)
 
 
-    def test_read_precursors(self):
+    def test_read_precursors_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         # read ground truth data
         dfs = [f'{self.data_dir}/skyline_reports/Sp3_by_protein_precursor_quality.tsv',
                f'{self.data_dir}/skyline_reports/Strap_by_protein_precursor_quality.tsv']
+        cols = {col.skyline_name: col.name for col in PrecursorReport().required_columns()}
         for i in range(len(dfs)):
             dfs[i] = pd.read_csv(dfs[i], sep='\t')
-            dfs[i] = dfs[i].rename(columns=PRECURSOR_QUALITY_REQUIRED_COLUMNS)
-            dfs[i] = dfs[i][PRECURSOR_QUALITY_REQUIRED_COLUMNS.values()]
+            dfs[i] = dfs[i].rename(columns=cols)
+            dfs[i] = dfs[i][cols.values()]
             dfs[i] = dfs[i][['replicateName', 'modifiedSequence', 'precursorCharge',
                              'totalAreaFragment']].drop_duplicates()
         df = pd.concat(dfs)

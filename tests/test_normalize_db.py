@@ -2,6 +2,7 @@
 import unittest
 import os
 import sqlite3
+from math import isclose
 
 import pandas as pd
 from numpy import log2
@@ -9,6 +10,39 @@ from numpy import log2
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
+
+
+def precursor_medians_equal(conn, epislon=1e-6):
+    query = ''' SELECT
+            r.replicate,
+            p.modifiedSequence,
+            p.precursorCharge,
+            p.normalizedArea
+        FROM precursors p
+        LEFT JOIN replicates r ON r.id == p.replicateId
+        WHERE p.normalizedArea IS NOT NULL; '''
+    df = pd.read_sql(query, conn)
+
+    df['log2NormArea'] = log2(df['normalizedArea'] + 1)
+    medians = df.groupby('replicate')['log2NormArea'].median()
+
+    return max(abs(medians.iloc[0] - median) for median in medians) <= epislon
+
+
+def protein_medians_eqeual(conn):
+    query = ''' SELECT
+            r.replicate,
+            q.proteinId,
+            q.normalizedAbundance
+        FROM proteinQuants q
+        LEFT JOIN replicates r ON r.id == q.replicateId
+        WHERE q.normalizedAbundance IS NOT NULL; '''
+    df = pd.read_sql(query, conn)
+
+    df['log2NormAbundance'] = log2(df['normalizedAbundance'] + 1)
+    medians = df.groupby('replicate')['log2NormAbundance'].median()
+
+    return all(medians.iloc[0] == medians)
 
 
 class CommonTests(setup_functions.AbstractTestsBase):
@@ -35,23 +69,7 @@ class CommonTests(setup_functions.AbstractTestsBase):
 
     def test_precursor_medians_equal(self):
         self.assertIsNotNone(self.conn)
-
-        query = ''' SELECT
-                r.replicate,
-                p.modifiedSequence,
-                p.precursorCharge,
-                p.normalizedArea
-            FROM precursors p
-            LEFT JOIN replicates r ON r.id == p.replicateId
-            WHERE p.normalizedArea IS NOT NULL; '''
-        df = pd.read_sql(query, self.conn)
-
-        self.assertTrue(not any(df['normalizedArea'] == 0))
-
-        df['log2NormArea'] = log2(df['normalizedArea'] + 1)
-        medians = df.groupby('replicate')['log2NormArea'].median()
-
-        self.assertTrue(all(medians.iloc[0] == medians))
+        self.assertTrue(precursor_medians_equal(self.conn))
 
 
 class TestSingleProject(CommonTests):
@@ -92,28 +110,13 @@ class TestMedianSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['normalize_db', '-m=median', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
         cls.run_commands(normalize_command)
 
 
     def test_protein_medians_equal(self):
         self.assertIsNotNone(self.conn)
-
-        query = ''' SELECT
-                r.replicate,
-                q.proteinId,
-                q.normalizedAbundance
-            FROM proteinQuants q
-            LEFT JOIN replicates r ON r.id == q.replicateId
-            WHERE q.normalizedAbundance IS NOT NULL; '''
-        df = pd.read_sql(query, self.conn)
-
-        self.assertTrue(not any(df['normalizedAbundance'] == 0))
-
-        df['log2NormAbundance'] = log2(df['normalizedAbundance'] + 1)
-        medians = df.groupby('replicate')['log2NormAbundance'].median()
-
-        self.assertTrue(all(medians.iloc[0] == medians))
+        self.assertTrue(protein_medians_eqeual(self.conn))
 
 
 class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
@@ -126,8 +129,17 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        normalize_command = ['normalize_db', '-m=DirectLFQ', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
         cls.run_commands(normalize_command)
+
+
+    def test_keep_missing_fails(self):
+        command = ['dia_qc', 'normalize', '-m=DirectLFQ', '--keepMissing', self.db_path]
+
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='test_keepMissing')
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
 
 
 class TestMultiProject(CommonTests):
@@ -261,7 +273,7 @@ class TestMedianMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['normalize_db', '-m=median', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
         cls.run_commands(normalize_command)
 
 
@@ -276,12 +288,21 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        normalize_command = ['normalize_db', '-m=DirectLFQ', cls.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
         cls.run_commands(normalize_command)
 
 
+    def test_keep_missing_fails(self):
+        command = ['dia_qc', 'normalize', '-m=DirectLFQ', '--keepMissing', self.db_path]
+
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='test_keepMissing')
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
+
+
 class TestAllPrecursorsMissing(unittest.TestCase):
-    TEST_PROJECT = 'GFP'
+    TEST_PROJECT = 'GPF'
 
     @classmethod
     def setUpClass(cls):
@@ -289,7 +310,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        command = ['parse_data', f'--projectName={cls.TEST_PROJECT}',
+        command = ['dia_qc', 'parse', f'--projectName={cls.TEST_PROJECT}',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
@@ -311,7 +332,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             cls.conn.close()
 
 
-    def test_median_normalization(self):
+    def test_median_normalization_na_rm(self):
         self.assertIsNotNone(self.conn)
 
         norm_levels = ['precursor_normalization_method', 'protein_normalization_method']
@@ -326,18 +347,71 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             for level in norm_levels:
                 self.assertIsNone(db_utils.get_meta_value(self.conn, level))
 
-        normalize_command = ['normalize_db', '-m=median', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=median', self.db_path]
         normalize_result = setup_functions.run_command(normalize_command,
                                                        self.work_dir,
-                                                       prefix='normalize_db_median')
+                                                       prefix='normalize_db_median_na_rm')
 
+        self.assertEqual(normalize_result.returncode, 0)
         self.assertTrue(db_utils.is_normalized(self.conn))
         for level in norm_levels:
             self.assertEqual(db_utils.get_meta_value(self.conn, level), 'median')
 
+        # make sure all normalized precursor areas are NULL
+        cur = self.conn.cursor()
+        cur.execute('SELECT * FROM precursors WHERE normalizedArea IS NOT NULL')
+        self.assertEqual(len(cur.fetchall()), 0)
+
+        # make sure all normalized protein quants are NULL
+        cur = self.conn.cursor()
+        cur.execute('SELECT * FROM proteinQuants WHERE normalizedAbundance IS NOT NULL')
+        self.assertEqual(len(cur.fetchall()), 0)
+
+
+    def test_median_normalization_keep_na(self):
+        self.assertIsNotNone(self.conn)
+
+        norm_levels = ['precursor_normalization_method', 'protein_normalization_method']
+        cur = self.conn.cursor()
+        for level in norm_levels:
+            cur.execute('DELETE FROM metadata WHERE key == ?', (level,))
+        cur.execute("UPDATE metadata SET value == FALSE WHERE key == 'is_normalized'")
+        self.conn.commit()
+
+        self.assertFalse(db_utils.is_normalized(self.conn))
+        with self.assertLogs(db_utils.LOGGER, level='ERROR') as cm:
+            for level in norm_levels:
+                self.assertIsNone(db_utils.get_meta_value(self.conn, level))
+
+        normalize_command = ['dia_qc', 'normalize', '--keepMissing', '-m=median', self.db_path]
+        normalize_result = setup_functions.run_command(normalize_command,
+                                                       self.work_dir,
+                                                       prefix='normalize_db_median_keep_na')
+
+        self.assertEqual(normalize_result.returncode, 0)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+        for level in norm_levels:
+            self.assertEqual(db_utils.get_meta_value(self.conn, level), 'median')
+
+        # make sure all normalized precursor areas are not NULL
+        cur = self.conn.cursor()
+        cur.execute('SELECT totalAreaFragment, normalizedArea FROM precursors WHERE normalizedArea IS NULL')
+        na_precursors = [norm_area for area, norm_area in cur.fetchall() if not (area is None and norm_area is None)]
+        self.assertEqual(len(na_precursors), 0)
+
+        # make sure all normalized protein quants are not NULL
+        cur = self.conn.cursor()
+        cur.execute('SELECT abundance, normalizedAbundance FROM proteinQuants WHERE normalizedAbundance IS NULL')
+        na_proteins = cur.fetchall()
+        self.assertEqual(len(na_proteins), 0)
+
+        # make sure protein and precursor medians are equal
+        self.assertTrue(precursor_medians_equal(self.conn))
+        self.assertTrue(protein_medians_eqeual(self.conn))
+
 
     def test_DirectLFQ_normalization(self):
-        normalize_command = ['normalize_db', '-m=DirectLFQ', self.db_path]
+        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', self.db_path]
 
         normalize_result = setup_functions.run_command(normalize_command,
                                                        self.work_dir,

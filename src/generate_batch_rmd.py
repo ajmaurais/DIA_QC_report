@@ -9,6 +9,8 @@ from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 
+COMMAND_DESCRIPTION = 'Generate batch correction rmd report.'
+
 DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA Batch Correction Report'
@@ -376,7 +378,7 @@ control.reps[[control.key]] <- factor(control.reps[[control.key]])\n'''
         filter_text = '''dplyr::filter(replicate %in% control.reps$replicate) %>%
     dplyr::left_join(control.reps, by='replicate') %>%\n'''
         group_by_text = ', !!rlang::sym(control.key)'
-        facet_text = "facet_wrap(as.formula(paste('~', control.key)), ncol=1) + \n\t"
+        facet_text = "facet_wrap(as.formula(paste0('~ ', '`', control.key, '`')), ncol=1) + \n\t"
 
     text += f'''
 # calculate CV for each precursor
@@ -531,8 +533,8 @@ def remove_bc_tables(table, name=None):
     return table
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Generate batch correction rmd report.')
+def parse_args(argv, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     file_settings = parser.add_argument_group('R markdown file settings')
     file_settings.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
@@ -610,8 +612,14 @@ def main():
                             help='Tables to write for metadata. Only 0 or 1 are supported. '
                                  '0 for false, 1 for true. 10 is the default')
 
-    parser.add_argument('db', help='Path to batch database.')
-    args = parser.parse_args()
+    parser.add_argument('db', help='Path to sqlite batch database.')
+    return parser.parse_args(argv)
+
+
+def _main(args):
+    '''
+    Actual main method. `args` Should be initialized argparse namespace.
+    '''
 
     # string variable args
     string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key']
@@ -736,6 +744,11 @@ def main():
         # Check if there is at least 1 table to be written.
         if sum(int(arg) for arg in (args.proteinTables, args.precursorTables, args.metadataTables)) > 0:
             outF.write(write_tables_section(precursor_tables, protein_tables, metadata_tables))
+
+
+def main():
+    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc batch_rmd" instead.')
+    _main(parse_args(sys.argv[1:]))
 
 
 if __name__ == '__main__':

@@ -47,47 +47,50 @@ class TestDetectDelim(unittest.TestCase):
 class TestDetectLanguage(unittest.TestCase):
     def test_invariant_replicates(self):
         df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', sep='\t')
-        lang = skyline_reports._detect_language(df, skyline_reports.REPLICATE_LANGUAGE_TO_INVARIANT)
+        lang = skyline_reports.ReplicateReport()._detect_language(df)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_replicates(self):
         df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality_english.tsv', sep='\t')
-        lang = skyline_reports._detect_language(df, skyline_reports.REPLICATE_LANGUAGE_TO_INVARIANT)
+        lang = skyline_reports.ReplicateReport()._detect_language(df)
         self.assertEqual(lang, 'English')
 
 
     def test_invariant_precursors(self):
         df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality.tsv', sep='\t')
-        lang = skyline_reports._detect_language(df, skyline_reports.PRECURSOR_LANGUAGE_TO_INVARIANT)
+        lang = skyline_reports.PrecursorReport()._detect_language(df)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_precursors(self):
         df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality_english.tsv', sep='\t')
-        lang = skyline_reports._detect_language(df, skyline_reports.PRECURSOR_LANGUAGE_TO_INVARIANT)
+        lang = skyline_reports.PrecursorReport()._detect_language(df)
         self.assertEqual(lang, 'English')
 
 
     def test_no_matching_cols(self):
-        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality_english.tsv', sep='\t')
+        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', sep='\t')
 
-        col_dict = {'dummy0': {skyline_reports.LANGUAGES[0]: 'Dummy1'},
-                    'dummy1': {skyline_reports.LANGUAGES[0]: 'Dummy2'},
-                    'dummy2': {skyline_reports.LANGUAGES[0]: 'Dummy3'},
-                    'dummy3': {skyline_reports.LANGUAGES[0]: 'Dummy4'}}
+        col_dict = {'Replicate': 'Dummy1',
+                    'AcquiredTime': 'Dummy2',
+                    'TicArea': 'Dummy3',
+                    'FileName': 'Dummy4'}
 
-        lang = skyline_reports._detect_language(df, col_dict)
+        df = df.rename(columns=col_dict)
+
+        lang = skyline_reports.ReplicateReport()._detect_language(df)
         self.assertIsNone(lang)
 
 
 class TestReadReportsBase(AbstractTestsBase):
     def __init__(self):
-        self.report_base = None
+        self.report_basename = None
         self.report_type = None
         self.data = None
         self.df_keys = None
         self.df_values = None
+        self.report_class = None
 
 
     @staticmethod
@@ -105,7 +108,7 @@ class TestReadReportsBase(AbstractTestsBase):
             suffix = '_english'
 
         with self.assertLogs(skyline_reports.LOGGER) as cm:
-            df = self.read_report(f'{self.report_base}_quality{suffix}.{ext}')
+            df = self.report_class.read_report(f'{self.report_basename}_quality{suffix}.{ext}')
 
         self.assertIsNotNone(df)
         self.assertTrue(f'Found {language} {self.report_type} report...' in cm.output[0])
@@ -121,18 +124,18 @@ class TestReadReplicateReport(unittest.TestCase, TestReadReportsBase):
     def setUp(self):
         # file vars
         self.report_type = 'replicate'
-        self.report_base = f'{TEST_DIR}/data/skyline_reports/{self.TEST_PROJECT}_{self.report_type}'
+        self.report_basename = f'{TEST_DIR}/data/skyline_reports/{self.TEST_PROJECT}_{self.report_type}'
+
+        # setup SkylineReport class
+        self.report_class = skyline_reports.ReplicateReport()
 
         # report column vars
-        self.df_keys = ['FileName']
-        self.df_values = list(skyline_reports.REPLICATE_QUALITY_REQUIRED_COLUMNS.values())
+        self.df_keys = ['fileName']
+        self.df_values = [col.name for col in self.report_class.required_columns()]
 
         # setup gt data
         df = pd.read_csv(f'{TEST_DIR}/data/intermediate_files/{self.TEST_PROJECT}_replicates_df.tsv', sep='\t')
         self.data = self.df_to_dict(df, self.df_keys, self.df_values)
-
-        # setup read_report fxn
-        self.read_report = skyline_reports.read_replicate_report
 
 
     def test_read_invariant_tsv(self):
@@ -169,19 +172,19 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
     def setUp(self):
         # file vars
         self.report_type = 'precursor'
-        self.report_base = f'{TEST_DIR}/data/skyline_reports/{self.TEST_PROJECT}_by_protein_{self.report_type}'
+        self.report_basename = f'{TEST_DIR}/data/skyline_reports/{self.TEST_PROJECT}_by_protein_{self.report_type}'
+
+        # setup SkylineReport class
+        self.report_class = skyline_reports.PrecursorReport()
 
         # report column vars
-        self.df_keys = ['replicateName', 'proteinAccession', 'modifiedSequence', 'precursorCharge']
-        self.df_values = list(skyline_reports.PRECURSOR_QUALITY_NUMERIC_COLUMNS)
+        self.df_keys = ['replicateName', 'proteinName', 'modifiedSequence', 'precursorCharge']
+        self.df_values = [col.name for col in self.report_class.required_columns()]
 
         # setup gt data
         df = pd.read_csv(f'{TEST_DIR}/data/intermediate_files/{self.TEST_PROJECT}_precursors_df.tsv', sep='\t')
 
         self.data = self.df_to_dict(df, self.df_keys, self.df_values)
-
-        # setup read_report fxn
-        self.read_report = skyline_reports.read_precursor_report
 
 
     def test_read_invariant_tsv(self):

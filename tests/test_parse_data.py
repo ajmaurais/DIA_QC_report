@@ -89,7 +89,7 @@ class TestMetadata(unittest.TestCase):
     @staticmethod
     def setup_command(project, ext, meta_suffix='_metadata'):
         db_path = f'test_{ext}{meta_suffix}.db3'
-        command = ['parse_data',
+        command = ['dia_qc', 'parse',
                    f'--projectName={project}', '--overwriteMode=overwrite',
                    '-m', f'{TEST_DIR}/data/metadata/{project}{meta_suffix}.{ext}',
                    '-o', db_path,
@@ -219,7 +219,7 @@ class TestInferDtypes(unittest.TestCase):
     @staticmethod
     def setup_command(project, ext, meta_suffix='_multi_var_metadata'):
         db_path = f'test_{ext}{meta_suffix}.db3'
-        command = ['parse_data',
+        command = ['dia_qc', 'parse',
                    f'--projectName={project}', '--overwriteMode=overwrite',
                    '-m', f'{TEST_DIR}/data/metadata/{project}{meta_suffix}.{ext}',
                    '-o', db_path,
@@ -366,7 +366,7 @@ class TestMultiProjectStepped(unittest.TestCase):
         db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
         self.assertTrue(db_proj_1_map == proj_1_map)
 
-        command = ['parse_data', '--overwriteMode=append', f'--projectName={self.PROJECT_2}',
+        command = ['dia_qc', 'parse', '--overwriteMode=append', f'--projectName={self.PROJECT_2}',
                    '-m', f'{self.DATA_DIR}/metadata/{self.PROJECT_2}_metadata.tsv',
                    f'{self.DATA_DIR}/skyline_reports/{self.PROJECT_2}_replicate_quality.tsv',
                    f'{self.DATA_DIR}/invalid_reports/{self.PROJECT_2}_by_protein_not_minimal_precursor_quality.tsv']
@@ -447,7 +447,7 @@ class TestMultiProjectStepped(unittest.TestCase):
 
         # make sure make_gene_matrix fails if grouped by protein
         conn = update_meta_value(conn, 'group_precursors_by', 'protein')
-        bad_matrix_result = setup_functions.run_command(['make_gene_matrix', gene_id_path, db_path],
+        bad_matrix_result = setup_functions.run_command(['dia_qc', 'export_gene_matrix', gene_id_path, db_path],
                                                         work_dir, prefix='failed_matrix')
         self.assertEqual(bad_matrix_result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)
@@ -467,7 +467,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
     @staticmethod
     def setup_command(project, option, precursor_rep):
         db_name = f'test_{option}_option.db3'
-        command = ['parse_data',
+        command = ['dia_qc', 'parse',
                    f'--projectName={project}', '--overwriteMode=overwrite',
                    '-m', f'{TEST_DIR}/data/metadata/{project}_metadata.tsv',
                    '-o', db_name,

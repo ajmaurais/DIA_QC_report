@@ -6,9 +6,9 @@ import argparse
 import subprocess
 import re
 
+import src.__init__ as src
 
 REPO_HEAD_DIR = os.path.dirname(os.path.abspath(__file__))
-# DOCKER_IMAGE_NAME = 'mauraisa/dia_qc_report'
 DOCKER_IMAGE_NAME = 'quay.io/mauraisa/dia_qc_report'
 
 
@@ -59,11 +59,14 @@ def main():
     parser.add_argument('-t', '--tag', type=str, default=None, help='Docker image tag')
     args = parser.parse_args()
 
+    package_version = src.__version__
     git_info = get_git_info(cwd=REPO_HEAD_DIR)
 
     docker_command = ['docker', 'build', '-t', DOCKER_IMAGE_NAME]
     if args.tag:
         docker_command[-1] += f':{args.tag}'
+    else:
+        docker_command[-1] += f':{package_version}'
 
     for key, value in git_info.items():
         if value is not None:
@@ -78,6 +81,9 @@ def main():
 
     docker_command.append('--build-arg')
     docker_command.append(f'DOCKER_TAG={args.tag}')
+
+    docker_command.append('--build-arg')
+    docker_command.append(f'DIA_QC_REPORT_VERSION={package_version}')
 
     docker_command.append(REPO_HEAD_DIR)
 
