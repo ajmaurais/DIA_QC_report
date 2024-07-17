@@ -75,6 +75,7 @@ class ReportColumn():
         KeyError
             If `alias_language` is not a language.
         '''
+
         if alias_language == 'invariant':
             return self.name
         return self.skyline_aliases[alias_language]
@@ -253,7 +254,7 @@ class PrecursorReport(SkylineReport):
                    ReportColumn('precursorMz', 'PrecursorMz', is_numeric=True),
                    ReportColumn('averageMassErrorPPM', 'AverageMassErrorPPM', is_numeric=True),
                    ReportColumn('totalAreaFragment', 'TotalAreaFragment', is_numeric=True),
-                   # ReportColumn('normalizedArea', '', is_numeric=True, is_required=False),
+                   # ReportColumn('normalizedArea', 'NormalizedAreaStrict', is_numeric=True, is_required=False),
                    ReportColumn('userSetTotal', 'UserSetTotal', is_required=False),
                    ReportColumn('totalAreaMs1', 'TotalAreaMs1', is_numeric=True),
                    ReportColumn('rt', 'BestRetentionTime', is_numeric=True),
@@ -280,7 +281,7 @@ class PrecursorReport(SkylineReport):
                              'maxEndTime': 'Max End Time',
                              'userSetTotal': 'User Set Total',
                              'maxFwhm': 'Max Fwhm',
-                             # 'normalizedArea': 'Normalized Area',
+                             # 'normalizedArea': 'Normalized Area Strict',
                              'libraryDotProduct': 'Library Dot Product',
                              'isotopeDotProduct': 'Isotope Dot Product'}
 
