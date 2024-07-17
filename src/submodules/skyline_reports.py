@@ -57,6 +57,29 @@ class ReportColumn():
         self.skyline_aliases = dict()
 
 
+    def col_to_alias(self, alias_language):
+        '''
+        Return the column alisas in the specified language.
+
+        Parameters
+        ----------
+        alias_language: str:
+            The language of the alias.
+
+        Return
+        ------
+        alias: str
+
+        Raises
+        ------
+        KeyError
+            If `alias_language` is not a language.
+        '''
+        if alias_language == 'invariant':
+            return self.name
+        return self.skyline_aliases[alias_language]
+
+
 class SkylineReport(ABC):
     '''
     Abstract base class for Skyline reports
@@ -120,9 +143,15 @@ class SkylineReport(ABC):
         return all_good
 
 
-    def _detect_language(self, df):
+    def _detect_language(self, file, delim=None):
+        # read the first line from the file
+        if delim is None:
+            delim = detect_delim(file)
+        headers = next(file).strip().split(delim)
+        file.seek(0)
+
         # first check invariant
-        df_languages = {col: set() for col in df.columns}
+        df_languages = {col: set() for col in headers}
         invariant_cols = {col.skyline_name for col in self.columns()}
         for col in df_languages:
             if col in invariant_cols:
@@ -185,11 +214,13 @@ class ReplicateReport(SkylineReport):
 
     def read_report(self, fname):
         with open(fname, 'r') as inF:
-            df = pd.read_csv(inF, sep=detect_delim(inF))
+            delim = detect_delim(inF)
+            report_language = self._detect_language(inF, delim)
+            LOGGER.info(f'Found {report_language} {self.report_name} report...')
+
+            df = pd.read_csv(inF, sep=delim)
 
         # Translate report into invariant format
-        report_language = self._detect_language(df)
-        LOGGER.info(f'Found {report_language} {self.report_name} report...')
         if report_language != 'invariant':
             col_dict = {}
             for col in self.columns():
@@ -262,11 +293,23 @@ class PrecursorReport(SkylineReport):
     def read_report(self, fname, by_gene=False):
         # read report df
         with open(fname, 'r') as inF:
-            df = pd.read_csv(inF, sep=detect_delim(inF))
+            # detect report delim
+            delim = detect_delim(inF)
+
+            # detect report language
+            report_language = self._detect_language(inF, delim)
+            LOGGER.info(f'Found {report_language} {self.report_name} report...')
+
+            # create dtypes dict for detected language
+            col_types = dict()
+            for col in self.columns():
+                col_types[col.col_to_alias(report_language)] = float64 if col.is_numeric else str
+            col_types[self._columns['precursorCharge'].col_to_alias(report_language)] = int8
+            col_types[self._columns['userSetTotal'].col_to_alias(report_language)] = bool
+
+            df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
 
         # Translate report into invariant format
-        report_language = self._detect_language(df)
-        LOGGER.info(f'Found {report_language} {self.report_name} report...')
         if report_language != 'invariant':
             col_dict = {}
             for col in self.columns():
@@ -275,22 +318,6 @@ class PrecursorReport(SkylineReport):
 
         # rename columns
         df = df.rename(columns={col.skyline_name: col.name for col in self.columns()})
-
-        # create dict of precursor report column types
-        col_types = dict()
-        for col in self.columns():
-            col_types[col.name] = float64 if col.is_numeric else str
-        col_types['precursorCharge'] = int8
-        col_types['userSetTotal'] = bool
-
-        # convert columns to correct datatypes
-        for col, col_type in col_types.items():
-            if col in df.columns and col_type is str:
-                df.loc[df[col].isnull(), col] = ''
-        df = df.astype(col_types)
-        for col, col_type in col_types.items():
-            if col in df.columns and col_type is str:
-                df.loc[df[col] == '', col] = pd.NA
 
         if by_gene:
             def protein_uid(row):

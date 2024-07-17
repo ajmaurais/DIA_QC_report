@@ -46,40 +46,42 @@ class TestDetectDelim(unittest.TestCase):
 
 class TestDetectLanguage(unittest.TestCase):
     def test_invariant_replicates(self):
-        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', sep='\t')
-        lang = skyline_reports.ReplicateReport()._detect_language(df)
+        with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', 'r') as inF:
+            lang = skyline_reports.ReplicateReport()._detect_language(inF)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_replicates(self):
-        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality_english.tsv', sep='\t')
-        lang = skyline_reports.ReplicateReport()._detect_language(df)
+        with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality_english.tsv', 'r') as inF:
+            lang = skyline_reports.ReplicateReport()._detect_language(inF)
         self.assertEqual(lang, 'English')
 
 
     def test_invariant_precursors(self):
-        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality.tsv', sep='\t')
-        lang = skyline_reports.PrecursorReport()._detect_language(df)
+        with open(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality.tsv', 'r') as inF:
+            lang = skyline_reports.PrecursorReport()._detect_language(inF)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_precursors(self):
-        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality_english.tsv', sep='\t')
-        lang = skyline_reports.PrecursorReport()._detect_language(df)
+        with open(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality_english.tsv', 'r') as inF:
+            lang = skyline_reports.PrecursorReport()._detect_language(inF)
         self.assertEqual(lang, 'English')
 
 
     def test_no_matching_cols(self):
-        df = pd.read_csv(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', sep='\t')
+        ''' Test that df with no matching headers returns None '''
 
-        col_dict = {'Replicate': 'Dummy1',
-                    'AcquiredTime': 'Dummy2',
-                    'TicArea': 'Dummy3',
-                    'FileName': 'Dummy4'}
+        # setup test fp with dummy headers
+        test_string = 'Dummy1\tDummy2\tDummy3\tDummy4\n'
+        with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', 'r') as inF:
+            next(inF)
+            for line in inF:
+                test_string += line
 
-        df = df.rename(columns=col_dict)
+        test_ss = StringIO(test_string)
+        lang = skyline_reports.ReplicateReport()._detect_language(test_ss)
 
-        lang = skyline_reports.ReplicateReport()._detect_language(df)
         self.assertIsNone(lang)
 
 
