@@ -57,9 +57,9 @@ class ReportColumn():
         self.skyline_aliases = dict()
 
 
-    def col_to_alias(self, alias_language):
+    def get_alias(self, alias_language):
         '''
-        Return the column alisas in the specified language.
+        Get the column alisas in the specified language.
 
         Parameters
         ----------
@@ -304,9 +304,9 @@ class PrecursorReport(SkylineReport):
             # create dtypes dict for detected language
             col_types = dict()
             for col in self.columns():
-                col_types[col.col_to_alias(report_language)] = float64 if col.is_numeric else str
-            col_types[self._columns['precursorCharge'].col_to_alias(report_language)] = int8
-            col_types[self._columns['userSetTotal'].col_to_alias(report_language)] = bool
+                col_types[col.get_alias(report_language)] = float64 if col.is_numeric else str
+            col_types[self._columns['precursorCharge'].get_alias(report_language)] = int8
+            col_types[self._columns['userSetTotal'].get_alias(report_language)] = bool
 
             df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
 
