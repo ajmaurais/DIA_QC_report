@@ -63,10 +63,8 @@ def main():
     git_info = get_git_info(cwd=REPO_HEAD_DIR)
 
     docker_command = ['docker', 'build', '-t', DOCKER_IMAGE_NAME]
-    if args.tag:
-        docker_command[-1] += f':{args.tag}'
-    else:
-        docker_command[-1] += f':{package_version}'
+    docker_tag = args.tag if args.tag else package_version
+    docker_command[-1] += f':{docker_tag}'
 
     for key, value in git_info.items():
         if value is not None:
@@ -80,7 +78,7 @@ def main():
     docker_command.append(f'DOCKER_IMAGE={DOCKER_IMAGE_NAME}')
 
     docker_command.append('--build-arg')
-    docker_command.append(f'DOCKER_TAG={args.tag}')
+    docker_command.append(f'DOCKER_TAG={docker_tag}')
 
     docker_command.append('--build-arg')
     docker_command.append(f'DIA_QC_REPORT_VERSION={package_version}')
