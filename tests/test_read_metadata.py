@@ -5,6 +5,7 @@ from io import StringIO
 from itertools import product
 import json
 import re
+import csv
 from jsonschema import validate
 import pandas as pd
 
@@ -172,6 +173,66 @@ class TestMetadataEqMethod(TestMetadataBase):
             rhs.df.loc[rhs.df['annotationKey'] == 'string_var', 'annotationValue'] = 'other_value'
 
             self.assertNotEqual(lhs, rhs)
+
+
+class TestWithExtension(TestMetadataBase):
+    '''
+    Test that results are equal regardless of whether replicate names have a file extension.
+    '''
+
+    def run_table_tests(self, ext, delim, replicate_ext):
+        ext = 'tsv'
+        delim = '\t'
+        no_ext = Metadata()
+        with_ext = Metadata()
+        with open(f'{self.metadata_dir}/HeLa_metadata.{ext}') as inF:
+            self.assertTrue(no_ext.read(inF, metadata_format=ext))
+
+            # read fp into csv reader and add file extensions to metadata
+            inF.seek(0)
+            reader = csv.reader(inF, delimiter=delim)
+            rows = list()
+            rows.append(next(reader))
+            for row in reader:
+                rows.append(row)
+                rows[-1][0] += f'.{replicate_ext}'
+
+        string_stream = StringIO('\n'.join(delim.join(row) for row in rows))
+        self.assertTrue(with_ext.read(string_stream, metadata_format=ext))
+
+        self.assertEqual(no_ext, with_ext)
+        self.assertDataDictEqual(with_ext.df_to_dict(), self.gt_data)
+
+
+    def test_tsv(self):
+        self.run_table_tests('tsv', '\t', 'mzML')
+        self.run_table_tests('tsv', '\t', 'raw')
+
+
+    def test_csv(self):
+        self.run_table_tests('csv', ',', 'mzML')
+        self.run_table_tests('csv', ',', 'raw')
+
+
+    def test_json(self):
+        ext = 'json'
+        no_ext = Metadata()
+        with_ext = Metadata()
+        with open(f'{self.metadata_dir}/HeLa_metadata.{ext}') as inF:
+            self.assertTrue(no_ext.read(inF, metadata_format=ext))
+
+            # read fp into dict
+            inF.seek(0)
+            data = json.load(inF)
+
+        for rep_ext in ('raw', 'mzML'):
+            test_data = {key + f'.{rep_ext}': value for key, value in data.items()}
+
+            string_stream = StringIO(json.dumps(test_data))
+            self.assertTrue(with_ext.read(string_stream, metadata_format=ext))
+
+            self.assertEqual(no_ext, with_ext)
+            self.assertDataDictEqual(with_ext.df_to_dict(), self.gt_data)
 
 
 class TestReadMetadata(TestMetadataBase):
