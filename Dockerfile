@@ -1,4 +1,4 @@
-from amazonlinux:latest
+FROM amazonlinux:latest
 
 MAINTAINER "Aaron Maurais -- MacCoss Lab"
 
@@ -72,5 +72,5 @@ ENV DIA_QC_REPORT_VERSION=${DIA_QC_REPORT_VERSION}
 WORKDIR /data
 
 CMD []
-entrypoint ["/usr/local/bin/entrypoint"]
+ENTRYPOINT ["/usr/local/bin/entrypoint"]
 
