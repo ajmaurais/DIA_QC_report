@@ -553,14 +553,14 @@ def _main(args):
     #     LOGGER.info('Done reading proteins table...')
 
     # check if file names match replicate names
-    if 'FileName' in replicates.columns:
-        if any(replicates['replicate'] != replicates['FileName'].apply(lambda x: os.path.splitext(x)[0])):
-            LOGGER.warning('Not all FileNames match replicate names, using FileName instead.')
+    if 'fileName' in replicates.columns:
+        if any(replicates['replicate'] != replicates['fileName'].apply(lambda x: os.path.splitext(x)[0])):
+            LOGGER.warning('Not all file names match replicate names, using FileName instead.')
 
             # fix names in replicates
-            replicates['FileName'] = replicates['FileName'].apply(lambda x: os.path.splitext(x)[0])
-            rep_name_map = {row.replicate: row.FileName for row in replicates.itertuples()}
-            replicates['replicate'] = replicates['FileName']
+            replicates['fileName'] = replicates['fileName'].apply(lambda x: os.path.splitext(x)[0])
+            rep_name_map = {row.replicate: row.fileName for row in replicates.itertuples()}
+            replicates['replicate'] = replicates['fileName']
 
             # fix names in precursors
             try:

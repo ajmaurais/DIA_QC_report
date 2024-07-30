@@ -15,6 +15,8 @@ from DIA_QC_report.submodules.dia_db_utils import is_normalized
 from DIA_QC_report.submodules.dia_db_utils import update_meta_value, get_meta_value
 
 
+MISSING_FILENAME_WARNING = 'WARNING: "FileName" column not found in replciate report, could not check that replicate names match!'
+
 def get_db_metadata(db_path):
     if not os.path.isfile(db_path):
         raise RuntimeError(f"'{db_path}' does not exist!")
@@ -98,12 +100,36 @@ class TestMetadata(unittest.TestCase):
         return command, db_path
 
 
+class TestMetadata(unittest.TestCase):
+    TEST_PROJECT = 'Sp3'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_metadata'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
+
+    @staticmethod
+    def setup_command(project, ext, meta_suffix='_metadata'):
+        db_path = f'test_{ext}{meta_suffix}.db3'
+        command = ['dia_qc', 'parse',
+                   f'--projectName={project}', '--overwriteMode=overwrite',
+                   '-m', f'{TEST_DIR}/data/metadata/{project}{meta_suffix}.{ext}',
+                   '-o', db_path,
+                   f'{TEST_DIR}/data/skyline_reports/{project}_replicate_quality.tsv',
+                   f'{TEST_DIR}/data/skyline_reports/{project}_by_protein_precursor_quality.tsv']
+        return command, db_path
+
+
     def test_tsv(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
         result = setup_functions.run_command(command, self.work_dir)
 
         # test command was successful
         self.assertEqual(0, result.returncode)
+
+        # test FileName not missing
+        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
 
         # get metadata from test db
         db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
@@ -130,6 +156,9 @@ class TestMetadata(unittest.TestCase):
         # test command was successful
         self.assertEqual(0, result.returncode)
 
+        # test FileName not missing
+        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
+
         # get metadata from test db
         db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
 
@@ -154,6 +183,9 @@ class TestMetadata(unittest.TestCase):
 
         # test command was successful
         self.assertEqual(0, result.returncode)
+
+        # test FileName not missing
+        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
 
         # Log entry specific for skyline annotations csv
         self.assertTrue('Found Skyline annotations csv' in result.stderr)
@@ -182,6 +214,9 @@ class TestMetadata(unittest.TestCase):
 
         # test command was successful
         self.assertEqual(0, result.returncode)
+
+        # test FileName not missing
+        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
 
         # get metadata from test db
         db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
@@ -240,6 +275,64 @@ class TestInferDtypes(unittest.TestCase):
         db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
 
         self.assertDictEqual(self.METADATA_TYPES, db_metadata_types)
+
+
+class TestReplicateFileName(unittest.TestCase):
+    TEST_PROJECT = 'Sp3'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_replicate_FileName'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
+
+    @staticmethod
+    def setup_command(project, replicate_suffix):
+        db_path = f'test_{replicate_suffix}.db3'
+        command = ['dia_qc', 'parse', '--overwriteMode=overwrite', '-o', db_path,
+                   f'{TEST_DIR}/data/invalid_reports/{project}_replicate_quality_{replicate_suffix}.tsv',
+                   f'{TEST_DIR}/data/skyline_reports/{project}_by_protein_precursor_quality.tsv']
+        return command
+
+
+    def test_missing_FileName(self):
+        command = self.setup_command(self.TEST_PROJECT, 'missing_FileName')
+        result = setup_functions.run_command(command, self.work_dir)
+
+        # test command was successful
+        self.assertEqual(0, result.returncode)
+
+        # test FileName missing
+        self.assertTrue(MISSING_FILENAME_WARNING in result.stderr)
+
+
+    def test_modified_Replicate(self):
+        replicate_suffix = 'modified_Replicate'
+        db_path = f'test_{replicate_suffix}.db3'
+        command = ['dia_qc', 'parse', '--overwriteMode=overwrite', '-o', db_path,
+                   f'{TEST_DIR}/data/invalid_reports/{self.TEST_PROJECT}_replicate_quality_{replicate_suffix}.tsv',
+                   f'{TEST_DIR}/data/invalid_reports/{self.TEST_PROJECT}_by_protein_precursor_quality_{replicate_suffix}.tsv']
+        result = setup_functions.run_command(command, self.work_dir)
+
+        # test command was successful
+        self.assertEqual(0, result.returncode)
+
+        # test FileName not missing
+        self.assertTrue('WARNING: Not all file names match replicate names, using FileName instead.' in result.stderr)
+        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
+
+
+    def test_modified_Replicate_missing_FileName(self):
+        command = self.setup_command(self.TEST_PROJECT, 'modified_Replicate_missing_FileName')
+        result = setup_functions.run_command(command, self.work_dir)
+
+        # test command was successful
+        self.assertEqual(1, result.returncode)
+
+        # test FileName missing
+        self.assertTrue(MISSING_FILENAME_WARNING in result.stderr)
+        self.assertTrue(re.search(r'ERROR: Missing required value: [\w\-]+ for protein_quants in repIndex!',
+                                  result.stderr))
 
 
 class TestMultiProject(unittest.TestCase):
