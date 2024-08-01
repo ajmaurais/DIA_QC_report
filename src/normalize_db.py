@@ -24,7 +24,7 @@ def parse_args(argv, prog=None):
                                help='Normalization method to use. Default is "DirectLFQ"')
     norm_settings.add_argument('--keepMissing', default=False, action='store_true', dest='keep_missing',
                                help="Don't exclude precursors which are missing in 1 or more "
-                                    "replicates from normalization. This option is only compabable "
+                                    "replicates from normalization. This option is only compatible "
                                     "with median normalization.")
 
     exclude_args = parser.add_argument_group('Filter replicates',

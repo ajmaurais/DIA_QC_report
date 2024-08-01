@@ -72,7 +72,7 @@ class TestMetadataEqMethod(TestMetadataBase):
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def read_ext(self, ext):
-        ''' Read metadat file with specified `ext` '''
+        ''' Read metadata file with specified `ext` '''
         suffix = 'metadata'
         if ext == 'skyline':
             ext = 'csv'

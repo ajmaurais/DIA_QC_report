@@ -59,7 +59,7 @@ class ReportColumn():
 
     def get_alias(self, alias_language):
         '''
-        Get the column alisas in the specified language.
+        Get the column alias in the specified language.
 
         Parameters
         ----------
@@ -99,7 +99,7 @@ class SkylineReport(ABC):
 
     def set_columns(self, columns):
         '''
-        Set the _columns and _languages attrubutes
+        Set the _columns and _languages attributes
         '''
         self._columns = {col.name: col for col in columns}
         if len(self._columns) < len(columns):

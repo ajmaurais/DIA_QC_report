@@ -132,10 +132,10 @@ def is_normalized(conn):
 
 def check_schema_version(conn):
     '''
-    Check the databse schema version and the version of dia_qc used to build the database.
+    Check the database schema version and the version of dia_qc used to build the database.
 
     If the version of dia_qc does not match the current verision, a warning is printed to the log.
-    If the SCHEMA_VERSION is diffent an error is printed to the log and the function returns False.
+    If the SCHEMA_VERSION is different an error is printed to the log and the function returns False.
 
     Parameters
     ----------
