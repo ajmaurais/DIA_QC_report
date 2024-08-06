@@ -34,8 +34,9 @@ class VersionAction(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         if self.version is None:
-            parser.exit(status=1)
-        parser.exit(message=f"dia_qc version {self.version}\n")
+            sys.exit(1)
+        sys.stdout.write(f'dia_qc version {self.version}\n')
+        sys.exit(0)
 
 
 class Main():
@@ -46,6 +47,7 @@ class Main():
 
     def __init__(self):
         parser = argparse.ArgumentParser(description='Tools to generate QC and batch reports from DIA proteomics data',
+                                         add_help=False,
                                          usage = f'''dia_qc <command> [<args>]
 
 Available commands:
@@ -57,6 +59,8 @@ Available commands:
    export_gene_matrix   {export_gene_matrix.COMMAND_DESCRIPTION}
    db_export            {export_tables.COMMAND_DESCRIPTION}''')
 
+        parser.add_argument('-h', '--help', action='help',
+                            help='Show this help message and exit.')
         parser.add_argument('-v', '--version', action=VersionAction)
         parser.add_argument('command', help='Subcommand to run.')
 
