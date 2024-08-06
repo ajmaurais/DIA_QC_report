@@ -1,6 +1,6 @@
 FROM amazonlinux:latest
 
-MAINTAINER "Aaron Maurais -- MacCoss Lab"
+LABEL maintainer="Aaron Maurais -- MacCoss Lab"
 
 RUN dnf update && \
     dnf -y install git wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
