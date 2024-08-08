@@ -7,7 +7,7 @@ from os.path import splitext
 from jsonschema import validate, ValidationError
 import pandas as pd
 
-from .dtype import Dtype
+from .dtype import Dtype, NA_RE
 from .logger import LOGGER
 
 
@@ -52,6 +52,19 @@ class Metadata():
         return True
 
 
+    def _normalize_nas(self):
+        '''
+        Convert values in self.data which match dtype.NA_RE to pd.NA
+        '''
+
+        def normalize_na_fxn(value):
+            if value is None or NA_RE.search(value):
+                return ''
+            return value
+
+        self.df['annotationValue'] = self.df['annotationValue'].apply(normalize_na_fxn)
+
+
     def df_to_dict(self):
         if not self.validate():
             return None
@@ -90,6 +103,11 @@ class Metadata():
             for l_key, l_value in l_data[l_rep].items():
                 if l_key not in r_data[l_rep]:
                     return False
+                if (n_na := sum(pd.isna(v) for v in (l_value, r_data[l_rep][l_key]))) > 0:
+                    if n_na != 2:
+                        return False
+                    continue
+
                 if l_value != r_data[l_rep][l_key]:
                     return False
 
@@ -163,6 +181,7 @@ class Metadata():
         self.types = self._infer_types(self.df)
 
         # set values of Dtype.NULL to NA
+        self._normalize_nas()
         self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
                                                                    else x.annotationValue, axis=1)
 
@@ -170,9 +189,9 @@ class Metadata():
             self.df = self.df[~pd.isna(self.df['annotationValue'])].reset_index(drop=True)
             self.types = {k: v for k, v in self.types.items() if v is not Dtype.NULL}
 
-        # This is an annoying edge case with metadata annotations exported from Skyline
-        # Boolean annotations are either True or blank instead of False
-        # Therefore we will set all blank boolean annotations to False
+        # This is an annoying edge case with metadata annotations exported from Skyline.
+        # Boolean annotations are either True or blank instead of False.
+        # Therefore, we will set all blank boolean annotations to False.
         for key, var_type in self.types.items():
             if var_type is Dtype.BOOL:
                 sele = self.df['annotationKey'] == key
@@ -295,6 +314,7 @@ class Metadata():
             self.types = self._infer_types(self.df)
 
             # set values of Dtype.NULL to NA
+            self._normalize_nas()
             self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
                                                                        else x.annotationValue, axis=1)
 

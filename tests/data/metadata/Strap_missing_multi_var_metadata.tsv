@@ -9,8 +9,8 @@ Replicate	string_var	bool_var	int_var	float_var	na_var
 10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR08-CCRF-CEM-02	CCRF-CEM	TRUE	7	303521802.8	
 10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR01-COLO-205-02	COLO-205	TRUE	8	-299764717.7	
 10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR01-COLO-205-01	COLO-205	TRUE	9	275575323.5	
-10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-02					
-10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-01	H226	TRUE	11	-533910731.5	
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-02	NA				
+10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR03-H226-01		NA	NA	NA	
 10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR09-H23-02	H23	TRUE	12	923269206.9	
 10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR09-H23-01	H23	TRUE	13	883022161.1	
 10Jan2022-Lumos-NCI-7-Repeat-S-trap-DIA-ind-8mz-ovlp-400to1000-ICR04-HeLa-01	HeLa	FALSE	14	-562295080.5	

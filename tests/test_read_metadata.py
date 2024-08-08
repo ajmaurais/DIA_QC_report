@@ -432,6 +432,28 @@ class TestMetadataWriteMethods(unittest.TestCase):
     #                  files=['tsv', 'json'])
 
 
+class TestToSkylineAnnotations(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.metadata_dir = f'{setup_functions.TEST_DIR}/data/metadata'
+
+
+    def test_missing(self):
+        reader = Metadata()
+        self.assertTrue(reader.read(f'{self.metadata_dir}/Strap_missing_multi_var_metadata.tsv'))
+
+        with StringIO() as sstream:
+            reader.to_skyline_annotations(sstream)
+            sstream.seek(0)
+            rows = [row for row in csv.DictReader(sstream)]
+
+        for row in rows:
+            self.assertEqual('', row['annotation_na_var'])
+
+            if not re.search(r'[0-9]+', row['annotation_int_var']):
+                self.assertEqual('', row['annotation_int_var'])
+
+
 class TestToSkylineDefinitions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
