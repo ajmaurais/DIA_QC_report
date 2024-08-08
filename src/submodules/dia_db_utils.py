@@ -377,11 +377,10 @@ def parse_bitmask_options(mask, digit_names, options):
     ------
     ret: dict
         A dictionary where the keys are the digit_names and values are
-        dictaries mapping options to booleans if their bit was set.
+        dictionaries mapping options to booleans if their bit was set.
     '''
 
     assert len(digit_names) == len(mask)
-    # assert len(options) == 3
     n_options = len(options)
 
     def _parse_bitmask(mask):

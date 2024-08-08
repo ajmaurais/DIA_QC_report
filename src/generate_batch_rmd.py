@@ -601,7 +601,7 @@ def parse_args(argv, prog=None):
     # Some of these examples might be good to include in the help, but is is already a lot of text.
     # For example, a mask of 42 would produce a wide batch corrected and long normalized tsv file.
     # A mask of 30 (1+2=3) would produce both a unnormalized and normalized wide tsv file.
-    # A mask of 70 would produce a (1+2+4=7) would produce a unnormalized, normalized, and batch
+    # A mask of 70 (1+2+4=7) would produce a unnormalized, normalized, and batch
     # corrected wide tsv file.
 
     table_args.add_argument('-p', '--precursorTables', default='40',
