@@ -369,10 +369,14 @@ def check_duplicate_precursors(precursors, mode):
                 if col.skyline_name not in ['ProteinAccession', 'ProteinName', 'ProteinGene']]
     n_unique_rows = len(precursors[all_cols].drop_duplicates().index)
 
+    # This should never happen.
+    # If this is true it means that there are duplicate precursos with the same sequence, charge, and area,
+    # but some other floating point column has a non-unique value.
     if n_unique_areas != n_unique_rows:
         LOGGER.error(f'There are {n_unique_rows - n_unique_areas} precursor rows which are not unique!')
         return None
 
+    # If there are no precursors with non-unique areas, simply return precursor df
     if n_unique == n_unique_areas:
         return precursors
 
