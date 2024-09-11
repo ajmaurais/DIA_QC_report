@@ -56,7 +56,8 @@ def get_git_info(cwd=None):
 
 def main():
     parser = argparse.ArgumentParser(description=f'Build {DOCKER_IMAGE_NAME} docker image from {REPO_HEAD_DIR}')
-    parser.add_argument('-t', '--tag', type=str, default=None, help='Docker image tag')
+    parser.add_argument('-t', '--tag', type=str, default=None,
+                        help='Docker image tag. By default the tag is read from src.__init__.__version__')
     args = parser.parse_args()
 
     package_version = src.__version__
