@@ -367,6 +367,7 @@ def check_duplicate_precursors(precursors, mode):
 
     all_cols = [col.name for col in precursor_cols
                 if col.skyline_name not in ['ProteinAccession', 'ProteinName', 'ProteinGene']]
+    all_cols = [col for col in all_cols if col in precursors.columns]
     n_unique_rows = len(precursors[all_cols].drop_duplicates().index)
 
     # This should never happen.
