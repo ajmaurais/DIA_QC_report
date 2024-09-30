@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 
 from .dtype import Dtype
 
-def pc_matrix(df):
+def calc_pc_matrix(df):
     df_s = StandardScaler().fit_transform(df.transpose())
 
     pca = PCA()
@@ -84,41 +84,43 @@ def pca_plot(pc_data, label_col, label_type='discrete',
         category_colors = dict(zip(unique_categories, generate_hcl_colors(len(unique_categories))))
 
         for i, (title, (pannel_data, pannel_var)) in enumerate(pc_data.items()):
-            show_legend = i >= len(pc_data) - 1
+            if pannel_data is not None:
+                show_legend = i >= len(pc_data) - 1
 
-            for category in unique_categories:
-                mask = pannel_data[label_col] == category
-                fig.add_trace(
-                    go.Scatter(x=pannel_data.loc[mask, x_axis_pc],
-                               y=pannel_data.loc[mask, y_axis_pc],
-                               mode='markers', name=category,
-                               hovertext=pannel_data['replicate'],
-                               marker={'color': category_colors[category]},
-                               showlegend=show_legend),
-                    row=1, col=i + 1
-                )
+                for category in unique_categories:
+                    mask = pannel_data[label_col] == category
+                    fig.add_trace(
+                        go.Scatter(x=pannel_data.loc[mask, x_axis_pc],
+                                   y=pannel_data.loc[mask, y_axis_pc],
+                                   mode='markers', name=category,
+                                   hovertext=pannel_data['replicate'],
+                                   marker={'color': category_colors[category]},
+                                   showlegend=show_legend),
+                        row=1, col=i + 1
+                    )
 
-            fig.update_xaxes(title_text=f'PC {x_axis_pc + 1} {pannel_var[x_axis_pc]:.1f}% var', row=1, col=i + 1)
-            fig.update_yaxes(title_text=f'PC {y_axis_pc + 1} {pannel_var[y_axis_pc]:.1f}% var', row=1, col=i + 1)
+                fig.update_xaxes(title_text=f'PC {x_axis_pc + 1} {pannel_var[x_axis_pc]:.1f}% var', row=1, col=i + 1)
+                fig.update_yaxes(title_text=f'PC {y_axis_pc + 1} {pannel_var[y_axis_pc]:.1f}% var', row=1, col=i + 1)
 
     elif label_type == 'continuous':
         for i, (title, (pannel_data, pannel_var)) in enumerate(pc_data.items()):
-            show_legend = i >= len(pc_data) - 1
+            if pannel_data is not None:
+                show_legend = i >= len(pc_data) - 1
 
-            marker = go.scatter.Marker(color=pannel_data[label_col], colorscale='Viridis',
-                                       showscale=show_legend,
-                                       colorbar={'title': label_col} if show_legend else None)
+                marker = go.scatter.Marker(color=pannel_data[label_col], colorscale='Viridis',
+                                           showscale=show_legend,
+                                           colorbar={'title': label_col} if show_legend else None)
 
-            fig.add_trace(
-                go.Scatter(x=pannel_data[x_axis_pc], y=pannel_data[y_axis_pc],
-                           mode='markers', name=title,
-                           hovertext=pannel_data['replicate'],
-                           marker=marker, showlegend=False),
-                row=1, col=i + 1
-            )
+                fig.add_trace(
+                    go.Scatter(x=pannel_data[x_axis_pc], y=pannel_data[y_axis_pc],
+                               mode='markers', name=title,
+                               hovertext=pannel_data['replicate'],
+                               marker=marker, showlegend=False),
+                    row=1, col=i + 1
+                )
 
-            fig.update_xaxes(title_text=f'PC {x_axis_pc + 1} {pannel_var[x_axis_pc]:.1f}% var', row=1, col=i + 1)
-            fig.update_yaxes(title_text=f'PC {y_axis_pc + 1} {pannel_var[y_axis_pc]:.1f}% var', row=1, col=i + 1)
+                fig.update_xaxes(title_text=f'PC {x_axis_pc + 1} {pannel_var[x_axis_pc]:.1f}% var', row=1, col=i + 1)
+                fig.update_yaxes(title_text=f'PC {y_axis_pc + 1} {pannel_var[y_axis_pc]:.1f}% var', row=1, col=i + 1)
 
     line_width = None
     axis_format_args = {'showgrid': False,
