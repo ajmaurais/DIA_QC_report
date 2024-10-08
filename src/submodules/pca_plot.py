@@ -49,6 +49,58 @@ def _add_discrete_col(pc_data, label_col,
     pass
 
 
+def estimate_legend_width(fig, font_size=12):
+    """
+    Estimate the width of the legend in a Plotly figure.
+
+    Parameters
+    ----------
+    fig: plotly.graph_objs._figure.Figure
+        Plotly figure object
+    font_size: int
+        Font size. Default is 12
+
+    Returns
+    -------
+    width: float
+        Estimated width of the legend in pixels
+    """
+
+    # Multiplier to estimate the width per character based on font size (roughly 0.6)
+    char_width_multiplier = 0.6
+
+    # Get legend data (assuming 'legend' or 'colorbar' exists)
+    legend_texts = []
+
+    # Get legend labels from traces
+    for trace in fig['data']:
+        if 'name' in trace:
+            legend_texts.append(trace['name'])
+
+    # Add color bar title if it exists
+    for trace in fig['data']:
+        if 'colorbar' in trace and 'title' in trace['colorbar']:
+            legend_texts.append(trace['colorbar']['title']['text'])
+
+    # Check if there's a legend title and estimate its width
+    legend_title = ""
+    if 'legend' in fig['layout'] and 'title' in fig['layout']['legend']:
+        legend_title = fig['layout']['legend']['title']['text']
+        if legend_title:
+            legend_texts.append(legend_title)
+
+    if not legend_texts:
+        return 0  # No legend or color bar present
+
+    # Find the longest text in the legend or color bar
+    longest_text = max(legend_texts, key=len)
+
+    # Estimate the width of the longest text
+    estimated_width = len(longest_text) * font_size * char_width_multiplier
+
+    return estimated_width
+
+
 def pca_plot(pc_data, label_cols,
              fname=None, x_axis_pc=0, y_axis_pc=1, add_title=False):
     '''
