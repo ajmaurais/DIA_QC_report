@@ -136,7 +136,10 @@ def pca_plot(pc_data, label_col, label_type='discrete',
     fig.update_xaxes(**axis_format_args)
     fig.update_yaxes(**axis_format_args)
 
+    # legend_width = estimate_legend_width(fig)
+    legend_width = 120
     fig.update_layout(plot_bgcolor='white',
+                      height=450, width=(400 * len(pc_data) + 150),
                       legend={'title': label_col})
 
     if add_title:
