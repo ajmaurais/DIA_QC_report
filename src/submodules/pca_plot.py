@@ -56,7 +56,7 @@ def pca_plot(pc_data, label_col, label_type='discrete',
         The label type of `label_col` ('discrete' or 'continious')
 
     fname: str
-        The name of the file to writ figure to. If None, the plot object is returned.
+        The name of the file to write figure to. If None, the plot object is returned.
 
     x_axis_pc: int
         The X axis PC index. Default is 0.
@@ -143,7 +143,7 @@ def pca_plot(pc_data, label_col, label_type='discrete',
         fig.update_layout(title=f'Colored by {label_col}')
 
     if fname is None:
-        fig.show()
+        return fig
     else:
         ext = splitext(fname)[1]
         if ext == '.html':
