@@ -37,7 +37,19 @@ def generate_hcl_colors(n):
     return colors
 
 
-def pca_plot(pc_data, label_col, label_type='discrete',
+def _add_discrete_row(pc_data, label_col,
+                      x_axis_title=None, y_axis_title=None,
+                      x_axis_pc=0, y_axis_pc=1):
+    pass
+
+
+def _add_discrete_col(pc_data, label_col,
+                      x_axis_title=None, y_axis_title=None,
+                      x_axis_pc=0, y_axis_pc=1):
+    pass
+
+
+def pca_plot(pc_data, label_cols,
              fname=None, x_axis_pc=0, y_axis_pc=1, add_title=False):
     '''
     Generate a plotly PCA plot for a PC matrix.
@@ -49,11 +61,9 @@ def pca_plot(pc_data, label_col, label_type='discrete',
         and the values are a tuple wher the first element is the PC matrix, and the second
         element are the variances explained by each PC.
 
-    label_col: str
-        A column name in each PC matrix to color pannles.
-
-    label_type: str
-        The label type of `label_col` ('discrete' or 'continious')
+    label_cols: dict
+        Keys are a column name in each PC matrix to color pannles, values are
+        a boolean indicating whether the variable is continious.
 
     fname: str
         The name of the file to writ figure to. If None, the plot object is returned.
@@ -72,8 +82,12 @@ def pca_plot(pc_data, label_col, label_type='discrete',
     for k, v in pc_data.items():
         assert isinstance(v, tuple)
 
-    fig = make_subplots(rows=1, cols=len(pc_data),
+    fig = make_subplots(rows=len(label_cols), cols=len(pc_data),
                         subplot_titles=list(pc_data.keys()))
+
+    for color_var, is_continious in label_col.items():
+        
+        for 
 
     if label_type == 'discrete':
         unique_categories = list()
