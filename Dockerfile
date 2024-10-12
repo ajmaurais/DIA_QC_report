@@ -39,7 +39,7 @@ RUN mkdir -p /code/quarto && cd /code/quarto && \
 # install python dependencies
 COPY src /code/DIA_QC_report/src
 COPY pyproject.toml /code/DIA_QC_report
-RUN pip install setuptools jupyter && \
+RUN pip install setuptools jupyter plotly && \
     cd /code/DIA_QC_report && \
     pip install . && \
     pip cache purge && \
