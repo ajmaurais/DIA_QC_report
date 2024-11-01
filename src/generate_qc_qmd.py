@@ -364,9 +364,9 @@ WHERE r.includeRep == TRUE;'''"""
 
 pc_data = dict()
 for col in ('Unnormalized',{" 'Normalized'" if show_normalized else ''}):
-    df_pc[col] = np.log2(df_pc[col] + 1)
     pc_data[col] = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
                                      columns="replicateId", values=col).dropna()
+    pc_data[col] = np.log2(pc_data[col] + 1)
 
 if max(len(data.index) for data in pc_data.values()) == 0:
     print('Can not perform PC analysis! 0 precursors found in all replicates.')
