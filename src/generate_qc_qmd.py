@@ -371,9 +371,13 @@ df_wide = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
 n_precursors = len(df_wide.index)
 df_wide = df_wide.dropna()
 n_overlapping = len(df_wide.index)
+n_reps = len(df_wide.columns)
 
 if n_overlapping == 0:
     print('Can not perform PC analysis! 0 precursors found in all replicates.')
+
+elif n_reps <= 1:
+    print('Can not perform PC analysis! Only 1 replicate.')
 
 else:
     # do pc analysis
