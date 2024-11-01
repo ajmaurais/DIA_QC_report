@@ -38,7 +38,8 @@ class TestMakeQCqmd(unittest.TestCase):
         command = ['dia_qc', 'qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='generate_qc_qmd')
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
@@ -150,14 +151,16 @@ class TestMissingMetadata(unittest.TestCase):
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='generate_qc_qmd')
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix='render_qmd')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
@@ -199,14 +202,65 @@ class TestBadMetadataHeaders(unittest.TestCase):
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='generate_qc_qmd')
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix='render_qmd')
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+
+
+class TestSingleReplicate(unittest.TestCase):
+    RENDER_QMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_single_replicate/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        parse_command = ['dia_qc', 'parse',
+                         f'{cls.data_dir}/invalid_reports/Sp3_single_replicate_replicate_quality.tsv',
+                         f'{cls.data_dir}/invalid_reports/Sp3_by_protein_single_replicate_precursor_quality.tsv']
+
+        setup_functions.make_work_dir(cls.work_dir, True)
+        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir)
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+    def test_is_successful(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        qmd_name = 'one_replicate_test'
+        command = ['dia_qc', 'qc_qmd',
+                   '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='generate_qc_qmd')
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix='render_qmd')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
