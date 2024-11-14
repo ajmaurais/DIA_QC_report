@@ -183,7 +183,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         project_name = f'project_{len(projects.index) + 1}'
     replicates['project'] = project_name
 
-    # populate some metadata values not that we have the project_name
+    # populate some metadata values now that we have the project_name
     log_metadata[f'Add {project_name} time'] = datetime.now().strftime(METADATA_TIME_FORMAT)
     log_metadata[f'Add {project_name} command'] = current_command
     log_metadata['replicates.acquiredRank updated'] = False
@@ -316,7 +316,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             conn.commit()
 
         sample_metadata['replicateId'] = rep_id_col
-        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']] #, 'annotationType']]
+        sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
     for key, value in log_metadata.items():

@@ -169,7 +169,7 @@ def update_meta_value(conn, key, value):
 
     Parameters
     ----------
-    conn: sqlite3.Connection:
+    conn: sqlite3.Connection
         Database connection.
     key: str
         The metadata key
@@ -193,7 +193,7 @@ def update_acquired_ranks(conn):
 
     Parameters
     ----------
-    conn: sqlite3.Connection:
+    conn: sqlite3.Connection
         Database connection.
     '''
 
@@ -221,7 +221,7 @@ def update_metadata_dtypes(conn, new_types):
 
     Parameters
     ----------
-    conn: sqlite3.Connection:
+    conn: sqlite3.Connection
         Database connection.
     new_types: dict
         A dictionary of new annotationKey, annotationType pairs.
