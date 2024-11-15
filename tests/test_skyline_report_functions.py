@@ -99,7 +99,8 @@ class TestReadReportsBase(AbstractTestsBase):
     def df_to_dict(df, key_cols, value_cols):
         ret = dict()
         for row in df.itertuples():
-            ret['_'.join([str(getattr(row, key)) for key in key_cols])] = {col: getattr(row, col) for col in value_cols}
+            key = '_'.join([str(getattr(row, key)) for key in key_cols])
+            ret[key] = {col: getattr(row, col) for col in value_cols}
 
         return ret
 
@@ -115,6 +116,23 @@ class TestReadReportsBase(AbstractTestsBase):
         self.assertIsNotNone(df)
         self.assertTrue(f'Found {language} {self.report_type} report...' in cm.output[0])
         self.assertTrue(f'Done reading {self.report_type}s table...' in cm.output[1])
+
+        test_dict = self.df_to_dict(df, self.df_keys, self.df_values)
+        self.assertDataDictEqual(test_dict, self.data, places=places, col_deltas=col_deltas)
+
+
+    def do_quiet_test(self, language, ext, places=6, col_deltas=None):
+        suffix = ''
+        if language == 'English':
+            suffix = '_english'
+
+        with self.assertNoLogs(skyline_reports.LOGGER) as cm:
+            old_quiet = self.report_class.quiet
+            self.report_class.quiet = True
+            df = self.report_class.read_report(f'{self.report_basename}_quality{suffix}.{ext}')
+            self.report_class.quiet = old_quiet
+
+        self.assertIsNotNone(df)
 
         test_dict = self.df_to_dict(df, self.df_keys, self.df_values)
         self.assertDataDictEqual(test_dict, self.data, places=places, col_deltas=col_deltas)
@@ -154,6 +172,13 @@ class TestReadReplicateReport(unittest.TestCase, TestReadReportsBase):
 
     def test_read_english_csv(self):
         self.do_test('English', 'csv', places=6)
+
+
+    def test_read_quiet(self):
+        self.do_quiet_test('invariant', 'tsv', places=6)
+        self.do_quiet_test('invariant', 'csv', places=6)
+        self.do_quiet_test('English', 'csv', places=6)
+        self.do_quiet_test('English', 'tsv', places=6)
 
 
 class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
@@ -203,3 +228,10 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
 
     def test_read_english_csv(self):
         self.do_test('English', 'csv', col_deltas=self.COL_DIFFS)
+
+
+    def test_read_quiet(self):
+        self.do_quiet_test('invariant', 'tsv', places=6)
+        self.do_quiet_test('invariant', 'csv', places=6)
+        self.do_quiet_test('English', 'csv', col_deltas=self.COL_DIFFS)
+        self.do_quiet_test('English', 'tsv', col_deltas=self.COL_DIFFS)
