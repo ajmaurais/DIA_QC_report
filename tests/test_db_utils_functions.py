@@ -1,6 +1,7 @@
 
 import unittest
 import random
+from itertools import combinations
 from unittest import mock
 import os
 import sqlite3
@@ -10,6 +11,8 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 from DIA_QC_report.submodules.dtype import Dtype
+from DIA_QC_report.submodules.read_metadata import Metadata
+from DIA_QC_report.submodules.skyline_reports import ReplicateReport
 from DIA_QC_report import __version__ as PROGRAM_VERSION
 
 
@@ -229,26 +232,24 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         cls.acquired_ranks = {row.replicate: row.acquiredRank for row in cls.acquired_ranks.itertuples()}
 
         # find replicate and metadata table commands in db_utils.SCHEMA
-        cls.replicate_table_command = None
-        cls.metadata_table_command = None
+        cls.test_schema = list()
+        cls.test_tables = ['replicates', 'metadata']
         for command in db_utils.SCHEMA:
-            if command.strip().startswith('CREATE TABLE replicates'):
-                cls.replicate_table_command = command
-                continue
-            if command.strip().startswith('CREATE TABLE metadata'):
-                cls.metadata_table_command = command
-                continue
+            for table in cls.test_tables:
+                if command.strip().startswith(f'CREATE TABLE {table}'):
+                    cls.test_schema.append(command)
+                    continue
 
 
     def setUp(self):
-        self.assertIsNotNone(self.replicate_table_command)
-        self.assertIsNotNone(self.metadata_table_command)
+        self.assertEqual(len(self.test_tables), len(self.test_schema))
 
         # create in memory database
         self.conn = sqlite3.connect('file::memory:?cache=shared', uri=True)
         cur = self.conn.cursor()
-        cur.execute(self.replicate_table_command)
-        cur.execute(self.metadata_table_command)
+        for command in self.test_schema:
+            cur.execute(command)
+
         self.conn.commit()
 
 
@@ -339,6 +340,147 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
             proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
             self.assertDictEqual(proj_ranks, db_ranks)
             db_utils.mark_all_reps_includced(self.conn)
+
+
+class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):
+    # TEST_PROJECT = 'HeLa'
+    TEST_PROJECT = 'Strap'
+
+    @staticmethod
+    def df_to_dict(df, cols):
+        ret = {row['replicate']: {var: row[var] for var in cols}
+               for _, row in df.iterrows()}
+        return ret
+
+    @classmethod
+    def setUpClass(cls):
+
+        # read replicates
+        rep_path = f'{setup_functions.TEST_DIR}/data/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv'
+        cls.replicates = ReplicateReport(quiet=True).read_report(rep_path)
+        cls.replicates = cls.replicates[[col.name for col in ReplicateReport().required_columns()]]
+        cls.replicates['project'] = cls.TEST_PROJECT
+        cls.replicates['acquiredRank'] = -1
+        rep_index = {r: i for i, r in zip(cls.replicates['replicate'].index,
+                                          cls.replicates['replicate'])}
+
+        # read metadata
+        cls.metadata_path = f'{setup_functions.TEST_DIR}/data/metadata/{cls.TEST_PROJECT}_metadata.tsv'
+        metadata_df = pd.read_csv(cls.metadata_path, sep='\t')
+
+        # add replicate data to cls.metadat_df
+        metadata_df = metadata_df.rename(columns={'Replicate': 'replicate'})
+        metadata_df['replicateId'] = metadata_df['replicate'].apply(lambda x: rep_index[x])
+        metadata_df = metadata_df.set_index('replicateId')
+        metadata_df = metadata_df.join(cls.replicates[['project']])
+
+        for col in metadata_df.columns:
+            if all(pd.isna(metadata_df[col])):
+                metadata_df[col] = None
+
+        metadata_df = metadata_df.reset_index()
+
+        keep_cols = [col for col in metadata_df.columns if col != 'replicate']
+        cls.metadata_dict = cls.df_to_dict(metadata_df, keep_cols)
+
+        # construct test db schema
+        cls.test_tables = ['replicates', 'sampleMetadata ', 'sampleMetadataTypes', 'metadata']
+        cls.test_schema = list()
+        for command in db_utils.SCHEMA:
+            for table in cls.test_tables:
+                if command.strip().startswith(f'CREATE TABLE {table}'):
+                    cls.test_schema.append(command)
+                    continue
+
+
+    def setUp(self):
+
+        # read metadata
+        meta_reader = Metadata()
+        self.assertTrue(meta_reader.read(self.metadata_path))
+        metadata = meta_reader.df
+
+        # add replicateId column
+        rep_index = {r: i for i, r in zip(self.replicates['replicate'].index,
+                                          self.replicates['replicate'])}
+        metadata['replicateId'] = metadata['Replicate'].apply(lambda x: rep_index[x])
+        metadata = metadata[['replicateId', 'annotationKey', 'annotationValue']]
+
+        # create in memory database
+        self.assertEqual(len(self.test_tables), len(self.test_schema))
+        self.conn = sqlite3.connect('file::memory:?cache=shared', uri=True)
+        cur = self.conn.cursor()
+        for command in self.test_schema:
+            cur.execute(command)
+        self.conn.commit()
+
+        # write data to database
+        self.replicates.to_sql('replicates', self.conn, if_exists='append', index=True, index_label='id')
+        metadata.to_sql('sampleMetadata', self.conn, if_exists='append', index=False)
+        db_utils.update_metadata_dtypes(self.conn, meta_reader.types)
+        db_utils.update_acquired_ranks(self.conn)
+
+
+    def tearDown(self):
+        self.conn.close()
+
+
+    @staticmethod
+    def subset_data_dict(d, selection):
+        ret = dict()
+        for rep in d:
+            ret[rep] = {k: v for k, v in d[rep].items() if k in selection}
+
+        return ret
+
+
+    def test_read_all(self):
+        metadata = db_utils.read_wide_metadata(self.conn)
+
+        skip_cols = {'replicate', 'acquiredRank'}
+        keep_cols = [col for col in metadata.columns if col not in skip_cols]
+
+        metadata_dict = self.df_to_dict(metadata, keep_cols)
+
+        self.assertDataDictEqual(metadata_dict, self.metadata_dict)
+
+
+    def test_only_acquired_ranks(self):
+        metadata = db_utils.read_wide_metadata(self.conn, read_all=False)
+
+        keep_cols = {'replicateId', 'project'}
+        metadata_dict = self.df_to_dict(metadata, keep_cols)
+
+        # select keep_cols from ground truth dict
+        test_df = self.subset_data_dict(self.metadata_dict, keep_cols)
+
+        self.assertDataDictEqual(metadata_dict, test_df)
+
+
+    def test_select_vars(self):
+        keep_cols = set()
+        for d in self.metadata_dict.values():
+            keep_cols |= set(d.keys())
+
+        selections = list()
+        for n in range(1, len(keep_cols) + 1):
+            for sele in combinations(keep_cols, n):
+                selections.append(sele)
+
+        for sele in selections:
+            metadata = db_utils.read_wide_metadata(self.conn, meta_vars=sele, read_all=False)
+
+            metadata_dict = self.df_to_dict(metadata, sele)
+
+            self.assertDataDictEqual(metadata_dict,
+                                     self.subset_data_dict(self.metadata_dict, sele))
+
+
+    def test_conflicting_aruments(self):
+        with self.assertRaises(ValueError) as cm:
+            db_utils.read_wide_metadata(self.conn,
+                                        meta_vars=['acquiredRank', 'project'],
+                                        read_all=True)
 
 
 if __name__ == '__main__':

@@ -29,6 +29,21 @@ JSON_SCHEMA = {
 
 
 class Metadata():
+    '''
+    A class to read and process replicate metadata.
+
+    Attributes
+    ----------
+    df: pd.DataFrame
+        The sample metadata dataframe.
+    types: dict
+        A dictionary of metadata keys and Dtypes
+    input_format: str
+        The input file extension.
+    self.input_file: str
+        The path of the input file
+    '''
+
     def __init__(self):
         self.df = None
         self.types = None
@@ -258,10 +273,8 @@ class Metadata():
 
         Returns
         -------
-        df: pd.DataFrame
-            The sample metadata dataframe.
-        types: dict
-            A dictionary of metadata keys and Dtypes
+        success: bool
+            True if successful, False if not
         '''
 
         read_from_path = False
