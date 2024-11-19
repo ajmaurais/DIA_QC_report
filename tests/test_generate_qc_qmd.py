@@ -8,7 +8,7 @@ from numpy import isnan
 
 import setup_functions
 
-from DIA_QC_report.submodules.pca_plot import convert_string_cols
+from DIA_QC_report.submodules.dia_db_utils import read_wide_metadata
 
 
 class TestMakeQCqmd(unittest.TestCase):
@@ -120,8 +120,8 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertIsNotNone(self.conn)
         df = self.do_query([var])
         na_reps = df.loc[(df['key'] == var) & pd.isna(df['value']), 'replicateId'].to_list()
-        metadata = convert_string_cols(df)
-        metadata = metadata.set_index('replicateId')
+
+        metadata = read_wide_metadata(self.conn)
 
         for rep in na_reps:
             self.assertTrue(isnan(metadata.loc[rep, var]))

@@ -153,17 +153,3 @@ def pca_plot(pc_data, label_col, label_type='discrete',
             fig.write_html(fname)
         else:
             fig.write_image(fname)
-
-
-def convert_string_cols(df):
-    '''
-    Convert string annotation key columns in DataFrame to annotationType
-    '''
-    types = {row.key: Dtype[row.type] for row in df[['key', 'type']].drop_duplicates().itertuples()}
-    ret = df.pivot(index="replicateId", columns="key", values="value")
-    for column in ret.columns:
-        ret[column] = ret[column].apply(types[column].convert)
-        if types[column] is Dtype.STRING:
-            ret.loc[ret[column] == '', column] = pd.NA
-
-    return ret.rename_axis(columns=None).reset_index()
