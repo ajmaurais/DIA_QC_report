@@ -476,12 +476,5 @@ class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase)
                                      self.subset_data_dict(self.metadata_dict, sele))
 
 
-    def test_conflicting_aruments(self):
-        with self.assertRaises(ValueError) as cm:
-            db_utils.read_wide_metadata(self.conn,
-                                        meta_vars=['acquiredRank', 'project'],
-                                        read_all=True)
-
-
 if __name__ == '__main__':
     unittest.main()

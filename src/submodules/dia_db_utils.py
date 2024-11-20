@@ -350,9 +350,6 @@ def read_wide_metadata(conn, meta_vars=None, read_all=True):
         A wide formated Pandas DataFrame.
     '''
 
-    if meta_vars is not None and read_all:
-        raise ValueError('meta_vars and read_all arguments conflict!')
-
     acquired_ranks = pd.read_sql('''
         SELECT
             replicate,
