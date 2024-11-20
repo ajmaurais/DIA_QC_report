@@ -369,7 +369,7 @@ def read_wide_metadata(conn, meta_vars=None, read_all=True):
         cur = conn.cursor()
         if meta_vars:
             meta_query += f'''\nWHERE key IN ({', '.join('?' * len(meta_vars))});'''
-            cur.execute(meta_query, meta_vars)
+            cur.execute(meta_query, tuple(meta_vars))
         else:
             cur.execute(meta_query)
         metadata = cur.fetchall()

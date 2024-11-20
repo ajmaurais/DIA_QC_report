@@ -343,8 +343,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
 
 
 class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):
-    # TEST_PROJECT = 'HeLa'
-    TEST_PROJECT = 'Strap'
+    TEST_PROJECT = 'HeLa'
 
     @staticmethod
     def df_to_dict(df, cols):

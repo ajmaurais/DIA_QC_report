@@ -13,6 +13,11 @@ import plotly.graph_objects as go
 
 from .dtype import Dtype
 
+
+NA_CATEGORY_NAME = '<NA>'
+GREY_RGB = 'rgb(121, 111, 111)'
+
+
 def calc_pc_matrix(df):
     df_s = StandardScaler().fit_transform(df.transpose())
 
@@ -37,7 +42,31 @@ def generate_hcl_colors(n):
     return colors
 
 
-def pca_plot(pc_data, label_col, label_type='discrete',
+def map_discrete_colors(replicates):
+
+    assert isinstance(replicates, dict)
+    assert all(isinstance(key, (str, int)) for key in replicates)
+    assert all(isinstance(value, (str, float, int, bool, type(None), type(pd.NA)))
+               for value in replicates.values())
+
+    categories = dict()
+    for key in replicates:
+        if replicates[key] is None or pd.isna(replicates[key]):
+            categories[key] = NA_CATEGORY_NAME
+        else:
+            categories[key] = str(replicates[key])
+
+    unique_categories = sorted(set(categories.values()))
+    non_na = [c for c in unique_categories if c != NA_CATEGORY_NAME]
+
+    colors = dict(zip(non_na, generate_hcl_colors(len(non_na))))
+
+    if len(non_na) != len(unique_categories):
+        colors[NA_CATEGORY_NAME] = GREY_RGB
+
+    return categories, colors
+
+
              fname=None, x_axis_pc=0, y_axis_pc=1, add_title=False):
     '''
     Generate a plotly PCA plot for a PC matrix.
