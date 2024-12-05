@@ -118,7 +118,9 @@ import pandas as pd
 from DIA_QC_report.submodules.std_peptide_rt_plot import peptide_rt_plot
 from DIA_QC_report.submodules.bar_chart import bar_chart
 from DIA_QC_report.submodules.histogram import histogram, box_plot, multi_boxplot
-from DIA_QC_report.submodules.pca_plot import calc_pc_matrix, pca_plot, convert_string_cols
+from DIA_QC_report.submodules.pca_plot import calc_pc_matrix
+from DIA_QC_report.submodules.pca_plot import mpl_pca_plot, plotly_pca_plot
+from DIA_QC_report.submodules.dia_db_utils import read_wide_metadata
 
 conn = sqlite3.connect('%s')
 ```\n\n''' % (python_block_header(stack()[0][3]), db_path)
@@ -300,70 +302,38 @@ multi_boxplot(dats, data_levels, dpi=250)\n\n```\n\n'''
     return text
 
 
-def pc_metadata(meta_keys=None):
+def pc_analysis(show_normalized=False, meta_keys=None):
 
     text = f'''\n{python_block_header(stack()[0][3])}\n'''
 
     if meta_keys is None or len(meta_keys) == 0:
         text += '\nmeta_values = {}\n'
     else:
-        text += f"""\nmeta_values = {str(meta_keys)}
-
-METADATA_QUERY = '''SELECT replicateId,
-                         m.annotationKey as key,
-                         m.annotationValue as value,
-                         t.annotationType as type
-                     FROM sampleMetadata m
-                     LEFT JOIN sampleMetadataTypes t ON t.annotationKey == m.annotationKey
-                     WHERE m.annotationKey IN ("{'", "'.join(meta_keys.keys())}")'''
-
-# get metadata labels for pca plot
-metadata = pd.read_sql(METADATA_QUERY, conn)
-metadata = convert_string_cols(metadata)\n"""
+        text += f"""\nmeta_values = {str(meta_keys)}"""
 
     text += """\nmeta_values['acquisition_number'] = 'continuous'
 
-def join_metadata(pc_matrix, acquired_ranks, meta_values, metadata=None):
-    ''' join metadata to pc matrix '''
+metadata = read_wide_metadata(conn, meta_vars=meta_values.keys())
+metadata = metadata.rename(columns={'acquiredRank': 'acquisition_number'})
 
-    if metadata is None:
-        this_metadata = acquired_ranks
-    else:
-        this_metadata = acquired_ranks.join(metadata)
-    pc_matrix = pc_matrix.join(this_metadata)
-
-    for label_name, label_type in meta_values.items():
-        if label_type == 'discrete':
-            if any(pc_matrix[label_name].apply(pd.isna)):
-                warnings.warn('Missing label values!', Warning)
-            pc_matrix[label_name] = pc_matrix[label_name].apply(str)
-
-    return pc_matrix
-\n```\n\n"""
-
-    return text
-
-
-def pc_analysis(show_normalized=False, have_color_vars=False):
-
-    text = f'''\n{python_block_header(stack()[0][3])}\n'''
-
-    text += """\nquery = '''SELECT
+query = '''SELECT
     p.replicateId,
     r.replicate,
-    r.acquiredRank as acquisition_number,
     p.modifiedSequence,
     p.precursorCharge,
-    p.totalAreaFragment as Unnormalized,
-    p.normalizedArea as Normalized
-FROM PRECURSORS p
+    p.totalAreaFragment as Unnormalized"""
+
+    if show_normalized:
+        text += ',\n\tp.normalizedArea as Normalized\n'
+
+    text += """FROM PRECURSORS p
 LEFT JOIN replicates r ON p.replicateId = r.id
 WHERE r.includeRep == TRUE;'''"""
 
     text += f'''\n\ndf_pc = pd.read_sql(query, conn)
 
 pc_data = dict()
-for col in ('Unnormalized',{" 'Normalized'" if show_normalized else ''}):
+for col in ('Unnormalized', {"'Normalized'" if show_normalized else ''}):
     pc_data[col] = df_pc.pivot_table(index=['modifiedSequence', 'precursorCharge'],
                                      columns="replicateId", values=col).dropna()
     pc_data[col] = np.log2(pc_data[col] + 1)
@@ -378,15 +348,8 @@ else:
         # do pc analysis
         if len(pc_data[col].index) > 0:
             pc[col] = calc_pc_matrix(pc_data[col])
-            acquired_ranks = df_pc[['replicateId', 'replicate', 'acquisition_number']].drop_duplicates().set_index('replicateId')
-            pc[col] = (join_metadata(pc[col][0], acquired_ranks, meta_values{' ,metadata=metadata' if have_color_vars else ''}),
-                       pc[col][1])
         else:
             pc[col] = (None, None)
-
-    for label_name, label_type in sorted(meta_values.items(), key=lambda x: x[0]):
-        fig = pca_plot(pc, label_name, label_type=label_type, add_title=True)
-        fig.show()
 ```\n\n'''
 
     return text
@@ -526,10 +489,8 @@ def _main(args):
         # Batch effects section
         outF.write(add_header('Batch effects', level=2))
 
-        outF.write(pc_metadata(meta_keys=get_meta_key_types(args.db, args.color_vars)))
-
         outF.write(pc_analysis(show_normalized=db_is_normalized,
-                               have_color_vars=args.color_vars is not None))
+                               meta_keys=get_meta_key_types(args.db, args.color_vars)))
 
         outF.write(doc_finalize())
 
