@@ -7,7 +7,9 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-# import plotly.express as px
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
@@ -67,7 +69,73 @@ def map_discrete_colors(replicates):
     return categories, colors
 
 
-             fname=None, x_axis_pc=0, y_axis_pc=1, add_title=False):
+def mpl_pca_plot(pc_data, label_col, metadata, label_type='discrete',
+                 fname=None, dpi=250, x_axis_pc=0, y_axis_pc=1, add_title=True):
+
+    data_levels = list(pc_data.keys())
+
+    fig = plt.figure(figsize = (6, 3*len(pc_data) + 2), dpi=dpi)
+    axs = fig.subplots(nrows=1, ncols=len(pc_data))
+    axs = np.atleast_1d(axs)
+
+    if label_type == 'discrete':
+        # join metadata variable to pc df
+        categories = metadata[['replicateId', label_col]].set_index('replicateId')
+        categories = categories[label_col].to_dict()
+        local_metadata, colors = map_discrete_colors(categories)
+
+        for i, level in enumerate(data_levels):
+
+            plot_df = pc_data[level][0]
+            plot_df[label_col] = plot_df.index.map(lambda x: local_metadata[x])
+
+            for label, color in colors.items():
+                sele = plot_df[label_col] == label
+                axs[i].scatter(plot_df[sele][x_axis_pc], plot_df[sele][y_axis_pc],
+                               color=color, label=label)
+
+            axs[-1].legend(loc='upper left', bbox_to_anchor=(1.05, 1),
+                           title=label_col, alignment='left')
+
+
+    elif label_type == 'continuous':
+        cmap = plt.get_cmap('viridis')
+        cmap.set_bad(color='grey')
+
+        for i, level in enumerate(data_levels):
+            plot_df = pc_data[level][0] #.set_index('replicateId')
+            local_metadata = metadata[['replicateId', label_col]].set_index('replicateId')
+            plot_df = plot_df.join(local_metadata)
+
+            points = axs[i].scatter(plot_df[x_axis_pc], plot_df[y_axis_pc],
+                                    c=plot_df[label_col], cmap=cmap, plotnonfinite=True)
+
+        ticks = MaxNLocator(integer=True) if pd.api.types.is_integer_dtype(plot_df[label_col]) else None
+        fig.colorbar(points, ax=axs, label=label_col,
+                     # use_gridspec=False,
+                     # shrink=0.8, pad=0.1,
+                     ticks=ticks)
+
+    else:
+        raise ValueError('Unknown label_type!')
+
+    # axis labels
+    for i, _ in enumerate(data_levels):
+        axs[i].set_xlabel(f'PC {x_axis_pc + 1} {pc_data[data_levels[i]][1][x_axis_pc]:.1f}% var')
+        axs[i].set_ylabel(f'PC {y_axis_pc + 1} {pc_data[data_levels[i]][1][y_axis_pc]:.1f}% var')
+        axs[i].set_title(data_levels[i])
+
+    if add_title:
+        plt.title(f'Colored by {label_col}')
+    if fname is None:
+        plt.show()
+    else:
+        plt.savefig(fname)
+    plt.close()
+
+
+def plotly_pca_plot(pc_data, label_col, label_type='discrete',
+                    fname=None, x_axis_pc=0, y_axis_pc=1, add_title=False):
     '''
     Generate a plotly PCA plot for a PC matrix.
 
