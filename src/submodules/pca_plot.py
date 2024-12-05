@@ -15,7 +15,7 @@ from .dtype import Dtype
 
 
 NA_CATEGORY_NAME = '<NA>'
-GREY_RGB = 'rgb(121, 111, 111)'
+GREY_RGB = (0.36, 0.36, 0.36)
 
 
 def calc_pc_matrix(df):
@@ -37,8 +37,8 @@ def generate_hcl_colors(n):
     colors = []
     for i in range(n):
         hue = i / n  # Evenly spaced around the color wheel
-        rgb = hsv_to_rgb(hue, 0.6, 0.8)  # Using HSV as a proxy for HCL
-        colors.append(f'rgb({int(rgb[0]*255)}, {int(rgb[1]*255)}, {int(rgb[2]*255)})')
+        rgb = hsv_to_rgb(hue, 0.76, 0.82)  # Using HSV as a proxy for HCL
+        colors.append(rgb)
     return colors
 
 
@@ -116,14 +116,14 @@ def map_discrete_colors(replicates):
             if pannel_data is not None:
                 show_legend = i >= len(pc_data) - 1
 
-                for category in unique_categories:
+                for color, category in category_colors.items():
                     mask = pannel_data[label_col] == category
                     fig.add_trace(
                         go.Scatter(x=pannel_data.loc[mask, x_axis_pc],
                                    y=pannel_data.loc[mask, y_axis_pc],
                                    mode='markers', name=category,
                                    hovertext=pannel_data['replicate'],
-                                   marker={'color': category_colors[category]},
+                                   marker={'color': color},
                                    showlegend=show_legend),
                         row=1, col=i + 1
                     )
