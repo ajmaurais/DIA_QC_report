@@ -82,7 +82,7 @@ def mpl_pca_plot(pc_data, metadata, label_col, label_type='discrete',
     ----------
     pc_data: dict
         A dictionary where the keys are the column title ('Unnormalized', 'Normalized' etc.),
-        and the values are a tuple wher the first element is the PC matrix, and the second
+        and the values are a tuple where the first element is the PC matrix, and the second
         element are the variances explained by each PC.
 
     metadata: pd.DataFrame
@@ -182,7 +182,7 @@ def plotly_pca_plot(pc_data, metadata, label_col, label_type='discrete',
     ----------
     pc_data: dict
         A dictionary where the keys are the column title ('Unnormalized', 'Normalized' etc.),
-        and the values are a tuple wher the first element is the PC matrix, and the second
+        and the values are a tuple where the first element is the PC matrix, and the second
         element are the variances explained by each PC.
 
     metadata: pd.DataFrame

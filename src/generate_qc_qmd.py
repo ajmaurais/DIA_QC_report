@@ -409,9 +409,9 @@ def normalize_var_names(meta_vars):
 
 def pca_tab_layout(meta_vars, plot_fxn):
     '''
-    Layout PCA plots so each variable is in a seperate tab in the final report.
+    Layout PCA plots so each variable is in a separate tab in the final report.
 
-    A seperate code block is generated for each variable and the plot_fxn is called in each block.
+    A separate code block is generated for each variable and the plot_fxn is called in each block.
 
     Parameters
     ----------
@@ -423,7 +423,7 @@ def pca_tab_layout(meta_vars, plot_fxn):
     Returns
     -------
     text: str
-        The string of the formated pannel-tabset and code blocks.
+        The string of the formatted pannel-tabset and code blocks.
     '''
 
     text = open_pannel_tabset()
@@ -453,13 +453,13 @@ def pca_stacked_layout(plot_fxn, label=None):
     ----------
     plot_fxn: str
         The name of the PCA plotting function to use.
-    lable: str
+    label: str
         The code block label. If None the function name is used. Default is None.
 
     Returns
     -------
     text: str
-        The string of the formated code block.
+        The string of the formatted code block.
     '''
 
     block_label = stack()[0][3] if label is None else label
@@ -535,7 +535,7 @@ def parse_args(argv, prog=None):
                         help='Add a annotationKey to color PCA plots.')
     parser.add_argument('--pcaFormat', choices=['tab', 'stack'], default='tab', dest='pca_format',
                         help='How to arrange PCA plots for each color variable in html report. '
-                             'Either in seperate tabs or stacked. Plots are always stacked in pdf report.')
+                             'Either in separate tabs or stacked. Plots are always stacked in pdf report.')
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 

@@ -347,7 +347,7 @@ def read_wide_metadata(conn, meta_vars=None, read_all=True):
     Returns
     -------
     metadata: pd.DataFrame
-        A wide formated Pandas DataFrame.
+        A wide formatted Pandas DataFrame.
     '''
 
     acquired_ranks = pd.read_sql('''
