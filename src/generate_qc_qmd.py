@@ -102,7 +102,7 @@ def add_header(text, level=1):
 
 
 def open_pannel_tabset():
-    return '\n::: { .panel-tabset }\n\n'
+    return '\n::: { .panel-tabset }\n'
 
 
 def close_pannel_tabset():
@@ -339,9 +339,9 @@ query = '''SELECT
     p.totalAreaFragment as Unnormalized"""
 
     if show_normalized:
-        text += ',\n\tp.normalizedArea as Normalized\n'
+        text += ',\n\tp.normalizedArea as Normalized'
 
-    text += """FROM PRECURSORS p
+    text += """\nFROM precursors p
 LEFT JOIN replicates r ON p.replicateId = r.id
 WHERE r.includeRep == TRUE;'''"""
 
@@ -353,8 +353,10 @@ for col in ('Unnormalized', {"'Normalized'" if show_normalized else ''}):
                                      columns="replicateId", values=col).dropna()
     pc_data[col] = np.log2(pc_data[col] + 1)
 
+skip_pca_plot = False
 if max(len(data.index) for data in pc_data.values()) == 0:
     print('Can not perform PC analysis! 0 precursors found in all replicates.')
+    skip_pca_plot = True
 
 else:
     pc = dict()
@@ -368,6 +370,122 @@ else:
 ```\n\n'''
 
     return text
+
+
+def normalize_var_names(meta_vars):
+    ''' Normalize metadata variable name so it can be used in code block label '''
+
+    fixed_vars = dict()
+    new_vars_count = dict()
+    for var in meta_vars:
+        fixed_var = var
+
+        # replace leading character that is not alpha
+        fixed_var = re.sub(r'^[^A-Za-z_]+', '_', fixed_var)
+
+        # replace non alpha numeric characters
+        fixed_var = re.sub(r'[^A-Za-z0-9_]+', '_', fixed_var)
+
+        fixed_vars[var] = fixed_var
+
+        if fixed_var in new_vars_count:
+            new_vars_count[fixed_var] += 1
+        else:
+            new_vars_count[fixed_var] = 1
+
+    # Fix duplicated fixed var names
+    for var, count in new_vars_count.items():
+        if count > 1:
+            i = 1
+            for var_name in fixed_vars:
+                if fixed_vars[var_name] == var:
+                    fixed_vars[var_name] += f'_{i}'
+                    i += 1
+
+    assert len(fixed_vars) == len(set(fixed_vars.values()))
+
+    return fixed_vars
+
+
+def pca_tab_layout(meta_vars, plot_fxn):
+    '''
+    Layout PCA plots so each variable is in a seperate tab in the final report.
+
+    A seperate code block is generated for each variable and the plot_fxn is called in each block.
+
+    Parameters
+    ----------
+    meta_vars: list
+        The list of metadata variables.
+    plot_fxn: str
+        The name of the PCA plotting function to use.
+
+    Returns
+    -------
+    text: str
+        The string of the formated pannel-tabset and code blocks.
+    '''
+
+    text = open_pannel_tabset()
+
+    fixed_vars = normalize_var_names(meta_vars)
+
+    for var, block_name in fixed_vars.items():
+        text += f'\n{add_header(var, level=3)}'
+
+        label = f'{block_name}_pca'
+        text += f'\n{python_block_header(label)}\n\n'
+
+        text += f'''if not skip_pca_plot:
+    {plot_fxn}(pc, metadata, '{var}', label_type=meta_values['{var}'], add_title=False)\n```\n'''
+
+    return text + close_pannel_tabset()
+
+
+def pca_stacked_layout(plot_fxn, label=None):
+    '''
+    Layout PCA plots so they are stacked in the final report.
+
+    The plot_fxn is called in a loop when the final report is rendered to
+    generate a plot for each metadata variable.
+
+    Parameters
+    ----------
+    plot_fxn: str
+        The name of the PCA plotting function to use.
+    lable: str
+        The code block label. If None the function name is used. Default is None.
+
+    Returns
+    -------
+    text: str
+        The string of the formated code block.
+    '''
+
+    block_label = stack()[0][3] if label is None else label
+    text = f'''\n{python_block_header(block_label)}
+
+if not skip_pca_plot:
+    for color_var, label_type in meta_values.items():
+        {plot_fxn}(pc, metadata, color_var, label_type=label_type)
+```\n\n'''
+
+    return text
+
+
+def pc_plots(meta_vars, pca_format):
+    text = '\n::: {.content-visible when-format="html"}\n'
+
+    if pca_format == 'tab':
+        text += pca_tab_layout(meta_vars, 'plotly_pca_plot')
+    elif pca_format == 'stack':
+        text += pca_stacked_layout('plotly_pca_plot', label='html_pca_plots')
+
+    text += '\n:::\n\n::: {.content-visible when-format="pdf"}\n'
+
+    text += pca_stacked_layout('mpl_pca_plot', label='pdf_pca_plots')
+
+    return text + ':::\n'
 
 
 def check_meta_keys_exist(conn, keys):
@@ -415,6 +533,9 @@ def parse_args(argv, prog=None):
                         help='Add standard protein name for retention time plot.')
     parser.add_argument('-c', '--addColorVar', action='append', default=None, dest='color_vars',
                         help='Add a annotationKey to color PCA plots.')
+    parser.add_argument('--pcaFormat', choices=['tab', 'stack'], default='tab', dest='pca_format',
+                        help='How to arrange PCA plots for each color variable in html report. '
+                             'Either in seperate tabs or stacked. Plots are always stacked in pdf report.')
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
 
@@ -506,8 +627,10 @@ def _main(args):
         # Batch effects section
         outF.write(add_header('Batch effects', level=2))
 
-        outF.write(pc_analysis(show_normalized=db_is_normalized,
-                               meta_keys=get_meta_key_types(args.db, args.color_vars)))
+        meta_keys = get_meta_key_types(args.db, args.color_vars)
+        outF.write(pc_analysis(meta_keys=meta_keys, show_normalized=db_is_normalized))
+
+        outF.write(pc_plots(['acquisition_number'] + list(meta_keys.keys()), args.pca_format))
 
         outF.write(doc_finalize())
 

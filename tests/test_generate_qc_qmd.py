@@ -31,24 +31,36 @@ class TestMakeQCqmd(unittest.TestCase):
             raise RuntimeError('Setup of test db failed!')
 
 
-    def test_is_successful(self):
+    def render_test(self, report_format, pca_format='tab'):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        qmd_name = 'basic_test'
+        qmd_name = f'{report_format}_{pca_format}_basic_test'
         command = ['dia_qc', 'qc_qmd',
-                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
+                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST', '--pcaFormat', pca_format,
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='generate_qc_qmd')
+        result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
-            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{qmd_name}')
             self.assertEqual(render_result.returncode, 0)
-            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.{report_format}'))
+
+
+    def test_pdf(self):
+        self.render_test('pdf')
+
+
+    def test_html_stacked(self):
+        self.render_test('html', 'stack')
+
+
+    def test_html_tabbed(self):
+        self.render_test('html', 'tab')
 
 
     def test_missing_std_protein_fails(self):
@@ -143,26 +155,37 @@ class TestMissingMetadata(unittest.TestCase):
         self.convert_strings_test('bool_var')
 
 
-    def test_is_successful(self):
+    def render_test(self, report_format, pca_format='tab'):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        qmd_name = 'basic_test'
+        qmd_name = f'{report_format}_{pca_format}_test'
         command = ['dia_qc', 'qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
-                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
+                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var', '--pcaFormat', pca_format,
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='generate_qc_qmd')
+        result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
-            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
             render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix='render_qmd')
+                                                        prefix=f'render_{qmd_name}')
             self.assertEqual(render_result.returncode, 0)
-            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.{report_format}'))
+
+
+    def test_pdf(self):
+        self.render_test('pdf')
+
+
+    def test_html_stacked(self):
+        self.render_test('html', 'stack')
+
+
+    def test_html_tabbed(self):
+        self.render_test('html', 'tab')
 
 
 class TestBadMetadataHeaders(unittest.TestCase):
@@ -202,8 +225,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='generate_qc_qmd')
+        result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
@@ -211,7 +233,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         if self.RENDER_QMD:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix='render_qmd')
+                                                        prefix='render_bad_header_qmd')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
@@ -260,7 +282,7 @@ class TestSingleReplicate(unittest.TestCase):
         if self.RENDER_QMD:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix='render_qmd')
+                                                        prefix=f'render_{qmd_name}')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 

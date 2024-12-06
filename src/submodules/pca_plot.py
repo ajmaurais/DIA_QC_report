@@ -113,7 +113,7 @@ def mpl_pca_plot(pc_data, metadata, label_col, label_type='discrete',
 
     data_levels = list(pc_data.keys())
 
-    fig = plt.figure(figsize=(8, len(pc_data) + 1), dpi=dpi, layout='constrained')
+    fig = plt.figure(figsize=(len(pc_data) * 4 + 1, 4), dpi=dpi, layout='constrained')
     axs = fig.subplots(nrows=1, ncols=len(pc_data))
 
     axs = np.atleast_1d(axs)
@@ -282,11 +282,13 @@ def plotly_pca_plot(pc_data, metadata, label_col, label_type='discrete',
                       height=480, width=(450 * len(pc_data) + 150),
                       legend={'title': label_col})
 
+    fig.update_traces(marker={'size': 8})
+
     if add_title:
         fig.update_layout(title=f'Colored by {label_col}')
 
     if fname is None:
-        return fig
+        fig.show()
     else:
         ext = splitext(fname)[1]
         if ext == '.html':
