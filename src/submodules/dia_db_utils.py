@@ -26,7 +26,7 @@ CREATE TABLE replicates (
     acquiredRank INTEGER NOT NULL,
     ticArea REAL NOT NULL,
     UNIQUE(replicate, project) ON CONFLICT FAIL
-)''',
+)''', # isImputed INTEGER DEFAULT 0,
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
