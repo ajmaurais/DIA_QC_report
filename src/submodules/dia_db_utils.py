@@ -30,7 +30,7 @@ CREATE TABLE replicates (
     acquiredRank INTEGER NOT NULL,
     ticArea REAL NOT NULL,
     UNIQUE(replicate, project) ON CONFLICT FAIL
-)''',
+)''', 
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
@@ -42,6 +42,7 @@ CREATE TABLE precursors (
     totalAreaFragment REAL,
     totalAreaMs1 REAL,
     normalizedArea REAL,
+    isImputed INTEGER DEFAULT 0,
     rt REAL,
     minStartTime REAL,
     maxEndTime REAL,
@@ -98,6 +99,7 @@ CREATE TABLE proteinQuants (
     proteinId INTEGER NOT NULL,
     abundance REAL,
     normalizedAbundance REAL,
+    isImputed INTEGER DEFAULT 0,
     PRIMARY KEY (replicateId, proteinId),
     FOREIGN KEY (replicateId) REFERENCES replicates(id) ON DELETE CASCADE,
     FOREIGN KEY (proteinId) REFERENCES proteins(proteinId) ON DELETE CASCADE
@@ -139,6 +141,14 @@ def get_meta_value_bool(conn, key):
 def is_normalized(conn):
     ''' Determine if metadata.is_normalized is True '''
     normalized = get_meta_value_bool(conn, 'is_normalized')
+    if normalized is None or normalized == False:
+        return False
+    return True
+
+
+def is_imputed(conn):
+    ''' Determine if metadata.is_imputed is True '''
+    normalized = get_meta_value_bool(conn, 'is_imputed')
     if normalized is None or normalized == False:
         return False
     return True
@@ -503,5 +513,3 @@ def parse_bitmask_options(mask, digit_names, options):
     for key, value in zip(digit_names, _parse_bitmask(mask)):
         ret[key] = dict(zip(options, value))
     return ret
-
-

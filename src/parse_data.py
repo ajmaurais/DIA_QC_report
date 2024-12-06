@@ -180,7 +180,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
 
     # populate some metadata values now that we have the project_name
     log_metadata['replicates.acquiredRank updated'] = False
-    log_metadata[f'is_normalized'] = False # set this to False because we are adding unnormalized data
+    log_metadata['is_normalized'] = False # set this to False because we are adding unnormalized data
 
     # deal with existing replicates, proteins, and protein to precursor pairs
     if append:
