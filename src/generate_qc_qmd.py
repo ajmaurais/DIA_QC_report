@@ -69,9 +69,9 @@ format:
     html:
         code-fold: true
         grid:
-            body-width: 1000px
+            body-width: 1200px
             sidebar-width: 0px
-            margin-width: 300px
+            margin-width: 200px
         self-contained: true
     pdf:
         fig-pos: 'H'
@@ -80,6 +80,21 @@ format:
 jupyter: python3
 ---\n\n''' % (command, title)
     return header
+
+
+def figure_style():
+    return '''<style>
+img, figure {
+    max-width: 100%;
+    height: auto;
+}
+
+pre, code {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+</style>
+'''
 
 
 def add_header(text, level=1):
@@ -442,6 +457,8 @@ def _main(args):
                               ' '.join(sys.argv[1:])), title=args.title))
         outF.write(add_header('Peptide independent metrics', level=1))
         outF.write(doc_initialize(args.db))
+
+        outF.write(figure_style())
 
         outF.write(add_header('Replicate TIC areas', level=2))
         outF.write(replicate_tic_areas(dpi=args.dpi))
