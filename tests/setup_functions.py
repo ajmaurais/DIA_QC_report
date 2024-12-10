@@ -69,6 +69,11 @@ class AbstractTestsBase(ABC):
         pass
 
 
+    @abstractmethod
+    def assertNoLogs(self, logger, level=None):
+        pass
+
+
     def assertDataDictEqual(self, lhs, rhs, places=6, col_deltas=None):
         '''
         Check that 2 dictionaries having the format {'rep_name': {<var_name>: <value>, ...}, ...}

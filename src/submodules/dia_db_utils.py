@@ -169,7 +169,7 @@ def update_meta_value(conn, key, value):
 
     Parameters
     ----------
-    conn: sqlite3.Connection:
+    conn: sqlite3.Connection
         Database connection.
     key: str
         The metadata key
@@ -193,7 +193,7 @@ def update_acquired_ranks(conn):
 
     Parameters
     ----------
-    conn: sqlite3.Connection:
+    conn: sqlite3.Connection
         Database connection.
     '''
 
@@ -221,7 +221,7 @@ def update_metadata_dtypes(conn, new_types):
 
     Parameters
     ----------
-    conn: sqlite3.Connection:
+    conn: sqlite3.Connection
         Database connection.
     new_types: dict
         A dictionary of new annotationKey, annotationType pairs.
@@ -328,6 +328,72 @@ def mark_all_reps_includced(conn):
         conn = update_acquired_ranks(conn)
     else:
         LOGGER.warning(f'All replicates are already included.')
+
+
+def read_wide_metadata(conn, meta_vars=None, read_all=True):
+    '''
+    Read metadata and replicates from database.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection
+    meta_vars: list
+        A list of metadata variables to include.
+        If None either none or all variables are included depending on the `read_all` parameter.
+    read_all: bool
+        If `meta_vars` is None, should all metadata variables be included or
+        only replicateId and acquiredRank? Default is True.
+
+    Returns
+    -------
+    metadata: pd.DataFrame
+        A wide formatted Pandas DataFrame.
+    '''
+
+    acquired_ranks = pd.read_sql('''
+        SELECT
+            replicate,
+            id as replicateId,
+            project,
+            acquiredRank
+        FROM replicates; ''', conn)
+
+    if meta_vars or read_all:
+        meta_query = '''
+        SELECT
+            replicateId,
+            annotationKey as key,
+            annotationValue as value
+        FROM sampleMetadata '''
+
+        cur = conn.cursor()
+        if meta_vars:
+            meta_query += f'''\nWHERE key IN ({', '.join('?' * len(meta_vars))});'''
+            cur.execute(meta_query, tuple(meta_vars))
+        else:
+            cur.execute(meta_query)
+        metadata = cur.fetchall()
+
+        keys = ['replicateId', 'key', 'value']
+        data = {key: list() for key in keys}
+        for row in metadata:
+            for i, key in enumerate(keys):
+                data[key].append(row[i])
+
+        metadata = pd.DataFrame(data=data).pivot(index='replicateId', columns='key', values='value')
+
+        cur = conn.cursor()
+        cur.execute('SELECT annotationKey as key, annotationType as type FROM sampleMetadataTypes')
+        types = {var: Dtype[t] for var, t in cur.fetchall()}
+
+        for col in metadata.columns:
+            metadata[col] = metadata[col].apply(types[col].convert)
+            if types[col] is Dtype.STRING:
+                metadata.loc[metadata[col] == '', col] = pd.NA
+
+        acquired_ranks = acquired_ranks.join(metadata)
+
+    return acquired_ranks
 
 
 def validate_bit_mask(mask, n_options=3, n_digits=2):

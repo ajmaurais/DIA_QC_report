@@ -8,7 +8,7 @@ from numpy import isnan
 
 import setup_functions
 
-from DIA_QC_report.submodules.pca_plot import convert_string_cols
+from DIA_QC_report.submodules.dia_db_utils import read_wide_metadata
 
 
 class TestMakeQCqmd(unittest.TestCase):
@@ -31,23 +31,36 @@ class TestMakeQCqmd(unittest.TestCase):
             raise RuntimeError('Setup of test db failed!')
 
 
-    def test_is_successful(self):
+    def render_test(self, report_format, pca_format='tab'):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        qmd_name = 'basic_test'
+        qmd_name = f'{report_format}_{pca_format}_basic_test'
         command = ['dia_qc', 'qc_qmd',
-                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
+                   '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST', '--pcaFormat', pca_format,
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
-            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{qmd_name}')
             self.assertEqual(render_result.returncode, 0)
-            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.{report_format}'))
+
+
+    def test_pdf(self):
+        self.render_test('pdf')
+
+
+    def test_html_stacked(self):
+        self.render_test('html', 'stack')
+
+
+    def test_html_tabbed(self):
+        self.render_test('html', 'tab')
 
 
     def test_missing_std_protein_fails(self):
@@ -119,8 +132,8 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertIsNotNone(self.conn)
         df = self.do_query([var])
         na_reps = df.loc[(df['key'] == var) & pd.isna(df['value']), 'replicateId'].to_list()
-        metadata = convert_string_cols(df)
-        metadata = metadata.set_index('replicateId')
+
+        metadata = read_wide_metadata(self.conn)
 
         for rep in na_reps:
             self.assertTrue(isnan(metadata.loc[rep, var]))
@@ -142,24 +155,37 @@ class TestMissingMetadata(unittest.TestCase):
         self.convert_strings_test('bool_var')
 
 
-    def test_is_successful(self):
+    def render_test(self, report_format, pca_format='tab'):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        qmd_name = 'basic_test'
+        qmd_name = f'{report_format}_{pca_format}_test'
         command = ['dia_qc', 'qc_qmd',
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
-                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
+                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var', '--pcaFormat', pca_format,
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
-            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{qmd_name}')
             self.assertEqual(render_result.returncode, 0)
-            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.{report_format}'))
+
+
+    def test_pdf(self):
+        self.render_test('pdf')
+
+
+    def test_html_stacked(self):
+        self.render_test('html', 'stack')
+
+
+    def test_html_tabbed(self):
+        self.render_test('html', 'tab')
 
 
 class TestBadMetadataHeaders(unittest.TestCase):
@@ -199,14 +225,64 @@ class TestBadMetadataHeaders(unittest.TestCase):
                    '-a', 'iRT', '-a', 'sp|P00924|ENO1_YEAST',
                    '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
                    '-o', f'{qmd_name}.qmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.RENDER_QMD:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
-            render_result = setup_functions.run_command(render_command, self.work_dir)
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix='render_bad_header_qmd')
+            self.assertEqual(render_result.returncode, 0)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
+
+
+class TestSingleReplicate(unittest.TestCase):
+    RENDER_QMD = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_single_replicate/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        parse_command = ['dia_qc', 'parse',
+                         f'{cls.data_dir}/invalid_reports/Sp3_single_replicate_replicate_quality.tsv',
+                         f'{cls.data_dir}/invalid_reports/Sp3_by_protein_single_replicate_precursor_quality.tsv']
+
+        setup_functions.make_work_dir(cls.work_dir, True)
+        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir)
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+    def test_is_successful(self):
+        self.assertEqual(self.parse_result.returncode, 0)
+
+        qmd_name = 'one_replicate_test'
+        command = ['dia_qc', 'qc_qmd',
+                   '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix='generate_qc_qmd')
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+        if self.RENDER_QMD:
+            render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{qmd_name}')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 

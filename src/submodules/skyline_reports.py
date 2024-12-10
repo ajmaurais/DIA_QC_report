@@ -89,12 +89,15 @@ class SkylineReport(ABC):
     ----------
     report_name: str
         The name of the report.
+    quiet: bool
+        Should log information be printed?
     '''
 
-    def __init__(self, report_name=None):
+    def __init__(self, report_name=None, quiet=False):
         self._columns = list()
         self.report_name = report_name
         self._languages = set()
+        self.quiet = quiet
 
 
     def set_columns(self, columns):
@@ -139,9 +142,21 @@ class SkylineReport(ABC):
         df_cols = set(df.columns.to_list())
         for col in self.required_columns():
             if col.name not in df_cols:
-                LOGGER.error(f'Missing required column: "{col}"' + f' in {self.report_name}' if self.report_name else '')
+                self._error(f'Missing required column: "{col}"' + f' in {self.report_name}' if self.report_name else '')
                 all_good = False
         return all_good
+
+
+    def _error(self, message):
+        if self.quiet:
+            self.RuntimeError(message)
+        else:
+            LOGGER.error(message)
+
+
+    def _info(self, message):
+        if not self.quiet:
+            LOGGER.info(message)
 
 
     def _detect_language(self, file, delim=None):
@@ -194,8 +209,8 @@ class SkylineReport(ABC):
 
 
 class ReplicateReport(SkylineReport):
-    def __init__(self):
-        super().__init__(report_name='replicate')
+    def __init__(self, quiet=False):
+        super().__init__(report_name='replicate', quiet=quiet)
 
         columns = [ReportColumn('replicate', 'Replicate'),
                    ReportColumn('acquiredTime', 'AcquiredTime'),
@@ -217,7 +232,7 @@ class ReplicateReport(SkylineReport):
         with open(fname, 'r') as inF:
             delim = detect_delim(inF)
             report_language = self._detect_language(inF, delim)
-            LOGGER.info(f'Found {report_language} {self.report_name} report...')
+            self._info(f'Found {report_language} {self.report_name} report...')
 
             df = pd.read_csv(inF, sep=delim)
 
@@ -236,14 +251,14 @@ class ReplicateReport(SkylineReport):
         df = df.rename(columns={col.skyline_name: col.name for col in self.columns()})
         if not self.check_df_columns(df):
             return None
-        LOGGER.info('Done reading replicates table...')
+        self._info('Done reading replicates table...')
 
         return df
 
 
 class PrecursorReport(SkylineReport):
-    def __init__(self):
-        super().__init__(report_name='precursor')
+    def __init__(self, quiet=False):
+        super().__init__(report_name='precursor', quiet=quiet)
 
         columns = [ReportColumn('replicateName', 'ReplicateName'),
                    ReportColumn('proteinAccession', 'ProteinAccession', is_required=False),
@@ -254,7 +269,6 @@ class PrecursorReport(SkylineReport):
                    ReportColumn('precursorMz', 'PrecursorMz', is_numeric=True),
                    ReportColumn('averageMassErrorPPM', 'AverageMassErrorPPM', is_numeric=True),
                    ReportColumn('totalAreaFragment', 'TotalAreaFragment', is_numeric=True),
-                   # ReportColumn('normalizedArea', 'NormalizedAreaStrict', is_numeric=True, is_required=False),
                    ReportColumn('userSetTotal', 'UserSetTotal', is_required=False),
                    ReportColumn('totalAreaMs1', 'TotalAreaMs1', is_numeric=True),
                    ReportColumn('rt', 'BestRetentionTime', is_numeric=True),
@@ -281,7 +295,6 @@ class PrecursorReport(SkylineReport):
                              'maxEndTime': 'Max End Time',
                              'userSetTotal': 'User Set Total',
                              'maxFwhm': 'Max Fwhm',
-                             # 'normalizedArea': 'Normalized Area Strict',
                              'libraryDotProduct': 'Library Dot Product',
                              'isotopeDotProduct': 'Isotope Dot Product'}
 
@@ -299,7 +312,7 @@ class PrecursorReport(SkylineReport):
 
             # detect report language
             report_language = self._detect_language(inF, delim)
-            LOGGER.info(f'Found {report_language} {self.report_name} report...')
+            self._info(f'Found {report_language} {self.report_name} report...')
 
             # create dtypes dict for detected language
             col_types = dict()
@@ -328,6 +341,6 @@ class PrecursorReport(SkylineReport):
         if not self.check_df_columns(df):
             return None
 
-        LOGGER.info('Done reading precursors table...')
+        self._info('Done reading precursors table...')
 
         return df
