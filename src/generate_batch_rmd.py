@@ -5,6 +5,7 @@ import argparse
 import sqlite3
 
 from .submodules.logger import LOGGER
+from .submodules.normalization import NORMALIZATION_METHODS
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
@@ -15,9 +16,13 @@ DEFAULT_OFNAME = 'bc_report.rmd'
 DEFAULT_EXT = 'html'
 DEFAULT_TITLE = 'DIA Batch Correction Report'
 
+# Column names for values at each stage of processing
 PYTHON_METHOD_NAMES = ('unnormalized', 'normalized', 'batch_corrected')
 PRECURSOR_METHOD_NAMES = ('totalAreaFragment', 'normalizedArea', 'normalizedArea.bc')
 PROTEIN_METHOD_NAMES = ('abundance', 'normalizedAbundance', 'normalizedAbundance.bc')
+
+# The method names used in plot headers
+NORMALIZATION_METHOD_NAMES = {'DirectLFQ': 'DirectLFQ', 'median': 'Median'}
 
 def doc_header(command, title=DEFAULT_TITLE):
     header='''<!-- This document was automatically generated. Command used to generate document: -->
@@ -78,6 +83,31 @@ def skip_batch_correction(conn, batch1, batch2):
             LOGGER.warning('Only 1 project in replicates! Skipping batch correction.')
             return True
     return False
+
+
+def norm_method_found(conn):
+    '''
+    Test whether protein_normalization_method and
+    precursor_normalization_method keys exist in metadata table.
+    '''
+
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM metadata;')
+    metadata = cur.fetchall()
+
+    keys = ['protein_normalization_method', 'precursor_normalization_method']
+    norm_methods = [value for key, value in metadata if key in keys]
+    if len(norm_methods) != len(keys):
+        LOGGER.error('Missing normalization methods in metadata table!')
+        return False
+
+    all_good = True
+    for method in norm_methods:
+        if method not in NORMALIZATION_METHODS:
+            LOGGER.error(f"Unknown normalization method: '{method}'")
+            all_good = False
+
+    return all_good
 
 
 def test_metadata_variables(conn, batch1=None, batch2=None,
@@ -658,6 +688,9 @@ def _main(args):
 
             if not is_normalized(conn):
                 raise RuntimeError('Database file it not normalized!')
+
+            if not norm_method_found(conn):
+                raise RuntimeError
 
             # Check control_vars args
             if args.control_key is None and args.control_values is not None:

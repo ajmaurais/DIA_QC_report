@@ -11,6 +11,7 @@ import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 import DIA_QC_report.generate_batch_rmd as generate_batch_rmd
+from DIA_QC_report.submodules.normalization import NORMALIZATION_METHODS
 
 
 class TestMainFxns(unittest.TestCase):
@@ -51,6 +52,15 @@ class TestMainFxns(unittest.TestCase):
 
             with self.assertNoLogs(generate_batch_rmd.LOGGER) as cm:
                 tables = generate_batch_rmd.remove_bc_tables(tables)
+
+
+class TestNormMethodsKnown(unittest.TestCase):
+    def test_all_norm_methods_known(self):
+        self.assertEqual(len(generate_batch_rmd.NORMALIZATION_METHOD_NAMES),
+                         len(NORMALIZATION_METHODS))
+
+        for method in NORMALIZATION_METHODS:
+            self.assertTrue(method in generate_batch_rmd.NORMALIZATION_METHOD_NAMES)
 
 
 class TestMakeBatchRmd(unittest.TestCase):
@@ -134,6 +144,51 @@ class TestMakeBatchRmd(unittest.TestCase):
         finally:
             # reset is_normalized metadata entry to True
             self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'True')
+
+
+    def test_norm_method_found_unknown_value(self):
+        self.assertTrue(self.conn is not None)
+
+        current_method = db_utils.get_meta_value(self.conn, 'protein_normalization_method')
+        try:
+            # set is_normalized metadata entry to False
+            self.conn = db_utils.update_meta_value(self.conn, 'protein_normalization_method', 'Nothing')
+
+            # make sure generate_batch_rmd fails
+            command = ['dia_qc', 'batch_rmd', self.db_path]
+            result = setup_functions.run_command(command, self.work_dir)
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue("Unknown normalization method: 'Nothing'" in result.stderr)
+
+        finally:
+            # reset protein_normalization_method to orriginal method
+            self.conn = db_utils.update_meta_value(self.conn, 'protein_normalization_method', current_method)
+
+
+    def test_norm_method_found_missing_key(self):
+        self.assertTrue(self.conn is not None)
+
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM metadata WHERE key == 'precursor_normalization_method';")
+        current_entry = cur.fetchall()
+        self.assertEqual(len(current_entry), 1)
+
+        try:
+            # delete current entry
+            cur.execute("DELETE FROM metadata WHERE key == 'precursor_normalization_method';")
+            self.conn.commit()
+
+            # make sure generate_batch_rmd fails
+            command = ['dia_qc', 'batch_rmd', self.db_path]
+            result = setup_functions.run_command(command, self.work_dir)
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue('Missing normalization methods in metadata table!' in result.stderr)
+
+        finally:
+            # reset orriginal precursor_normalization_method entry
+            cur = self.conn.cursor()
+            cur.executemany('INSERT INTO metadata (key, value) VALUES (?, ?);', current_entry)
+            self.conn.commit()
 
 
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
