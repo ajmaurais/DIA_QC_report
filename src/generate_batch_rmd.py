@@ -277,10 +277,17 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                 LEFT JOIN proteins p ON p.proteinId = q.proteinId
                                 LEFT JOIN replicates r ON r.id == q.replicateId
                                 WHERE r.includeRep == TRUE{protein_filter};')
+norm.methods <- DBI::dbGetQuery(conn, "SELECT * FROM metadata
+                               WHERE key IN ('precursor_normalization_method', 'protein_normalization_method')")
 dat.metadata <- rDIAUtils::readWideMetadata(conn)
 DBI::dbDisconnect(conn)\n'''
 
     text += '''
+# Format normalization method strings
+norm.methods$value <- factor(norm.methods$value, levels=c('median', 'DirectLFQ'),
+                            labels=c('Median', 'DirectLFQ'))
+norm.methods <- setNames(norm.methods$value, sub('_normalization_method$', '', norm.methods$key))
+
 # fix special characters in replicate names so they can be R headers
 dat.metadata$replicate <- make.names(dat.metadata$replicate)
 dat.precursor <- dplyr::left_join(dat.precursor,
@@ -451,7 +458,6 @@ def pca_plot(p, color_vars=None, plot_file_path=None, skip_bc=False):
 
     text = '\n' + r_block_header(f'{p}_pca', fig_width=fig_width, fig_height=fig_height)
 
-    norm_method = 'Median' if p != 'protein' else 'DirectLFQ'
     color_vars_text = '' if color_vars is None else ', color.vars'
     batch_var_text = '' if skip_bc else ", 'Batch'=batch1"
 
@@ -460,7 +466,7 @@ def pca_plot(p, color_vars=None, plot_file_path=None, skip_bc=False):
     pcs.{p}[[method]] <- rDIAUtils::pcAnalysis(dat.{p}.l[dat.{p}.l$method == method,],
                                                      'value', rowsName='{p}', columnsName='replicate')'''
     text += '\n}\n\n'
-    text += f'''names({p}.methods) <- c('Unnormalized', '{norm_method} Normalized'{'' if skip_bc else ", 'Batch corrected'"})
+    text += f'''names({p}.methods) <- c('Unnormalized', paste(norm.methods['{p}'], 'Normalized'){'' if skip_bc else ", 'Batch corrected'"})
 pca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
     color.cols=c('Acquisition\\nnumber'='acquiredRank'{batch_var_text}{color_vars_text}),
     dat.metadata=dat.metadata)\n'''
