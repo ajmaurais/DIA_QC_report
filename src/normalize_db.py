@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 
 from .submodules.normalization import MedianNormalizer, DirectlfqNormalizer
+from .submodules.normalization import NORMALIZATION_METHODS
 from .submodules.dia_db_utils import METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import check_schema_version
@@ -20,7 +21,7 @@ def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     norm_settings = parser.add_argument_group('Normalization settings')
-    norm_settings.add_argument('-m', '--method', choices=['DirectLFQ', 'median'], default='DirectLFQ',
+    norm_settings.add_argument('-m', '--method', choices=NORMALIZATION_METHODS, default='DirectLFQ',
                                help='Normalization method to use. Default is "DirectLFQ"')
     norm_settings.add_argument('--keepMissing', default=False, action='store_true', dest='keep_missing',
                                help="Don't exclude precursors which are missing in 1 or more "

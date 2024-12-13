@@ -10,6 +10,8 @@ import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 from .logger import LOGGER
 
+NORMALIZATION_METHODS = ('median', 'DirectLFQ')
+
 
 class NormalizationManagerBase(ABC):
     '''
