@@ -5,6 +5,9 @@ from itertools import combinations
 from unittest import mock
 import os
 import sqlite3
+from socket import gethostname
+from datetime import datetime
+
 import pandas as pd
 
 import setup_functions
@@ -206,6 +209,50 @@ class TestDBHelperFunctions(unittest.TestCase):
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr)
+
+
+class TestCommandLog(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.test_tables = ['commandLog']
+        cls.test_schema = list()
+        for command in db_utils.SCHEMA:
+            for table in cls.test_tables:
+                if command.strip().startswith(f'CREATE TABLE {table}'):
+                    cls.test_schema.append(command)
+                    continue
+
+
+    def setUp(self):
+        self.assertEqual(len(self.test_tables), len(self.test_schema))
+        self.conn = sqlite3.connect('file::memory:?cache=shared', uri=True)
+        cur = self.conn.cursor()
+        for command in self.test_schema:
+            cur.execute(command)
+        self.conn.commit()
+
+
+    def tearDown(self):
+        self.conn.close()
+
+
+    def test_add_entry(self):
+        command_str = 'command'
+        db_utils.update_command_log(self.conn, command_str, os.getcwd())
+
+        cur = self.conn.cursor()
+        cur.execute('''SELECT commandNumber, command, version, workingDirectory, time, user, hostname
+                       FROM commandLog;''')
+        index, command, version, wd, time, user, host = cur.fetchall()[0]
+
+        self.assertEqual(index, 1)
+        self.assertEqual(command_str, command)
+        self.assertEqual(version, PROGRAM_VERSION)
+        self.assertEqual(user, os.getlogin())
+        self.assertEqual(host, gethostname())
+        self.assertTrue(os.path.isdir(wd))
+        self.assertLess(datetime.strptime(time, db_utils.METADATA_TIME_FORMAT),
+                        datetime.now())
 
 
 class TestUpdateAcquiredRanks(unittest.TestCase):
