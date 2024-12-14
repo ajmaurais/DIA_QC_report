@@ -1,6 +1,8 @@
 
 import re
 from datetime import datetime
+from os import getlogin
+from socket import gethostname
 from collections import Counter
 
 import pandas as pd
@@ -13,7 +15,7 @@ METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
 PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'precursorCharge')
 
-SCHEMA_VERSION = '1.18'
+SCHEMA_VERSION = '2.4.0'
 
 SCHEMA = ['PRAGMA foreign_keys = ON',
 '''
@@ -71,6 +73,16 @@ CREATE TABLE metadata (
     value TEXT,
     PRIMARY KEY (key)
 )''',
+'''
+CREATE TABLE commandLog (
+    commandNumber INTEGER PRIMARY KEY,
+    command TEXT NOT NULL,
+    version TEXT NOT NULL,
+    workingDirectory TEXT,
+    time BLOB,
+    user TEXT,
+    hostname TEXT
+) ''',
 '''
 CREATE TABLE proteins (
     proteinId INTEGER PRIMARY KEY,
@@ -182,6 +194,23 @@ def update_meta_value(conn, key, value):
             (key, value) VALUES (?, ?)
         ON CONFLICT(key) DO UPDATE SET value = ? ''',
                 (key, value, value))
+    conn.commit()
+
+    return conn
+
+
+def update_command_log(conn, command, wd):
+    ''' Update commandLog table. '''
+
+    data = (command, PROGRAM_VERSION, wd,
+            datetime.now().strftime(METADATA_TIME_FORMAT),
+            getlogin(), gethostname())
+
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT INTO commandLog
+            (command, version, workingDirectory, time, user, hostname)
+        VALUES (?, ?, ?, ?, ?, ?); ''', data)
     conn.commit()
 
     return conn
