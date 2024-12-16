@@ -1,8 +1,10 @@
 
 import os
 import subprocess
+from shlex import join as join_shell
 import inspect
 from abc import ABC, abstractmethod
+
 from numpy import isnan
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -167,7 +169,7 @@ def run_command(command, wd, prefix=None):
     result.stdout = result.stdout.decode('utf-8')
 
     with open(f'{prefix_path}.command.txt', 'w') as outF:
-        outF.write(f"{' '.join(command)}\n")
+        outF.write(f"{join_shell(command)}\n")
     with open(f'{prefix_path}.stdout.txt', 'w') as outF:
         outF.write(f"{result.stdout}\n")
     with open(f'{prefix_path}.stderr.txt', 'w') as outF:
