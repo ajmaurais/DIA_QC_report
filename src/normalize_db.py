@@ -6,11 +6,12 @@ import os
 from datetime import datetime
 
 from .submodules.normalization import MedianNormalizer, DirectlfqNormalizer
-from .submodules.normalization import NORMALIZATION_METHODS
+from .submodules.normalization import DirectlfqNormalizer, NORMALIZATION_METHODS
 from .submodules.dia_db_utils import METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
+from .submodules.dia_db_utils import update_command_log
 from .submodules.logger import LOGGER
 from . import __version__ as PROGRAM_VERSION
 
@@ -131,25 +132,14 @@ def _main(args):
     conn.commit()
     LOGGER.info('Done updating protein normalizedAbundance values.')
 
-    # get commands previously run on db
-    cur = conn.cursor()
-    cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
-    previous_commands = cur.fetchall()
-    if len(previous_commands) == 0:
-        LOGGER.warning('Missing command_log metadata entry!')
-        previous_commands = 'MISSING_COMMAND_LOG\n'
-    else:
-        previous_commands = previous_commands[0][0] + '\n'
-    current_command = ' '.join(sys.argv)
+    # update commandLog
+    update_command_log(conn, sys.argv, os.getcwd())
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    metadata = {'Normalization time': datetime.now().strftime(METADATA_TIME_FORMAT),
-                'precursor_normalization_method': precursor_normalization_method,
+    metadata = {'precursor_normalization_method': precursor_normalization_method,
                 'protein_normalization_method': protein_normalization_method,
-                'is_normalized': 'True',
-                'Normalization command': current_command,
-                'command_log': previous_commands + current_command}
+                'is_normalized': 'True'}
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 
