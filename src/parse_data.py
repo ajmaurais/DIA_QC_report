@@ -16,6 +16,7 @@ from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ran
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import update_command_log
 from .submodules.read_metadata import Metadata
 from . import __version__ as PROGRAM_VERSION
 
@@ -113,8 +114,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     '''
 
     # Metadata to add to db
-    current_command = ' '.join(sys.argv)
-    log_metadata = {'command_log': current_command}
+    log_metadata = dict()
     log_metadata['group_precursors_by'] = group_precursors_by
     log_metadata['schema_version'] = SCHEMA_VERSION
     log_metadata['dia_qc version'] = PROGRAM_VERSION
@@ -143,11 +143,6 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             # check database version
             if not check_schema_version(conn):
                 return False
-
-            # get commands previously run on database
-            if (command_log := get_meta_value(conn, 'command_log')) is None:
-                return False
-            log_metadata['command_log'] = f'{command_log}\n{log_metadata["command_log"]}'
 
             # check that existing precursors in db were grouped by current method
             if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
@@ -184,8 +179,6 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     replicates['project'] = project_name
 
     # populate some metadata values now that we have the project_name
-    log_metadata[f'Add {project_name} time'] = datetime.now().strftime(METADATA_TIME_FORMAT)
-    log_metadata[f'Add {project_name} command'] = current_command
     log_metadata['replicates.acquiredRank updated'] = False
     log_metadata[f'is_normalized'] = False # set this to False because we are adding unnormalized data
 
@@ -319,9 +312,13 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
+    # update metadata tablr
     for key, value in log_metadata.items():
         conn = update_meta_value(conn, key, value)
     conn = update_acquired_ranks(conn)
+
+    # update commandLog
+    update_command_log(conn, sys.argv, os.getcwd())
 
     conn.close()
     return True

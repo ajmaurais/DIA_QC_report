@@ -11,18 +11,12 @@ import pandas as pd
 import setup_functions
 from setup_functions import TEST_DIR
 
-from DIA_QC_report.submodules.dia_db_utils import is_normalized
-from DIA_QC_report.submodules.dia_db_utils import update_meta_value, get_meta_value
+import DIA_QC_report.submodules.dia_db_utils as db_utils
 
 
 MISSING_FILENAME_WARNING = 'WARNING: "FileName" column not found in replciate report, could not check that replicate names match!'
 
-def get_db_metadata(db_path):
-    if not os.path.isfile(db_path):
-        raise RuntimeError(f"'{db_path}' does not exist!")
-
-    conn = sqlite3.connect(db_path)
-
+def get_db_metadata(conn):
     # get replicates
     query = 'SELECT id as replicateId, replicate, project FROM replicates;'
     cur = conn.cursor()
@@ -121,8 +115,19 @@ class TestMetadata(unittest.TestCase):
         return command, db_path
 
 
-    def test_tsv(self):
-        command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
+    def do_test(self, ext, **kwargs):
+        '''
+        Integration test for reading different metadata formats.
+
+        Parameters
+        ----------
+        ext: str
+            The metadata file extension passed to self.setup_command
+        **kwargs:
+            Additional keyword arguments passed to self.setup_command
+        '''
+
+        command, db_path = self.setup_command(self.TEST_PROJECT, ext, **kwargs)
         result = setup_functions.run_command(command, self.work_dir)
 
         # test command was successful
@@ -131,8 +136,18 @@ class TestMetadata(unittest.TestCase):
         # test FileName not missing
         self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
 
+        # open connection to db
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{db_path}'))
+        conn = sqlite3.connect(f'{self.work_dir}/{db_path}')
+
+        # make sure command was added to commandLog
+        last_command = db_utils.get_last_command(conn)
+        last_command[0] = os.path.basename(last_command[0])
+        self.assertEqual(last_command, command)
+
         # get metadata from test db
-        db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
+        db_metadata, db_metadata_types = get_db_metadata(conn)
+        conn.close()
 
         # test all replicates are in test db
         project_reps = [rep for rep, data in METADATA.items() if data['project'] == self.TEST_PROJECT]
@@ -147,93 +162,22 @@ class TestMetadata(unittest.TestCase):
         # test metadata types are correct
         for variable in db_metadata_types:
             self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
+
+
+    def test_tsv(self):
+        self.do_test('tsv')
 
 
     def test_json(self):
-        command, db_path = self.setup_command(self.TEST_PROJECT, 'json')
-        result = setup_functions.run_command(command, self.work_dir)
-
-        # test command was successful
-        self.assertEqual(0, result.returncode)
-
-        # test FileName not missing
-        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
-
-        # get metadata from test db
-        db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
-
-        # test all replicates are in test db
-        project_reps = [rep for rep, data in METADATA.items() if data['project'] == self.TEST_PROJECT]
-        self.assertEqual(len(project_reps), len(db_metadata))
-        for rep in project_reps:
-            self.assertTrue(rep in db_metadata)
-
-        # test all annotations are correct
-        for rep in project_reps:
-            self.assertDictEqual(db_metadata[rep], METADATA[rep])
-
-        # test metadata types are correct
-        for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
+        self.do_test('json')
 
 
     def test_skyline_csv(self):
-        command, db_path = self.setup_command(self.TEST_PROJECT, 'csv', meta_suffix='_annotations')
-        result = setup_functions.run_command(command, self.work_dir)
-
-        # test command was successful
-        self.assertEqual(0, result.returncode)
-
-        # test FileName not missing
-        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
-
-        # Log entry specific for skyline annotations csv
-        self.assertTrue('Found Skyline annotations csv' in result.stderr)
-
-        # get metadata from test db
-        db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
-
-        # test all replicates are in test db
-        project_reps = [rep for rep, data in METADATA.items() if data['project'] == self.TEST_PROJECT]
-        self.assertEqual(len(project_reps), len(db_metadata))
-        for rep in project_reps:
-            self.assertTrue(rep in db_metadata)
-
-        # test all annotations are correct
-        for rep in project_reps:
-            self.assertDictEqual(db_metadata[rep], METADATA[rep])
-
-        # test metadata types are correct
-        for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
+        self.do_test('csv', meta_suffix='_annotations')
 
 
     def test_nomal_csv(self):
-        command, db_path = self.setup_command(self.TEST_PROJECT, 'csv')
-        result = setup_functions.run_command(command, self.work_dir)
-
-        # test command was successful
-        self.assertEqual(0, result.returncode)
-
-        # test FileName not missing
-        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
-
-        # get metadata from test db
-        db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
-
-        # test all replicates are in test db
-        project_reps = [rep for rep, data in METADATA.items() if data['project'] == self.TEST_PROJECT]
-        self.assertEqual(len(project_reps), len(db_metadata))
-        for rep in project_reps:
-            self.assertTrue(rep in db_metadata)
-
-        # test all annotations are correct
-        for rep in project_reps:
-            self.assertDictEqual(db_metadata[rep], METADATA[rep])
-
-        # test metadata types are correct
-        for variable in db_metadata_types:
-            self.assertEqual(db_metadata_types[variable], METADATA_TYPES[variable])
+        self.do_test('csv')
 
 
 class TestInferDtypes(unittest.TestCase):
@@ -271,8 +215,13 @@ class TestInferDtypes(unittest.TestCase):
         # test command was successful
         self.assertEqual(0, result.returncode)
 
+        # open connection to db
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{db_path}'))
+        conn = sqlite3.connect(f'{self.work_dir}/{db_path}')
+
         # get metadata from test db
-        db_metadata, db_metadata_types = get_db_metadata(f'{self.work_dir}/{db_path}')
+        db_metadata, db_metadata_types = get_db_metadata(conn)
+        conn.close()
 
         self.assertDictEqual(self.METADATA_TYPES, db_metadata_types)
 
@@ -363,7 +312,7 @@ class TestMultiProject(unittest.TestCase):
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_is_not_normalized(self):
         self.assertTrue(self.conn is not None)
-        self.assertFalse(is_normalized(self.conn))
+        self.assertFalse(db_utils.is_normalized(self.conn))
 
 
     def test_replicates(self):
@@ -378,8 +327,13 @@ class TestMultiProject(unittest.TestCase):
 
 
     def test_metadata(self):
+        # open connection to db
+        self.assertTrue(os.path.isfile(self.db_path))
+        conn = sqlite3.connect(self.db_path)
+
         # get metadata from test db
-        db_metadata, db_metadata_types = get_db_metadata(self.db_path)
+        db_metadata, db_metadata_types = get_db_metadata(conn)
+        conn.close()
 
         self.assertDictEqual(METADATA_TYPES, db_metadata_types)
         self.assertDictEqual(METADATA, db_metadata)
@@ -510,7 +464,7 @@ class TestMultiProjectStepped(unittest.TestCase):
         # initialize db connection
         self.assertTrue(os.path.isfile(db_path))
         conn = sqlite3.connect(db_path)
-        self.assertEqual('gene', get_meta_value(conn, 'group_precursors_by'))
+        self.assertEqual('gene', db_utils.get_meta_value(conn, 'group_precursors_by'))
 
         # Test adding PROJECT_2 with by_protein grouping fails
         second_result_by_protein = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_2,
@@ -539,12 +493,12 @@ class TestMultiProjectStepped(unittest.TestCase):
             self.assertDictEqual(gene_groups[project], db_gene_groups)
 
         # make sure make_gene_matrix fails if grouped by protein
-        conn = update_meta_value(conn, 'group_precursors_by', 'protein')
+        conn = db_utils.update_meta_value(conn, 'group_precursors_by', 'protein')
         bad_matrix_result = setup_functions.run_command(['dia_qc', 'export_gene_matrix', gene_id_path, db_path],
                                                         work_dir, prefix='failed_matrix')
         self.assertEqual(bad_matrix_result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)
-        conn = update_meta_value(conn, 'group_precursors_by', 'gene')
+        conn = db_utils.update_meta_value(conn, 'group_precursors_by', 'gene')
 
 
 class TestDuplicatePrecursorsOption(unittest.TestCase):

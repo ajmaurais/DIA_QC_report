@@ -50,6 +50,7 @@ class CommonTests(setup_functions.AbstractTestsBase):
         self.conn = None
         self.precursor_method = None
         self.protein_method = None
+        self.command = None
 
 
     @classmethod
@@ -72,11 +73,20 @@ class CommonTests(setup_functions.AbstractTestsBase):
         self.assertTrue(precursor_medians_equal(self.conn))
 
 
+    def test_command_log_updated(self):
+        self.assertIsNotNone(self.conn)
+
+        last_command = db_utils.get_last_command(self.conn)
+        last_command[0] = os.path.basename(last_command[0])
+
+        self.assertEqual(last_command, self.command)
+
+
 class TestSingleProject(CommonTests):
     TEST_PROJECT = 'Sp3'
 
     @classmethod
-    def run_commands(cls, normalize_command):
+    def run_commands(cls):
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
                                                            cls.TEST_PROJECT,
@@ -85,7 +95,7 @@ class TestSingleProject(CommonTests):
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-        cls.normalize_result = setup_functions.run_command(normalize_command,
+        cls.normalize_result = setup_functions.run_command(cls.command,
                                                            cls.work_dir,
                                                            prefix='normalize_single_proj')
 
@@ -103,15 +113,15 @@ class TestSingleProject(CommonTests):
 class TestMedianSingle(unittest.TestCase, TestSingleProject):
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_median_single_project/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_median_single_project'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
-        cls.run_commands(normalize_command)
+        cls.command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
+        cls.run_commands()
 
 
     def test_protein_medians_equal(self):
@@ -122,15 +132,15 @@ class TestMedianSingle(unittest.TestCase, TestSingleProject):
 class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_DirectLFQ_single_project/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_DirectLFQ_single_project'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
-        cls.run_commands(normalize_command)
+        cls.command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
+        cls.run_commands()
 
 
     def test_keep_missing_fails(self):
@@ -144,11 +154,11 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
 
 class TestMultiProject(CommonTests):
     @classmethod
-    def run_commands(cls, normalize_command):
+    def run_commands(cls):
         if any(result.returncode != 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        cls.normalize_result = setup_functions.run_command(normalize_command,
+        cls.normalize_result = setup_functions.run_command(cls.command,
                                                            cls.work_dir,
                                                            prefix='normalize_multi_proj')
 
@@ -265,7 +275,7 @@ class TestMultiProject(CommonTests):
 class TestMedianMulti(unittest.TestCase, TestMultiProject):
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_median_multi_project/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_median_multi_project'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir, cls.work_dir)
@@ -273,14 +283,14 @@ class TestMedianMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
-        cls.run_commands(normalize_command)
+        cls.command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
+        cls.run_commands()
 
 
 class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_DirectLFQ_multi_project/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_DirectLFQ_multi_project'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir, cls.work_dir)
@@ -288,8 +298,8 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
-        cls.run_commands(normalize_command)
+        cls.command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
+        cls.run_commands()
 
 
     def test_keep_missing_fails(self):
@@ -306,7 +316,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_missing_precursors/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_missing_precursors'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
