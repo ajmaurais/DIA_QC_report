@@ -1,7 +1,9 @@
 
 import re
 from datetime import datetime
-from os import getlogin
+from os import environ
+from shlex import join as join_shell
+from shlex import split as split_shell
 from socket import gethostname
 from collections import Counter
 
@@ -202,9 +204,11 @@ def update_meta_value(conn, key, value):
 def update_command_log(conn, command, wd):
     ''' Update commandLog table. '''
 
-    data = (command, PROGRAM_VERSION, wd,
+    user = environ.get('USER', environ.get('USERNAME', 'UNKNOWN'))
+
+    data = (join_shell(command), PROGRAM_VERSION, wd,
             datetime.now().strftime(METADATA_TIME_FORMAT),
-            getlogin(), gethostname())
+            user, gethostname())
 
     cur = conn.cursor()
     cur.execute('''
@@ -214,6 +218,16 @@ def update_command_log(conn, command, wd):
     conn.commit()
 
     return conn
+
+
+def get_last_command(conn):
+    ''' Get the most recent command run on the database. '''
+
+    cur = conn.cursor()
+    cur.execute('SELECT commandNumber, command FROM commandLog;')
+    commands = dict(cur.fetchall())
+
+    return split_shell(commands[max(commands.keys())])
 
 
 def update_acquired_ranks(conn):
