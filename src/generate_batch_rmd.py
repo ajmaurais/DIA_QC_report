@@ -2,6 +2,7 @@
 import sys
 import os
 import argparse
+from shlex import join as join_shell
 import sqlite3
 
 from .submodules.logger import LOGGER
@@ -745,8 +746,7 @@ def _main(args):
 
     # generate rmd
     with open(args.ofname, 'w') as outF:
-        outF.write(doc_header('{} {}'.format(os.path.basename(sys.argv[0]), ' '.join(sys.argv[1:])),
-                              title=args.title))
+        outF.write(doc_header(join_shell(sys.argv), title=args.title))
 
         # setup
         outF.write(doc_initialize(args.db, **string_args,

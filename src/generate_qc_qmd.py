@@ -1,6 +1,7 @@
 import sys
 import os
 import argparse
+from shlex import join as join_shell
 import re
 import sqlite3
 from inspect import stack
@@ -578,8 +579,8 @@ def _main(args):
     conn.close()
 
     with open(args.ofname, 'w') as outF:
-        outF.write(doc_header('{} {}'.format(os.path.abspath(__file__),
-                              ' '.join(sys.argv[1:])), title=args.title))
+        outF.write(doc_header(join_shell(sys.argv), title=args.title))
+
         outF.write(add_header('Peptide independent metrics', level=1))
         outF.write(doc_initialize(args.db))
 
