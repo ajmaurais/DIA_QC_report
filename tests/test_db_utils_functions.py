@@ -237,22 +237,29 @@ class TestCommandLog(unittest.TestCase):
 
 
     def test_add_entry(self):
-        command_str = 'command'
-        db_utils.update_command_log(self.conn, command_str, os.getcwd())
+        command = ['command', '-a', '123']
+        db_utils.update_command_log(self.conn, command, os.getcwd())
 
         cur = self.conn.cursor()
         cur.execute('''SELECT commandNumber, command, version, workingDirectory, time, user, hostname
                        FROM commandLog;''')
-        index, command, version, wd, time, user, host = cur.fetchall()[0]
+        index, db_command, version, wd, time, user, host = cur.fetchall()[0]
 
         self.assertEqual(index, 1)
-        self.assertEqual(command_str, command)
+        self.assertEqual(db_command, ' '.join(command))
         self.assertEqual(version, PROGRAM_VERSION)
-        self.assertEqual(user, os.getlogin())
+        self.assertEqual(user, os.environ.get('USER', os.environ.get('USERNAME', 'UNKNOWN')))
         self.assertEqual(host, gethostname())
         self.assertTrue(os.path.isdir(wd))
         self.assertLess(datetime.strptime(time, db_utils.METADATA_TIME_FORMAT),
                         datetime.now())
+
+
+    def test_get_last_command(self):
+        commands = ['abc', 'bca', 'cab', 'aabc']
+        for command in commands:
+            db_utils.update_command_log(self.conn, [command], os.getcwd())
+            self.assertEqual(db_utils.get_last_command(self.conn), [command])
 
 
 class TestUpdateAcquiredRanks(unittest.TestCase):
