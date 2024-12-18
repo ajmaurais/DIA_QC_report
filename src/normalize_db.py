@@ -29,17 +29,6 @@ def parse_args(argv, prog=None):
                                     "replicates from normalization. This option is only compatible "
                                     "with median normalization.")
 
-    exclude_args = parser.add_argument_group('Filter replicates',
-                                             'Add replicates or projects to exclude from normalization. '
-                                             'The replicates.includeRep value will simply be set to FALSE '
-                                             'the replicate will not be deleted from the database.')
-    exclude_args.add_argument('-x', '--excludeRep', action='append', default=[],
-                              help='Add replicate to exclude from normalization.')
-    exclude_args.add_argument('-p', '--excludeProject', action='append', default=[],
-                              help='Exclude project from normalization.')
-    exclude_args.add_argument('-a', '--useAll', action='store_true', default=False,
-                              help='Use all replicates for normalization and set all '
-                                    'replicates.includeRep values to TRUE.')
     parser.add_argument('db', help='Path to sqlite batch/qc database.')
 
     return parser.parse_args(argv)
@@ -50,11 +39,6 @@ def _main(args):
     Actual main method. `args` Should be initialized argparse namespace.
     '''
 
-    exclude_reps = sum([len(args.excludeRep), len(args.excludeProject)]) > 0
-    if exclude_reps and args.useAll:
-        LOGGER.error('exclude Rep/Project and --useAll arguments conflict!')
-        sys.exit(1)
-
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)
     else:
@@ -64,15 +48,6 @@ def _main(args):
     # check database version
     if not check_schema_version(conn):
         sys.exit(1)
-
-    # remove replicates if applicable
-    if exclude_reps:
-        if not mark_reps_skipped(conn, reps=args.excludeRep,
-                                 projects=args.excludeProject):
-            sys.exit(1)
-
-    if args.useAll:
-        mark_all_reps_includced(conn)
 
     # init normalization manager
     if args.method == 'median':
