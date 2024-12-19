@@ -92,7 +92,7 @@ class TestDBHelperFunctions(unittest.TestCase):
             self.assertTrue(all(rep in db_excluded for rep in excluded + [single_rep]))
 
             # Set all reps included
-            db_utils.mark_all_reps_includced(self.conn)
+            db_utils.mark_all_reps_included(self.conn)
             included = included_reps()
             self.assertEqual(len(included), self.N_REPS)
             self.assertEqual(len(excluded_reps()), 0)
@@ -103,12 +103,12 @@ class TestDBHelperFunctions(unittest.TestCase):
             self.assertEqual(len(included_reps()), 0)
 
             # Set all reps included again
-            db_utils.mark_all_reps_includced(self.conn)
+            db_utils.mark_all_reps_included(self.conn)
             self.assertEqual(len(included_reps()), self.N_REPS)
             self.assertEqual(len(excluded_reps()), 0)
 
         finally:
-            db_utils.mark_all_reps_includced(self.conn)
+            db_utils.mark_all_reps_included(self.conn)
 
 
     def test_metadata_functions(self):
@@ -393,7 +393,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
             db_ranks = self.get_db_ranks(self.conn)
             proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
             self.assertDictEqual(proj_ranks, db_ranks)
-            db_utils.mark_all_reps_includced(self.conn)
+            db_utils.mark_all_reps_included(self.conn)
 
 
 class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):

@@ -5,11 +5,6 @@ import os
 import setup_functions
 
 
-class OptionStep():
-    def __init__(self, flag):
-        self.flag = flag
-
-
 class TestExportTables(unittest.TestCase):
     TEST_PROJECT = 'Strap'
     RENDER_QMD = False

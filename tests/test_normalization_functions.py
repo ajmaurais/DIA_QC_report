@@ -135,7 +135,7 @@ class TestNormalizationBase(setup_functions.AbstractTestsBase):
             self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
 
         finally:
-            db_utils.mark_all_reps_includced(self.conn)
+            db_utils.mark_all_reps_included(self.conn)
 
 
 class TestSingleNormalization(unittest.TestCase, TestNormalizationBase):
