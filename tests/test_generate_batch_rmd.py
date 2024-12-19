@@ -220,7 +220,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         finally:
             # Set all replicates to be included
-            db_utils.mark_all_reps_includced(self.conn)
+            db_utils.mark_all_reps_included(self.conn)
 
 
     def test_controlKey_check(self):

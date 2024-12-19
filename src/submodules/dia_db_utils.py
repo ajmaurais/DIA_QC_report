@@ -356,7 +356,7 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     return True
 
 
-def mark_all_reps_includced(conn):
+def mark_all_reps_included(conn):
     '''
     Set all replicates.includeRep values to TRUE and update replicates.acquiredRank if necissary.
     '''
