@@ -220,8 +220,8 @@ def setup_multi_db(data_dir, output_dir,
             commands[i].insert(2, '--groupBy=gene')
 
     results = list()
-    for command in commands:
-        results.append(run_command(command, output_dir))
+    for i, command in enumerate(commands):
+        results.append(run_command(command, output_dir, prefix=f'add_project_{i}'))
 
     return results
 

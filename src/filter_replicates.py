@@ -7,11 +7,14 @@ from datetime import datetime
 
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import check_schema_version
-from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
+from .submodules.dia_db_utils import mark_all_reps_included, mark_reps_skipped
+from .submodules.dia_db_utils import update_command_log
+from .submodules.dia_db_utils import is_normalized, is_imputed
 from .submodules.logger import LOGGER
 from . import __version__ as PROGRAM_VERSION
 
 COMMAND_DESCRIPTION = 'Filter replicates in database.'
+CONFLICTING_ARG_MESSAGE = 'exclude Rep/Project and --include_all arguments conflict!'
 
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION + '''
@@ -33,12 +36,12 @@ will not be deleted from the database.''')
 
 def _main(args):
     '''
-    Actual main method. `args` Should be initialized argparse namespace.
+    Actual main method. `args` Should be an initialized argparse namespace.
     '''
 
     exclude_reps = sum([len(args.excludeRep), len(args.excludeProject)]) > 0
-    if exclude_reps and args.includeAll:
-        LOGGER.error('exclude Rep/Project and --includeAll arguments conflict!')
+    if exclude_reps and args.include_all:
+        LOGGER.error(CONFLICTING_ARG_MESSAGE)
         sys.exit(1)
 
     if os.path.isfile(args.db):
@@ -58,23 +61,30 @@ def _main(args):
             sys.exit(1)
 
     if args.include_all:
-        mark_all_reps_includced(conn)
+        mark_all_reps_included(conn)
 
-    # get commands previously run on db
-    cur = conn.cursor()
-    cur.execute('SELECT value FROM metadata WHERE key == "command_log"')
-    previous_commands = cur.fetchall()
-    if len(previous_commands) == 0:
-        LOGGER.warning('Missing command_log metadata entry!')
-        previous_commands = 'MISSING_COMMAND_LOG\n'
-    else:
-        previous_commands = previous_commands[0][0] + '\n'
-    current_command = ' '.join(sys.argv)
+    # unset imputed values if applicable
+    # if is_imputed(conn):
+    #     cur = conn.cursor()
+    #     LOGGER.info('Setting existing precursor normalizedArea values to NULL.')
+    #     cur.execute('UPDATE precursors SET totalAreaFragment = NULL WHERE isImputed == 1')
+    #     cur.execute('UPDATE precursors SET isImputed = 0')
+    #     conn.commit()
+
+    # unset normalized values if applicable
+    if is_normalized(conn):
+        cur = conn.cursor()
+        cur.execute('UPDATE precursors SET normalizedArea = NULL')
+        cur.execute('UPDATE proteinQuants SET normalizedAbundance = NULL')
+        conn.commit()
+
+    # update commandLog
+    update_command_log(conn, sys.argv, os.getcwd())
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    metadata = {'is_normalized': 'False',
-                'command_log': previous_commands + current_command}
+    metadata = {'is_normalized': 'False'}
+                # 'is_imputed': 'False'} # set to false if we are changing replicates
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 
