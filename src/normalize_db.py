@@ -10,7 +10,6 @@ from .submodules.normalization import DirectlfqNormalizer, NORMALIZATION_METHODS
 from .submodules.dia_db_utils import METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import check_schema_version
-from .submodules.dia_db_utils import mark_all_reps_includced, mark_reps_skipped
 from .submodules.dia_db_utils import update_command_log
 from .submodules.logger import LOGGER
 from . import __version__ as PROGRAM_VERSION

@@ -356,7 +356,7 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     return True
 
 
-def mark_all_reps_included(conn):
+def mark_all_reps_included(conn, quiet=False):
     '''
     Set all replicates.includeRep values to TRUE and update replicates.acquiredRank if necissary.
     '''
@@ -365,12 +365,14 @@ def mark_all_reps_included(conn):
     include_rep_counts = Counter({x[0]: x[1] for x in cur.fetchall()})
 
     if 0 in include_rep_counts:
-        LOGGER.info(f'Setting {include_rep_counts[0]} includeRep values to TRUE.')
+        if not quiet:
+            LOGGER.info(f'Setting {include_rep_counts[0]} includeRep values to TRUE.')
         cur.execute('UPDATE replicates SET includeRep = TRUE;')
         conn.commit()
         conn = update_acquired_ranks(conn)
     else:
-        LOGGER.warning(f'All replicates are already included.')
+        if not quiet:
+            LOGGER.warning('All replicates are already included.')
 
 
 def read_wide_metadata(conn, meta_vars=None, read_all=True):
