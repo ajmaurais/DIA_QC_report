@@ -1,6 +1,6 @@
 
 from multiprocessing import cpu_count
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 import numpy as np
 import pandas as pd
@@ -9,11 +9,12 @@ from directlfq.normalization import NormalizationManagerSamplesOnSelectedProtein
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 from .logger import LOGGER
+from .transformation import TransformationManagerBase
 
 NORMALIZATION_METHODS = ('median', 'DirectLFQ')
 
 
-class NormalizationManagerBase(ABC):
+class NormalizationManagerBase(TransformationManagerBase):
     '''
     NormalizationManager abastract base class.
 
@@ -32,9 +33,7 @@ class NormalizationManagerBase(ABC):
     '''
 
     def __init__(self, conn, keep_na=False):
-        self.conn = conn
-        self.precursors = None
-        self.proteins = None
+        super().__init__(conn)
         self.keep_na = keep_na
 
 
