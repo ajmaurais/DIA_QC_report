@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 
 from .submodules.dia_db_utils import update_meta_value
+from .submodules.dia_db_utils import IS_IMPUTED, IS_NORMALIZED
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import mark_all_reps_included, mark_reps_skipped
 from .submodules.dia_db_utils import update_command_log
@@ -83,8 +84,8 @@ def _main(args):
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    metadata = {'is_normalized': 'False'}
-                # 'is_imputed': 'False'} # set to false if we are changing replicates
+    metadata = {IS_NORMALIZED: 'False',
+                IS_IMPUTED: 'False'} # set to false if we are changing replicates
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 

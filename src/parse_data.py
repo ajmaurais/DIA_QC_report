@@ -14,6 +14,7 @@ from .submodules.skyline_reports import ReplicateReport, PrecursorReport
 from .submodules.dia_db_utils import PRECURSOR_KEY_COLS, METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_metadata_dtypes, update_acquired_ranks
 from .submodules.dia_db_utils import update_meta_value
+from .submodules.dia_db_utils import IS_NORMALIZED, IS_IMPUTED
 from .submodules.dia_db_utils import get_meta_value
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import update_command_log
@@ -180,7 +181,8 @@ def write_db(fname, replicates, precursors, protein_quants=None,
 
     # populate some metadata values now that we have the project_name
     log_metadata['replicates.acquiredRank updated'] = False
-    log_metadata['is_normalized'] = False # set this to False because we are adding unnormalized data
+    log_metadata[IS_NORMALIZED] = False # set this to False because we are adding new data
+    log_metadata[IS_IMPUTED] = False # set this to False because we are adding new data
 
     # deal with existing replicates, proteins, and protein to precursor pairs
     if append:

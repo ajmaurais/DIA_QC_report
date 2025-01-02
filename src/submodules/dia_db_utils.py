@@ -17,6 +17,14 @@ METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
 
 PRECURSOR_KEY_COLS = ('replicateId', 'peptideId', 'precursorCharge')
 
+# metadata table keys
+PRECURSOR_NORM_METHOD = 'precursor_normalization_method'
+PROTEIN_NORM_METHOD = 'protein_normalization_method'
+IS_NORMALIZED = 'is_normalized'
+PRECURSOR_IMPUTE_METHOD = 'precursor_imputation_method'
+PROTEIN_IMPUTE_METHOD = 'protein_imputation_method'
+IS_IMPUTED = 'is_imputed'
+
 SCHEMA_VERSION = '2.4.0'
 
 SCHEMA = ['PRAGMA foreign_keys = ON',
@@ -140,7 +148,7 @@ def get_meta_value_bool(conn, key):
 
 def is_normalized(conn):
     ''' Determine if metadata.is_normalized is True '''
-    normalized = get_meta_value_bool(conn, 'is_normalized')
+    normalized = get_meta_value_bool(conn, IS_NORMALIZED)
     if normalized is None or normalized == False:
         return False
     return True
@@ -148,7 +156,7 @@ def is_normalized(conn):
 
 def is_imputed(conn):
     ''' Determine if metadata.is_imputed is True '''
-    normalized = get_meta_value_bool(conn, 'is_imputed')
+    normalized = get_meta_value_bool(conn, IS_IMPUTED)
     if normalized is None or normalized == False:
         return False
     return True

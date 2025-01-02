@@ -6,6 +6,7 @@ from shlex import join as join_shell
 import sqlite3
 
 from .submodules.logger import LOGGER
+from .submodules.dia_db_utils import PRECURSOR_NORM_METHOD, PROTEIN_NORM_METHOD
 from .submodules.normalization import NORMALIZATION_METHODS
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import is_normalized
@@ -96,7 +97,7 @@ def norm_method_found(conn):
     cur.execute('SELECT * FROM metadata;')
     metadata = cur.fetchall()
 
-    keys = ['protein_normalization_method', 'precursor_normalization_method']
+    keys = [PROTEIN_NORM_METHOD, PRECURSOR_NORM_METHOD]
     norm_methods = [value for key, value in metadata if key in keys]
     if len(norm_methods) != len(keys):
         LOGGER.error('Missing normalization methods in metadata table!')
@@ -279,7 +280,7 @@ dat.protein <- DBI::dbGetQuery(conn, 'SELECT
                                 LEFT JOIN replicates r ON r.id == q.replicateId
                                 WHERE r.includeRep == TRUE{protein_filter};')
 norm.methods <- DBI::dbGetQuery(conn, "SELECT * FROM metadata
-                               WHERE key IN ('precursor_normalization_method', 'protein_normalization_method')")
+                               WHERE key IN ('{PRECURSOR_NORM_METHOD}', '{PROTEIN_NORM_METHOD}')")
 dat.metadata <- rDIAUtils::readWideMetadata(conn)
 DBI::dbDisconnect(conn)\n'''
 
@@ -288,6 +289,11 @@ DBI::dbDisconnect(conn)\n'''
 norm.methods$value <- factor(norm.methods$value, levels=c('median', 'DirectLFQ'),
                             labels=c('Median', 'DirectLFQ'))
 norm.methods <- setNames(norm.methods$value, sub('_normalization_method$', '', norm.methods$key))
+
+# make sure that we found both normalization methods
+if(length(norm.methods) != 2 | any(is.na(norm.methods))) {
+    stop('Error formating normalization methods!')
+}
 
 # fix special characters in replicate names so they can be R headers
 dat.metadata$replicate <- make.names(dat.metadata$replicate)

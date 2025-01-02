@@ -126,7 +126,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         try:
             # set is_normalized metadata entry to False
-            self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'False')
+            self.conn = db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'False')
 
             # make sure generate_batch_rmd fails
             command = ['dia_qc', 'batch_rmd', self.db_path]
@@ -136,16 +136,16 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         finally:
             # reset is_normalized metadata entry to True
-            self.conn = db_utils.update_meta_value(self.conn, 'is_normalized', 'True')
+            self.conn = db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'True')
 
 
     def test_norm_method_found_unknown_value(self):
         self.assertTrue(self.conn is not None)
 
-        current_method = db_utils.get_meta_value(self.conn, 'protein_normalization_method')
+        current_method = db_utils.get_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD)
         try:
             # set is_normalized metadata entry to False
-            self.conn = db_utils.update_meta_value(self.conn, 'protein_normalization_method', 'Nothing')
+            self.conn = db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, 'Nothing')
 
             # make sure generate_batch_rmd fails
             command = ['dia_qc', 'batch_rmd', self.db_path]
@@ -155,20 +155,20 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         finally:
             # reset protein_normalization_method to orriginal method
-            self.conn = db_utils.update_meta_value(self.conn, 'protein_normalization_method', current_method)
+            self.conn = db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, current_method)
 
 
     def test_norm_method_found_missing_key(self):
         self.assertTrue(self.conn is not None)
 
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM metadata WHERE key == 'precursor_normalization_method';")
+        cur.execute("SELECT * FROM metadata WHERE key == ?;", (db_utils.PRECURSOR_NORM_METHOD,))
         current_entry = cur.fetchall()
         self.assertEqual(len(current_entry), 1)
 
         try:
             # delete current entry
-            cur.execute("DELETE FROM metadata WHERE key == 'precursor_normalization_method';")
+            cur.execute("DELETE FROM metadata WHERE key == ?", (db_utils.PRECURSOR_NORM_METHOD,))
             self.conn.commit()
 
             # make sure generate_batch_rmd fails

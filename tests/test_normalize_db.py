@@ -62,9 +62,9 @@ class CommonTests(setup_functions.AbstractTestsBase):
     def test_is_normalized(self):
         self.assertIsNotNone(self.conn)
         self.assertTrue(db_utils.is_normalized(self.conn))
-        self.assertEqual(db_utils.get_meta_value(self.conn, 'precursor_normalization_method'),
+        self.assertEqual(db_utils.get_meta_value(self.conn, db_utils.PRECURSOR_NORM_METHOD),
                          self.precursor_method)
-        self.assertEqual(db_utils.get_meta_value(self.conn, 'protein_normalization_method'),
+        self.assertEqual(db_utils.get_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD),
                          self.protein_method)
 
 
@@ -345,11 +345,11 @@ class TestAllPrecursorsMissing(unittest.TestCase):
     def test_median_normalization_na_rm(self):
         self.assertIsNotNone(self.conn)
 
-        norm_levels = ['precursor_normalization_method', 'protein_normalization_method']
+        norm_levels = [db_utils.PRECURSOR_NORM_METHOD, db_utils.PROTEIN_NORM_METHOD]
         cur = self.conn.cursor()
         for level in norm_levels:
             cur.execute('DELETE FROM metadata WHERE key == ?', (level,))
-        cur.execute("UPDATE metadata SET value == FALSE WHERE key == 'is_normalized'")
+        cur.execute("UPDATE metadata SET value == FALSE WHERE key == ?", (db_utils.IS_NORMALIZED, ))
         self.conn.commit()
 
         self.assertFalse(db_utils.is_normalized(self.conn))
@@ -381,11 +381,11 @@ class TestAllPrecursorsMissing(unittest.TestCase):
     def test_median_normalization_keep_na(self):
         self.assertIsNotNone(self.conn)
 
-        norm_levels = ['precursor_normalization_method', 'protein_normalization_method']
+        norm_levels = [db_utils.PRECURSOR_NORM_METHOD, db_utils.PROTEIN_NORM_METHOD]
         cur = self.conn.cursor()
         for level in norm_levels:
             cur.execute('DELETE FROM metadata WHERE key == ?', (level,))
-        cur.execute("UPDATE metadata SET value == FALSE WHERE key == 'is_normalized'")
+        cur.execute("UPDATE metadata SET value == FALSE WHERE key == ?", (db_utils.IS_NORMALIZED,))
         self.conn.commit()
 
         self.assertFalse(db_utils.is_normalized(self.conn))

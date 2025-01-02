@@ -10,6 +10,7 @@ from .submodules.normalization import DirectlfqNormalizer, NORMALIZATION_METHODS
 from .submodules.dia_db_utils import METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import IS_NORMALIZED, PRECURSOR_NORM_METHOD, PROTEIN_NORM_METHOD
 from .submodules.dia_db_utils import update_command_log
 from .submodules.logger import LOGGER
 from . import __version__ as PROGRAM_VERSION
@@ -111,9 +112,9 @@ def _main(args):
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    metadata = {'precursor_normalization_method': precursor_normalization_method,
-                'protein_normalization_method': protein_normalization_method,
-                'is_normalized': 'True'}
+    metadata = {PRECURSOR_NORM_METHOD: precursor_normalization_method,
+                PROTEIN_NORM_METHOD: protein_normalization_method,
+                IS_NORMALIZED: 'True'}
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 

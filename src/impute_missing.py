@@ -6,6 +6,7 @@ import os
 
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import METADATA_TIME_FORMAT
+from .submodules.dia_db_utils import IS_IMPUTED, PRECURSOR_IMPUTE_METHOD, PROTEIN_IMPUTE_METHOD
 from .submodules.dia_db_utils import update_meta_value
 from .submodules.imputation import IMPUTATION_METHODS
 from .submodules.logger import LOGGER
@@ -44,9 +45,9 @@ def _main(args):
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    metadata = {'precursor_imputation_method': precursor_normalization_method,
-                'protein_imputation_method': protein_normalization_method,
-                'is_imputed': 'True'}
+    metadata = {PRECURSOR_IMPUTE_METHOD: precursor_normalization_method,
+                PROTEIN_IMPUTE_METHOD: protein_normalization_method,
+                IS_IMPUTED: 'True'}
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 
