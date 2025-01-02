@@ -5,6 +5,7 @@ import argparse
 from . import parse_data
 from . import metadata_convert
 from . import filter_replicates
+from . import impute_missing
 from . import normalize_db
 from . import generate_qc_qmd
 from . import generate_batch_rmd
@@ -13,8 +14,8 @@ from . import export_tables
 
 from . import __version__ as PACKAGE_VERSION
 
-SUBCOMMANDS = {'parse', 'metadata_convert', 'filter', 'normalize', 'qc_qmd',
-               'batch_rmd', 'export_gene_matrix', 'db_export'}
+SUBCOMMANDS = {'parse', 'metadata_convert', 'filter', 'impute', 'normalize',
+               'qc_qmd', 'batch_rmd', 'export_gene_matrix', 'db_export'}
 
 
 def _first_subcommand(argv):
@@ -55,6 +56,7 @@ Available commands:
    parse                {parse_data.COMMAND_DESCRIPTION}
    metadata_convert     {metadata_convert.COMMAND_DESCRIPTION}
    filter               {filter_replicates.COMMAND_DESCRIPTION}
+   impute               {impute_missing.COMMAND_DESCRIPTION}
    normalize            {normalize_db.COMMAND_DESCRIPTION}
    qc_qmd               {generate_qc_qmd.COMMAND_DESCRIPTION}
    batch_rmd            {generate_batch_rmd.COMMAND_DESCRIPTION}
