@@ -2,6 +2,10 @@
 from abc import ABC
 
 
+def cammel_case(prefix, suffix):
+    return f'{prefix}{suffix[0].upper()}{suffix[1:]}'
+
+
 class TransformationManagerBase(ABC):
     '''
     TransformationManager abastract base class.

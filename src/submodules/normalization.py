@@ -9,6 +9,7 @@ from directlfq.normalization import NormalizationManagerSamplesOnSelectedProtein
 import directlfq.protein_intensity_estimation as lfqprot_estimation
 
 from .logger import LOGGER
+from .transformation import cammel_case
 from .transformation import TransformationManagerBase
 
 NORMALIZATION_METHODS = ('median', 'DirectLFQ')
@@ -119,10 +120,6 @@ class NormalizationManagerBase(TransformationManagerBase):
 
     def get_wide_tables(self, normalized=True, use_db_ids=False):
         pass
-
-
-def cammel_case(prefix, suffix):
-    return f'{prefix}{suffix[0].upper()}{suffix[1:]}'
 
 
 def median_normalize_df(df, key_cols, value_col):
