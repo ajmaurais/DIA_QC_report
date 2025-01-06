@@ -5,19 +5,47 @@ from itertools import product
 
 from DIA_QC_report.submodules.dia_db_utils import validate_bit_mask
 from DIA_QC_report.submodules.dia_db_utils import parse_bitmask_options
+from DIA_QC_report.submodules.dia_db_utils import LOGGER as db_utils_logger
 
 class TestBitMaskParsing(unittest.TestCase):
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
-    def test_invalid_options(self):
+    def test_invalid_mask(self):
         masks = [('89', 3, 2),
-                 ('12', 3, 1),
                  ('45', 1, 2),
-                 ('45', 2, 2),
+                 ('45', 2, 2)]
+        max_values = (0, 1, 3, 7)
+
+        for mask, n_options, n_digits in masks:
+            with self.assertLogs(db_utils_logger, level='ERROR') as cm:
+                result = validate_bit_mask(mask, n_options=n_options, n_digits=n_digits)
+
+            self.assertFalse(result)
+
+            self.assertEqual(len(cm.output), 1)
+            expected_message = f'Bit mask digits must be between 0 and {max_values[n_options]}!'
+            self.assertTrue(expected_message in cm.output[0])
+
+
+    def test_invalid_n_digits(self):
+        masks = [('12', 3, 1),
                  ('45', 3, 3)]
 
         for mask, n_options, n_digits in masks:
-            self.assertFalse(validate_bit_mask(mask, n_options=n_options, n_digits=n_digits))
+            with self.assertLogs(db_utils_logger, level='ERROR') as cm:
+                result = validate_bit_mask(mask, n_options=n_options, n_digits=n_digits)
+
+            self.assertFalse(result)
+            self.assertEqual(len(cm.output), 1)
+            self.assertTrue(f'Bit mask must be {n_digits} digits!', cm.output[0])
+
+
+    def test_invalid_n_options(self):
+        masks = [('00', 4, 2),
+                 ('00', 0, 2)]
+
+        for mask, n_options, n_digits in masks:
+            with self.assertRaises(ValueError):
+                validate_bit_mask(mask, n_options=n_options, n_digits=n_digits)
 
 
     @staticmethod

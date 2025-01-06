@@ -38,7 +38,7 @@ CREATE TABLE replicates (
     acquiredRank INTEGER NOT NULL,
     ticArea REAL NOT NULL,
     UNIQUE(replicate, project) ON CONFLICT FAIL
-)''', 
+)''',
 f'''
 CREATE TABLE precursors (
     replicateId INTEGER NOT NULL,
@@ -128,7 +128,7 @@ def get_meta_value(conn, key):
     value = cur.fetchall()
     if len(value) == 1:
         return value[0][0]
-    LOGGER.error(f"Could not get key '{key}' from metadata table!")
+    LOGGER.error("Could not get key '%s' from metadata table!", key)
     return None
 
 
@@ -188,7 +188,7 @@ def check_schema_version(conn):
     # check the database schema version
     db_version = get_meta_value(conn, 'schema_version')
     if db_version is None or db_version != SCHEMA_VERSION:
-        LOGGER.error(f'Database schema version (%s) does not match program (%s)',
+        LOGGER.error('Database schema version (%s) does not match program (%s)',
                      db_version, SCHEMA_VERSION)
         return False
 
@@ -338,7 +338,7 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     def check_missing(var_name, missing_vals):
         if len(missing_vals) > 0:
             for rep in reps:
-                LOGGER.error(f"{var_name} '{rep}' is not in database!")
+                LOGGER.error("%s '%s' is not in database!", var_name, rep)
             return True
         return False
 
@@ -362,9 +362,9 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     rep_index_to_false = Counter(rep_index_to_false)
     for rep_i, count in rep_index_to_false.items():
         if count > 1:
-            LOGGER.warning(f"Replicate '{db_reps[rep_i][1]}' was set to be excluded {count} times!")
+            LOGGER.warning("Replicate '%s' was set to be excluded %i times!", db_reps[rep_i][1], count)
 
-    LOGGER.info(f'Excluding {len(rep_index_to_false)} replicates.')
+    LOGGER.info('Excluding %i replicates.', len(rep_index_to_false))
     cur = conn.cursor()
     cur.executemany('UPDATE replicates SET includeRep = FALSE WHERE id = ?;',
                     [(db_reps[rep_i][0],) for rep_i in rep_index_to_false])
@@ -384,7 +384,7 @@ def mark_all_reps_included(conn, quiet=False):
 
     if 0 in include_rep_counts:
         if not quiet:
-            LOGGER.info(f'Setting {include_rep_counts[0]} includeRep values to TRUE.')
+            LOGGER.info('Setting %i includeRep values to TRUE.', include_rep_counts[0])
         cur.execute('UPDATE replicates SET includeRep = TRUE;')
         conn.commit()
         conn = update_acquired_ranks(conn)
@@ -473,17 +473,18 @@ def validate_bit_mask(mask, n_options=3, n_digits=2):
         Expected number of digits in mask.
     '''
 
-    assert n_options in range(4)
+    if n_options not in range(1, 4):
+        raise ValueError('n_options must be between 1-3!')
 
     max_values = (0, 1, 3, 7)
 
     max_value = max_values[n_options]
     if not re.search(f"^[0-{str(max_value)}]+$", mask):
-        LOGGER.error(f'Bit mask digits must be between 0 and {str(max_value)}!')
+        LOGGER.error('Bit mask digits must be between 0 and %i!', max_value)
         return False
 
     if len(mask) != n_digits:
-        LOGGER.error(f'Bit mask must be {n_digits} digits!')
+        LOGGER.error('Bit mask must be %i digits!', n_digits)
         return False
 
     return True
