@@ -124,14 +124,14 @@ class NormalizationManagerBase(TransformationManagerBase):
 
 def median_normalize_df(df, key_cols, value_col):
     '''
-    Median normalize peak areas in long formatted datafraeme.
+    Median normalize peak areas in long formatted dataframe.
 
     Parameters
     ----------
     df: pd.DataFrame
-        Long formatted data frame
+        Long formatted dataframe
     key_cols: list
-        The names of column(s) which uniquely identify each replicate.
+        The names of column(s) which uniquely identify each row.
     value_col: str
         The name of the column with peak areas.
         This function will log2 transform this column so the areas should be in linear space.
@@ -140,9 +140,6 @@ def median_normalize_df(df, key_cols, value_col):
     log2_value_col = cammel_case('log2', value_col)
     norm_value_col = cammel_case('normalized', value_col)
     log2_norm_value_col = cammel_case('log2', norm_value_col)
-
-    cols = df.columns.tolist()
-    cols.append(norm_value_col)
 
     # log2 transform
     df[log2_value_col] = np.log2(df[value_col] + 1)
@@ -207,9 +204,6 @@ class MedianAbsoluteDeviationNormalizer(NormalizationManagerBase):
         log2_value_col = cammel_case('log2', value_col)
         norm_value_col = cammel_case('normalized', value_col)
         log2_norm_value_col = cammel_case('log2', norm_value_col)
-
-        cols = df.columns.tolist()
-        cols.append(norm_value_col)
 
         # log2 transform
         df[log2_value_col] = np.log2(df[value_col] + 1)

@@ -3,8 +3,10 @@ from abc import abstractmethod
 
 import numpy as np
 import pandas as pd
+from sklearn.impute import KNNImputer as skl_KNNImputer
 
 from .logger import LOGGER
+from .transformation import cammel_case
 from .transformation import TransformationManagerBase
 
 IMPUTATION_METHODS = ('k-means',)
@@ -43,7 +45,7 @@ class ImputationManagerBase(TransformationManagerBase):
         impute_data: str
             Impute 'precursors', 'proteins', or 'both'. Default is 'both'.
         group_by_project: bool
-            Only use replicates in the same project to 
+            Only use replicates in the same project to
             Default is 'project'.
         '''
         super().__init__(conn)
@@ -52,12 +54,15 @@ class ImputationManagerBase(TransformationManagerBase):
             self.level = level
         else:
             raise RuntimeError('level must be 0 or 1')
-        self.missing_threshold = 0.5
-        if impute_data in ['precursors', 'proteins', 'both']:
+
+        self.missing_threshold = missing_threshold
+        self.group_by_project = group_by_project
+
+        if impute_data in ('precursors', 'proteins', 'both'):
             self.impute_data = impute_data
         else:
             raise RuntimeError("impute_data must be 'precursors', 'proteins', or 'both'")
-        
+
 
     def _read_precursors(self):
         # get precursor table from db
@@ -88,7 +93,7 @@ class ImputationManagerBase(TransformationManagerBase):
 
 
     def _read_proteins(self):
-        LOGGER.info('Reading precursors from database...')
+        LOGGER.info('Reading proteins from database...')
         df = pd.read_sql(f'''
             SELECT
                 r.project,
@@ -105,9 +110,8 @@ class ImputationManagerBase(TransformationManagerBase):
         if len(df.index) == 0:
             LOGGER.error('All replicates in database have been excluded!')
             return False
-        
+
         df['isImputed'] = df['isImputed'].map({0: False, 1: True})
-        # n_missing = df.group_by(['proteinId'])['abundance'].size()
 
         self.proteins = df
         return True
@@ -118,15 +122,100 @@ class ImputationManagerBase(TransformationManagerBase):
         pass
 
 
-class KMeansNormalizer(ImputationManagerBase):
-    def __init__(self, conn, **kwargs):
+def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
+                  is_imputed_col='isImputed', missing_threshold=0.5, **kwargs):
+    '''
+    KNN impute peak areas in a long formated dataframe.
+
+    Parameters
+    ----------
+    df: pd.DataFrame
+        Long formated dataframe
+    key_cols: list
+        The names of column(s) which uniquely identify each row.
+    replicate_col: str
+        The name of the column that uniquely identify each replicate.
+    value_col: str
+        The name of the column with peak areas.
+    is_imputed_col: str
+        The name of the boolean column which indicates whether the value_col is imputed.
+        If the column does not already exist in df it will be added.
+        If the column does exist all the existing imputed values will be set to NA and re-imputed.
+        Default is 'isImputed'.
+    missing_threshold: float
+        Fraction of missing values above which imputation for a group will be skipped.
+        Default is 0.5.
+    **kwargs: dict
+        Additional kwargs passed to sklearn.impute.KNNImputer.
+    '''
+
+    imputed_value_col = cammel_case('imputed', value_col)
+
+    # reset existing imputed values
+    df = df.copy()
+    if is_imputed_col in df.columns:
+        df.loc[df[is_imputed_col]][value_col] = pd.NA
+    else:
+        df[is_imputed_col] = False
+
+    # pivot df wider
+    df_w = df.pivot(index=key_cols, columns=replicate_col, values=value_col)
+
+    # drop rows with more than missing_threshold missing values
+    df_w = df_w.dropna(thresh=1 if missing_threshold is None else int(df.shape[1] * missing_threshold))
+
+    # impute missing values
+    imputer = skl_KNNImputer(**kwargs)
+    df_i = pd.DataFrame(imputer.fit_transform(df_w), columns=df_w.columns, index=df_w.index)
+    df_i = df_i.melt(value_name=imputed_value_col, ignore_index=False).reset_index()
+
+    # Join imputed values to df and clean up
+    df = df.set_index(key_cols + [replicate_col])
+    df_i = df_i.set_index(key_cols + [replicate_col])
+    df = df.join(df_i)
+    df[is_imputed_col] = pd.isna(df[value_col]) & ~pd.isna(df[imputed_value_col])
+    df[value_col] = df.apply(lambda x: x[imputed_value_col] if x[is_imputed_col] else x[value_col], axis=1)
+    df = df.drop(columns=[imputed_value_col]).reset_index()
+
+    return df
+
+
+class KNNImputer(ImputationManagerBase):
+    '''
+    KNN imputation manager.
+
+    Inherets from ImputationManagerBase
+
+    Attributes
+    ----------
+    n_neighbors: int
+        Number of nearest neigbors. Passed to KNN imputaion algorithm.
+    '''
+
+    def __init__(self, conn, n_neighbors=5, **kwargs):
+        '''
+        Parameters
+        ----------
+        conn: sqlite3.Connection
+        n_neighbors: int
+        **kwargs: dict
+            Additional kwargs passed to ImputationManagerBase
+        '''
         super().__init__(conn, **kwargs)
+        self.n_neighbors = n_neighbors
 
 
     def impute(self):
         if self.impute_data in ('precursors', 'both'):
             if not self._read_precursors():
                 return False
+            self.precursors = knn_impute_df(self.precursors, ['peptideId', 'precursorCharge'], 'area',
+                                            missing_threshold=self.missing_threshold,
+                                            n_neighbors=self.n_neighbors)
+
         if self.impute_data in ('proteins', 'both'):
             if not self._read_proteins():
                 return False
+            self.proteins = knn_impute_df(self.proteins, ['proteinId'], 'abundance',
+                                          missing_threshold=self.missing_threshold,
+                                          n_neighbors=self.n_neighbors)
