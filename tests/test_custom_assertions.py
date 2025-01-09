@@ -1,5 +1,6 @@
 
 import unittest
+import pandas as pd
 from numpy import nan
 
 from setup_functions import AbstractTestsBase
@@ -79,3 +80,17 @@ class TestCustomAssertion(unittest.TestCase, AbstractTestsBase):
         self.assertDataDictEqual(self.gt_data, test_data)
 
 
+class TestDataFrameEqual(unittest.TestCase, AbstractTestsBase):
+    def setUp(self):
+        self.df = pd.DataFrame(data={'a':['x'], 'b':['y'], 'c':[0.1], 'd':[0]})
+
+    @unittest.expectedFailure
+    def test_assert_frame_equal_fails(self):
+        rhs = self.df.copy()
+        rhs['a'] = 0
+        self.assertDataFrameEqual(self.df, rhs)
+
+
+    def test_assert_frame_equal(self):
+        rhs = self.df.copy()
+        self.assertDataFrameEqual(self.df, rhs)

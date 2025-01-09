@@ -2,22 +2,15 @@
 import unittest
 from io import StringIO
 import pandas as pd
-from pandas.testing import assert_frame_equal
 
 from setup_functions import TEST_DIR, AbstractTestsBase
 
 import DIA_QC_report.submodules.skyline_reports as skyline_reports
 
 
-class TestDetectDelim(unittest.TestCase):
+class TestDetectDelim(unittest.TestCase, AbstractTestsBase):
     def setUp(self):
         self.data = pd.DataFrame(data={'a':['x'], 'b':['y'], 'c':[0.1], 'd':[1]})
-
-
-    @unittest.expectedFailure
-    def test_pd_assertion(self):
-        df = pd.DataFrame(data={'a':['x'], 'b':['y'], 'c':[0.1], 'd':[0]})
-        assert_frame_equal(self.data, df)
 
 
     def do_tests(self, test_string, expected_delim):
@@ -31,7 +24,7 @@ class TestDetectDelim(unittest.TestCase):
 
         # make sure df is as expected
         test_file_stream.seek(0)
-        assert_frame_equal(self.data, pd.read_csv(test_file_stream, sep=delim))
+        self.assertDataFrameEqual(self.data, pd.read_csv(test_file_stream, sep=delim))
 
 
     def test_tsv(self):

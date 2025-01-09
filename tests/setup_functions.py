@@ -4,6 +4,7 @@ import subprocess
 from shlex import join as join_shell
 import inspect
 from abc import ABC, abstractmethod
+from pandas.testing import assert_frame_equal
 
 from numpy import isnan
 
@@ -74,6 +75,15 @@ class AbstractTestsBase(ABC):
     @abstractmethod
     def assertNoLogs(self, logger, level=None):
         pass
+
+
+    @abstractmethod
+    def failureException(self, msg):
+        pass
+
+
+    def assertDataFrameEqual(self, a, b, **kwargs):
+        assert_frame_equal(a, b, **kwargs)
 
 
     def assertDataDictEqual(self, lhs, rhs, places=6, col_deltas=None):
