@@ -2,8 +2,8 @@
 import unittest
 import os
 import sqlite3
-import pandas as pd
 import random
+import pandas as pd
 
 import setup_functions
 
@@ -33,9 +33,8 @@ def create_missing_values(df, key_cols,
 
     random.seed(seed)
     df_s = df.copy()
-    df_s = df_s.groupby(key_cols).apply(add_nas, include_groups=False)
-    return df_s.reset_index()
-
+    df_s['area'] = df_s.groupby(key_cols).apply(add_nas, include_groups=False).reset_index(drop=True)['area']
+    return df_s
 
 
 class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
@@ -61,12 +60,12 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
 
         df = create_missing_values(self.df, ['modifiedSequence', 'precursorCharge'],
                                    value_col='area', seed=1,
-                                   min_missing=1, max_missing=len(replicates) - 1)
+                                   min_missing=0, max_missing=len(replicates) - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
 
         df_i = imputation.knn_impute_df(df, ['modifiedSequence', 'precursorCharge'],
-                                        'area', replicate_col='replicate', missing_threshold=None)
+                                        'area', replicate_col='replicate', max_missing=None)
 
         df_i = df_i.set_index(['replicate', 'modifiedSequence', 'precursorCharge'])
         df = df.set_index(['replicate', 'modifiedSequence', 'precursorCharge'])
@@ -81,7 +80,36 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
 
 
     def test_threshold_NAs_skipped(self):
-        pass
+        replicates = self.df['replicate'].drop_duplicates().to_list()
+
+        key_cols = ['modifiedSequence', 'precursorCharge']
+
+        df = create_missing_values(self.df, key_cols,
+                                   value_col='area', seed=1,
+                                   min_missing=0, max_missing=len(replicates) - 1)
+
+        self.assertTrue(any(pd.isna(df['area'])))
+
+        for t in range(1, len(replicates)):
+            df_i = imputation.knn_impute_df(df, key_cols, 'area',
+                                            replicate_col='replicate', max_missing=t)
+
+            df_i = df_i.set_index(['replicate'] + key_cols)
+            df_j = df.set_index(['replicate'] + key_cols)
+            df_j = df_j.join(df_i, rsuffix='_imputed')
+
+            for _, group in df_j.groupby(key_cols):
+                self.assertEqual(group.shape[0], len(replicates))
+                n_na = sum(group['area'].isna())
+
+                if n_na == 0:
+                    self.assertFalse(any(group['isImputed']))
+                    self.assertTrue(all(group['area'] == group['area_imputed']))
+                elif n_na >= t:
+                    self.assertFalse(any(group['isImputed']))
+                    self.assertEqual(sum(group['area_imputed'].isna()), n_na)
+                else:
+                    self.assertFalse(any(group['area_imputed'].isna()))
 
 
 class TestImputationBase(setup_functions.AbstractTestsBase):
