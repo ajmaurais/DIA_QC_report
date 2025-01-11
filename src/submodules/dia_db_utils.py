@@ -374,6 +374,16 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     return True
 
 
+def _quiet_log_info(quiet, *args):
+    if not quiet:
+        LOGGER.info(*args)
+
+
+def _quiet_log_warning(quiet, *args):
+    if not quiet:
+        LOGGER.warning(*args)
+
+
 def mark_all_reps_included(conn, quiet=False):
     '''
     Set all replicates.includeRep values to TRUE and update replicates.acquiredRank if necissary.
@@ -383,14 +393,47 @@ def mark_all_reps_included(conn, quiet=False):
     include_rep_counts = Counter({x[0]: x[1] for x in cur.fetchall()})
 
     if 0 in include_rep_counts:
-        if not quiet:
-            LOGGER.info('Setting %i includeRep values to TRUE.', include_rep_counts[0])
+        _quiet_log_info(quiet, 'Setting %i includeRep values to TRUE.', include_rep_counts[0])
         cur.execute('UPDATE replicates SET includeRep = TRUE;')
         conn.commit()
         conn = update_acquired_ranks(conn)
     else:
-        if not quiet:
-            LOGGER.warning('All replicates are already included.')
+        _quiet_log_warning(quiet, 'All replicates are already included.')
+
+
+def reset_imputed_values(conn, proteins=True, precursors=True, quiet=False):
+    '''
+    Reset all imputed precursor and/or protein quantities to NA.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection
+    precursors: bool
+        Reset imputed precursor totalAreaFragment and normalizedArea?
+        Default is True.
+    proteins: bool
+        Reset imputed protein abundance and normalizedAbundance?
+        Default is True.
+    quiet: bool
+        Don't print to log? Default is False.
+    '''
+    if precursors:
+        _quiet_log_info(quiet, 'Setting imputed precursor quantities to NULL.')
+        cur = conn.cursor()
+        cur.execute(''' UPDATE precursors
+                        SET totalAreaFragment = NULL, normalizedArea = NULL
+                        WHERE isImputed == 1; ''')
+        cur.execute('UPDATE precursors SET isImputed = 0')
+        conn.commit()
+
+    if proteins:
+        _quiet_log_info(quiet, 'Setting imputed protein quantities to NULL.')
+        cur = conn.cursor()
+        cur.execute(''' UPDATE proteinQuants
+                        SET abundance = NULL, normalizedAbundance = NULL
+                        WHERE isImputed == 1; ''')
+        cur.execute('UPDATE proteinQuants SET isImputed = 0')
+        conn.commit()
 
 
 def read_wide_metadata(conn, meta_vars=None, read_all=True):

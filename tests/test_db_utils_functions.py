@@ -529,5 +529,16 @@ class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase)
                                      self.subset_data_dict(self.metadata_dict, sele))
 
 
-if __name__ == '__main__':
-    unittest.main()
+class TestResetImputedValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        pass
+
+    def test_proteins(self):
+        pass
+
+    def test_precursors(self):
+        pass
+
+    def test_all(self):
+        pass
