@@ -123,7 +123,8 @@ class ImputationManagerBase(TransformationManagerBase):
 
 
 def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
-                  is_imputed_col='isImputed', max_missing=None, **kwargs):
+                  is_imputed_col='isImputed', max_missing=None,
+                  n_neighbors=5, weights='uniform'):
     '''
     KNN impute peak areas in a long formated dataframe.
 
@@ -145,8 +146,10 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
     max_missing: int
         Maximum number of missing values; above which imputation is skipped.
         If None, no threshold is used. Default is None.
-    **kwargs: dict
-        Additional kwargs passed to sklearn.impute.KNNImputer.
+    n_neighbors: int
+        n_neighbors passed to sklearn.impute.KNNImputer. Default is 5
+    weights: int
+        weights passed to sklearn.impute.KNNImputer. Default is 'uniform'
     '''
 
     imputed_value_col = cammel_case('imputed', value_col)
@@ -166,9 +169,14 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
         mask = df_w.apply(lambda x: pd.isna(x).sum(), axis=1) < max_missing
         df_w = df_w[mask]
 
-    # impute missing values
-    imputer = skl_KNNImputer(**kwargs)
+    # transpose so peptides are columns
     df_w = df_w.T
+
+    # impute missing values
+    imputer = skl_KNNImputer(n_neighbors=n_neighbors, weights=weights,
+                             keep_empty_features=True)
+    df_w = df_w.T
+
     df_i = pd.DataFrame(imputer.fit_transform(df_w), columns=df_w.columns, index=df_w.index)
     df_i = df_i.T
     df_i = df_i.melt(value_name=imputed_value_col, ignore_index=False).reset_index()
@@ -211,17 +219,19 @@ class KNNImputer(ImputationManagerBase):
 
     def impute(self):
         if self.impute_data in ('precursors', 'both'):
-            replicates = self.precursors['replicateId'].drop_duplicates().to_list()
             if not self._read_precursors():
                 return False
+            replicates = self.precursors['replicateId'].drop_duplicates().to_list()
             self.precursors = knn_impute_df(self.precursors, ['peptideId', 'precursorCharge'], 'area',
                                             max_missing=int(len(replicates) * self.missing_threshold),
                                             n_neighbors=self.n_neighbors)
 
         if self.impute_data in ('proteins', 'both'):
-            replicates = self.proteins['replicateId'].drop_duplicates().to_list()
             if not self._read_proteins():
                 return False
+            replicates = self.proteins['replicateId'].drop_duplicates().to_list()
             self.proteins = knn_impute_df(self.proteins, ['proteinId'], 'abundance',
                                           max_missing=int(len(replicates) * self.missing_threshold),
                                           n_neighbors=self.n_neighbors)
+
+        return True

@@ -56,41 +56,42 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
 
 
     def test_imputed_values_set(self):
-        replicates = self.df['replicate'].drop_duplicates().to_list()
+        n_reps = len(self.df['replicate'].drop_duplicates())
+        key_cols = ['modifiedSequence', 'precursorCharge']
 
-        df = create_missing_values(self.df, ['modifiedSequence', 'precursorCharge'],
+        df = create_missing_values(self.df, key_cols,
                                    value_col='area', seed=1,
-                                   min_missing=0, max_missing=len(replicates) - 1)
+                                   min_missing=0, max_missing=n_reps - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
 
-        df_i = imputation.knn_impute_df(df, ['modifiedSequence', 'precursorCharge'],
-                                        'area', replicate_col='replicate', max_missing=None)
+        df_i = imputation.knn_impute_df(df, key_cols, 'area',
+                                        replicate_col='replicate', max_missing=None)
 
-        df_i = df_i.set_index(['replicate', 'modifiedSequence', 'precursorCharge'])
-        df = df.set_index(['replicate', 'modifiedSequence', 'precursorCharge'])
+        df_i = df_i.set_index(['replicate'] + key_cols)
+        df = df.set_index(['replicate'] + key_cols)
         df_j = df.join(df_i, rsuffix='_imputed')
 
-        for row in df_j.itertuples():
-            if pd.isna(row.area):
-                self.assertTrue(row.isImputed)
-                self.assertFalse(pd.isna(row.area_imputed))
+        for _, group in df_j.groupby(key_cols):
+            if any(group['area'].isna()):
+                self.assertTrue(all(group['isImputed'] == group['area'].isna()))
+                self.assertFalse(any(group['area_imputed'].isna()))
             else:
-                self.assertFalse(row.isImputed)
+                self.assertFalse(any(group['isImputed']))
 
 
     def test_threshold_NAs_skipped(self):
-        replicates = self.df['replicate'].drop_duplicates().to_list()
+        n_reps = len(self.df['replicate'].drop_duplicates())
 
         key_cols = ['modifiedSequence', 'precursorCharge']
 
         df = create_missing_values(self.df, key_cols,
                                    value_col='area', seed=1,
-                                   min_missing=0, max_missing=len(replicates) - 1)
+                                   min_missing=0, max_missing=n_reps - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
 
-        for t in range(1, len(replicates)):
+        for t in range(1, n_reps):
             df_i = imputation.knn_impute_df(df, key_cols, 'area',
                                             replicate_col='replicate', max_missing=t)
 
@@ -99,7 +100,7 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
             df_j = df_j.join(df_i, rsuffix='_imputed')
 
             for _, group in df_j.groupby(key_cols):
-                self.assertEqual(group.shape[0], len(replicates))
+                self.assertEqual(group.shape[0], n_reps)
                 n_na = sum(group['area'].isna())
 
                 if n_na == 0:
@@ -117,7 +118,6 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
         self.work_dir = None
         self.db_path = None
         self.data_dir = None
-        self.parse_result = None
         self.conn = None
 
 
@@ -134,22 +134,89 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
             imputation.ImputationManagerBase(self.conn)
 
 
+    def do_level_test(self, level, df_precursor, df_protein):
+        manager = imputation.KNNImputer(self.conn, level=level)
+        with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+            self.assertTrue(manager.impute())
+
+        db_pre = manager.precursors
+        db_pre = db_pre[~db_pre['isImputed']]
+        db_pre = db_pre.set_index(df_precursor.index.names)
+
+        db_pro = manager.proteins
+        db_pro = db_pro[~db_pro['isImputed']]
+        db_pro = db_pro.set_index(df_protein.index.names)
+
+        db_pre = db_pre.join(df_precursor)
+        db_pro = db_pro.join(df_protein)
+
+        self.assertSeriesEqual(db_pre['area'],
+                               db_pre['quant' if level == 0 else 'normQuant'],
+                               check_names=False, check_exact=True)
+        self.assertSeriesEqual(db_pro['abundance'],
+                               db_pro['quant' if level == 0 else 'normQuant'],
+                               check_names=False, check_exact=True)
+
+
+    def test_imputation_level(self):
+        self.assertIsNotNone(self.conn)
+
+        df_pre = pd.read_sql('''SELECT replicateId, peptideId, precursorCharge,
+                                totalAreaFragment as quant, normalizedArea as normQuant
+                                FROM precursors;''', self.conn)
+        df_pre = df_pre.set_index(['replicateId', 'peptideId', 'precursorCharge'])
+
+        df_pro = pd.read_sql('''SELECT replicateId, proteinId,
+                                abundance as quant, normalizedAbundance as normQuant
+                                FROM proteinQuants;''', self.conn)
+        df_pro = df_pro.set_index(['replicateId', 'proteinId'])
+
+        self.do_level_test(0, df_pre, df_pro)
+        self.do_level_test(1, df_pre, df_pro)
+
+
+    def test_all_reps_skipped(self):
+        self.assertIsNotNone(self.conn)
+
+        manager = imputation.KNNImputer(self.conn)
+        try:
+            cur = self.conn.cursor()
+            cur.execute('UPDATE replicates SET includeRep = FALSE;')
+            self.conn.commit()
+
+            with self.assertLogs(imputation.LOGGER, level='ERROR') as cm:
+                self.assertFalse(manager._read_precursors())
+            self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
+
+            with self.assertLogs(imputation.LOGGER, level='ERROR') as cm:
+                self.assertFalse(manager.impute())
+            self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
+
+        finally:
+            db_utils.mark_all_reps_included(self.conn, quiet=True)
+
+
 class TestSingleImputation(unittest.TestCase, TestImputationBase):
     TEST_PROJECT = 'Sp3'
 
     @classmethod
     def setUpClass(cls):
-        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions/'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions_single/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
-                                                           cls.work_dir,
-                                                           cls.TEST_PROJECT,
-                                                           clear_dir=True)
+        parse_result = setup_functions.setup_single_db(cls.data_dir,
+                                                       cls.work_dir,
+                                                       cls.TEST_PROJECT,
+                                                       clear_dir=True)
+
+        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
+        normalize_result = setup_functions.run_command(normalize_command,
+                                                       cls.work_dir,
+                                                       prefix='normalize')
 
         cls.conn = None
-        if cls.parse_result.returncode == 0:
+        if normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
                 cls.conn = sqlite3.connect(cls.db_path)
 
