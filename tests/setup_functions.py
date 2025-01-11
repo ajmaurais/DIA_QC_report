@@ -4,7 +4,7 @@ import subprocess
 from shlex import join as join_shell
 import inspect
 from abc import ABC, abstractmethod
-from pandas.testing import assert_frame_equal
+from pandas import testing as pd_testing
 
 from numpy import isnan
 
@@ -78,12 +78,22 @@ class AbstractTestsBase(ABC):
 
 
     @abstractmethod
-    def failureException(self, msg):
+    def fail(self, msg):
         pass
 
 
     def assertDataFrameEqual(self, a, b, **kwargs):
-        assert_frame_equal(a, b, **kwargs)
+        try:
+            pd_testing.assert_frame_equal(a, b, **kwargs)
+        except AssertionError as e:
+            self.fail(str(e))
+
+
+    def assertSeriesEqual(self, a, b, **kwargs):
+        try:
+            pd_testing.assert_series_equal(a, b, **kwargs)
+        except AssertionError as e:
+            self.fail(str(e))
 
 
     def assertDataDictEqual(self, lhs, rhs, places=6, col_deltas=None):
@@ -209,9 +219,13 @@ def setup_single_db(data_dir, output_dir, project,
 
 
 def setup_multi_db(data_dir, output_dir,
-                   group_by_gene=False, clear_dir=False, metadata_suffix='_metadata.tsv'):
+                   group_by_gene=False, clear_dir=False,
+                   normalize=False,
+                   metadata_suffix='_metadata.tsv'):
     make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
+
+    db_path = f'{output_dir}/data.db3'
 
     commands = [['dia_qc', 'parse', '--projectName=Sp3',
                  '-m', f'{data_dir}/metadata/Sp3{metadata_suffix}',
@@ -222,7 +236,7 @@ def setup_multi_db(data_dir, output_dir,
                  f'{data_dir}/skyline_reports/Strap_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Strap_{grouping}_precursor_quality.tsv']]
 
-    if os.path.isfile(f'{output_dir}/data.db3'):
+    if os.path.isfile(db_path):
         commands[0].insert(2, '--overwriteMode=overwrite')
 
     if group_by_gene:
@@ -232,6 +246,10 @@ def setup_multi_db(data_dir, output_dir,
     results = list()
     for i, command in enumerate(commands):
         results.append(run_command(command, output_dir, prefix=f'add_project_{i}'))
+
+    if normalize:
+        normalize_command = ['dia_qc', 'normalize', '-m=median', db_path]
+        results.append(run_command(normalize_command, output_dir, prefix='normalize_db'))
 
     return results
 

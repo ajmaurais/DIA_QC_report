@@ -1,6 +1,5 @@
 
 import unittest
-from unittest import mock
 import os
 import sqlite3
 from collections import Counter
@@ -115,7 +114,6 @@ class TestNormalizationBase(setup_functions.AbstractTestsBase):
         self.assertEqual(precursors.shape[1], 8)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_all_reps_skipped(self):
         self.assertIsNotNone(self.conn)
 
@@ -135,7 +133,7 @@ class TestNormalizationBase(setup_functions.AbstractTestsBase):
             self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
 
         finally:
-            db_utils.mark_all_reps_included(self.conn)
+            db_utils.mark_all_reps_included(self.conn, quiet=True)
 
 
 class TestSingleNormalization(unittest.TestCase, TestNormalizationBase):

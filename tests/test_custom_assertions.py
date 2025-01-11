@@ -80,7 +80,7 @@ class TestCustomAssertion(unittest.TestCase, AbstractTestsBase):
         self.assertDataDictEqual(self.gt_data, test_data)
 
 
-class TestDataFrameEqual(unittest.TestCase, AbstractTestsBase):
+class TestPandasAssertions(unittest.TestCase, AbstractTestsBase):
     def setUp(self):
         self.df = pd.DataFrame(data={'a':['x'], 'b':['y'], 'c':[0.1], 'd':[0]})
 
@@ -94,3 +94,15 @@ class TestDataFrameEqual(unittest.TestCase, AbstractTestsBase):
     def test_assert_frame_equal(self):
         rhs = self.df.copy()
         self.assertDataFrameEqual(self.df, rhs)
+
+
+    @unittest.expectedFailure
+    def test_assert_series_equal_fails(self):
+        rhs = self.df.copy()
+        rhs['a'] = 0
+        self.assertSeriesEqual(self.df['a'], rhs['a'])
+
+
+    def test_assert_series_equal(self):
+        rhs = self.df.copy()
+        self.assertSeriesEqual(self.df['a'], rhs['a'])

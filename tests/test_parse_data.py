@@ -376,7 +376,7 @@ class TestMultiProjectStepped(unittest.TestCase):
     def test_peptideToProtein(self):
         '''
         Test that no new peptide to protein mappings are added
-        when skyline documents have different protein parsimpny settings.
+        when skyline documents have different protein parsimony settings.
         '''
 
         # setup variables
@@ -417,6 +417,7 @@ class TestMultiProjectStepped(unittest.TestCase):
                    '-m', f'{self.DATA_DIR}/metadata/{self.PROJECT_2}_metadata.tsv',
                    f'{self.DATA_DIR}/skyline_reports/{self.PROJECT_2}_replicate_quality.tsv',
                    f'{self.DATA_DIR}/invalid_reports/{self.PROJECT_2}_by_protein_not_minimal_precursor_quality.tsv']
+        # add PROJECT_2
         second_result = setup_functions.run_command(command, work_dir, prefix='add_project_2')
         self.assertEqual(second_result.returncode, 0)
 
@@ -493,12 +494,22 @@ class TestMultiProjectStepped(unittest.TestCase):
             self.assertDictEqual(gene_groups[project], db_gene_groups)
 
         # make sure make_gene_matrix fails if grouped by protein
-        conn = db_utils.update_meta_value(conn, 'group_precursors_by', 'protein')
-        bad_matrix_result = setup_functions.run_command(['dia_qc', 'export_gene_matrix', gene_id_path, db_path],
-                                                        work_dir, prefix='failed_matrix')
-        self.assertEqual(bad_matrix_result.returncode, 1)
-        self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)
-        conn = db_utils.update_meta_value(conn, 'group_precursors_by', 'gene')
+        try:
+            conn = db_utils.update_meta_value(conn, 'group_precursors_by', 'protein')
+            bad_matrix_result = setup_functions.run_command(['dia_qc', 'export_gene_matrix', gene_id_path, db_path],
+                                                            work_dir, prefix='failed_matrix')
+            self.assertEqual(bad_matrix_result.returncode, 1)
+            self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)
+        finally:
+            conn = db_utils.update_meta_value(conn, 'group_precursors_by', 'gene')
+
+
+    def test_imputed_set_to_na(self):
+        '''
+        Test that all imputed protein and precursor quantities are set to NA
+        when a new project is added.
+        '''
+        pass
 
 
 class TestDuplicatePrecursorsOption(unittest.TestCase):
