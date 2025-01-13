@@ -22,12 +22,30 @@ def create_missing_values(df, key_cols,
     ----------
     df: pd.DataFrame
         A long formated dataframe with peptide/protein quantities
-    key_cols:
+    key_cols: list
+        A list of key columns which uniquely identify each peptide or protein
+    replicate_col: str
+        The name of the replicate colum.
+    value_col: str
+        The name of the value column.
+    min_missing: int
+        Mininum number of missing values.
+    max_missing: int
+        Maximum number of missing values.
+    seed: int
+        The seed for the random number generator.
+
+    Returns
+    -------
+    df_na: pd.DataFrame
+        A long formated dataframe the same shape as `df` with random values in
+        `value_col` set to pd.NA.
     '''
     replicates = df['replicate'].drop_duplicates().to_list()
 
     def add_nas(d):
-        subset = set(random.sample(replicates, random.randint(min_missing, max_missing)))
+        n = random.randint(min_missing, max_missing)
+        subset = set(random.sample(replicates, n))
         d.loc[d[replicate_col].apply(lambda x: x in subset), value_col] = pd.NA
         return d.reset_index(drop=True)
 
@@ -38,16 +56,18 @@ def create_missing_values(df, key_cols,
 
 
 class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
+    PRECURSOR_KEY_COLS = ['modifiedSequence', 'precursorCharge']
     def setUp(self):
         fname = f'{setup_functions.TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality.csv'
         df = PrecursorReport(quiet=True).read_report(fname)
-        df = df[['replicateName', 'modifiedSequence', 'precursorCharge', 'totalAreaFragment']].drop_duplicates()
+        df = df[self.PRECURSOR_KEY_COLS + ['replicateName', 'totalAreaFragment']].drop_duplicates()
         self.df = df.rename(columns={'replicateName': 'replicate', 'totalAreaFragment': 'area'})
+        self.n_reps = len(self.df['replicate'].drop_duplicates())
 
 
     def test_no_imputation_when_no_missing(self):
         df = self.df.copy()
-        df = imputation.knn_impute_df(df, ['modifiedSequence', 'precursorCharge'],
+        df = imputation.knn_impute_df(df, self.PRECURSOR_KEY_COLS,
                                       'area', replicate_col='replicate')
         self.assertTrue(all(~df['isImputed']))
         df = df.drop(columns=['isImputed'])
@@ -55,13 +75,26 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
         self.assertDataFrameEqual(self.df, df[self.df.columns.to_list()])
 
 
+    def test_create_missing_values(self):
+        key_cols = self.PRECURSOR_KEY_COLS
+
+        tests = [(1, self.n_reps - 1), (0, self.n_reps - 1), (5, 5), (5, self.n_reps - 1)]
+        for i, test in enumerate(tests):
+            df = create_missing_values(self.df, self.PRECURSOR_KEY_COLS,
+                                       value_col='area', seed=i,
+                                       min_missing=test[0], max_missing=test[1])
+            n_nas = df.groupby(key_cols)['area'].apply(lambda x: x.isna().sum())
+
+            self.assertGreaterEqual(min(n_nas), test[0])
+            self.assertLessEqual(max(n_nas), test[1])
+
+
     def test_imputed_values_set(self):
-        n_reps = len(self.df['replicate'].drop_duplicates())
-        key_cols = ['modifiedSequence', 'precursorCharge']
+        key_cols = self.PRECURSOR_KEY_COLS
 
         df = create_missing_values(self.df, key_cols,
                                    value_col='area', seed=1,
-                                   min_missing=0, max_missing=n_reps - 1)
+                                   min_missing=0, max_missing=self.n_reps - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
 
@@ -81,17 +114,15 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
 
 
     def test_threshold_NAs_skipped(self):
-        n_reps = len(self.df['replicate'].drop_duplicates())
-
-        key_cols = ['modifiedSequence', 'precursorCharge']
+        key_cols = self.PRECURSOR_KEY_COLS
 
         df = create_missing_values(self.df, key_cols,
                                    value_col='area', seed=1,
-                                   min_missing=0, max_missing=n_reps - 1)
+                                   min_missing=0, max_missing=self.n_reps - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
 
-        for t in range(1, n_reps):
+        for t in range(1, self.n_reps):
             df_i = imputation.knn_impute_df(df, key_cols, 'area',
                                             replicate_col='replicate', max_missing=t)
 
@@ -100,7 +131,7 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
             df_j = df_j.join(df_i, rsuffix='_imputed')
 
             for _, group in df_j.groupby(key_cols):
-                self.assertEqual(group.shape[0], n_reps)
+                self.assertEqual(group.shape[0], self.n_reps)
                 n_na = sum(group['area'].isna())
 
                 if n_na == 0:
@@ -127,11 +158,105 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
             cls.conn.close()
 
 
+    @staticmethod
+    def set_random_nulls(conn, min_missing=0, max_missing=1, seed=1):
+        '''
+        Set quantities for random precursors and proteins in conn to NA.
+
+        Parameters
+        ----------
+        conn: sqlite3.Connection
+            A connection to a batch database.
+        min_missing: int
+            Mininum number of missing values.
+        max_missing: int
+            Maximum number of missing values.
+        seed: int
+            The seed for the random number generator.
+        '''
+        random.seed(seed)
+
+        cur = conn.cursor()
+        cur.execute('SELECT replicateId, peptideId, precursorCharge FROM precursors;')
+        precursors = dict()
+        for rep, peptide, charge in cur.fetchall():
+            p = (peptide, charge)
+            if p not in precursors:
+                precursors[p] = list()
+            precursors[p].append(rep)
+
+        precursor_nas = list()
+        for precursor, reps in precursors.items():
+            n = len(reps) - random.randint(min_missing, max_missing)
+            for r in random.sample(reps, n):
+                precursor_nas.append((r, precursor[0], precursor[1]))
+
+        cur.executemany('''
+            UPDATE precursors
+                SET totalAreaFragment = NULL, normalizedArea = NULL
+            WHERE replicateId = ? AND
+                  peptideId = ? AND
+                  precursorCharge = ? ;''',
+                        precursor_nas)
+        conn.commit()
+
+        df_pre = pd.read_sql('''
+            SELECT
+                p.replicateId, ptp.proteinId, p.peptideId, p.precursorCharge, p.totalAreaFragment as area
+            FROM precursors p
+            LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', conn)
+
+        df_prot = df_pre.groupby(['replicateId', 'proteinId'])['area'].sum(min_count=1).reset_index()
+
+        protein_nas = [(row.replicateId, row.proteinId)
+                       for row in df_prot[df_prot['area'].isna()].itertuples()]
+
+        cur = conn.cursor()
+        cur.executemany('''
+            UPDATE proteinQuants
+                SET abundance = NULL, normalizedAbundance = NULL
+            WHERE replicateId = ? AND
+                  proteinId = ? ;''',
+                        protein_nas)
+        conn.commit()
+
+
     def test_abc_instantiation_fails(self):
         self.assertIsNotNone(self.conn)
 
         with self.assertRaises(TypeError):
             imputation.ImputationManagerBase(self.conn)
+
+
+    def test_db_has_missing_values(self):
+        '''
+        Test that test database was initialized properly.
+        There should be missing precursor and protein quantities.
+        '''
+        self.assertIsNotNone(self.conn)
+
+        df_pre = pd.read_sql('''
+            SELECT
+                p.replicateId, ptp.proteinId, p.peptideId, p.precursorCharge, p.totalAreaFragment as area
+            FROM precursors p
+            LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', self.conn)
+
+        protein_keys = ['replicateId', 'proteinId']
+        na_precursors = df_pre.groupby(protein_keys)['area'].apply(lambda x: all(pd.isna(x)))
+        na_precursors.name = 'all_na'
+        self.assertTrue(any(na_precursors))
+
+        df_prot = pd.read_sql('''
+            SELECT
+                q.replicateId, q.proteinId, q.abundance
+            FROM proteinQuants q; ''', self.conn)
+
+        self.assertTrue(any(df_prot['abundance'].isna()))
+
+        df_prot = df_prot.set_index(protein_keys).join(na_precursors)
+        self.assertFalse(any(df_prot['all_na'].isna()))
+        self.assertSeriesEqual(df_prot['all_na'], df_prot['abundance'].isna(),
+                               check_names=False)
 
 
     def do_level_test(self, level, df_precursor, df_protein):
@@ -210,12 +335,27 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
                                                        cls.TEST_PROJECT,
                                                        clear_dir=True)
 
-        normalize_command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
+        cls.conn = None
+        if parse_result.returncode == 0:
+            if os.path.isfile(cls.db_path):
+                conn = sqlite3.connect(cls.db_path)
+
+                cur = conn.cursor()
+                cur.execute('SELECT id FROM replicates;')
+                n_reps = len(cur.fetchall())
+
+                # set db quantities randomly to NULL
+                TestImputationBase.set_random_nulls(conn, min_missing=0, max_missing=n_reps - 1)
+                conn.close()
+
+        else:
+            return
+
+        normalize_command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
         normalize_result = setup_functions.run_command(normalize_command,
                                                        cls.work_dir,
                                                        prefix='normalize')
 
-        cls.conn = None
         if normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
                 cls.conn = sqlite3.connect(cls.db_path)

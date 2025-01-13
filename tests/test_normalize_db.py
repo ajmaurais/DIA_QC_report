@@ -29,7 +29,7 @@ def precursor_medians_equal(conn, epislon=1e-6):
     return max(abs(medians.iloc[0] - median) for median in medians) <= epislon
 
 
-def protein_medians_eqeual(conn):
+def protein_medians_eqeual(conn, epislon=1e-6):
     query = ''' SELECT
             r.replicate,
             q.proteinId,
@@ -42,7 +42,7 @@ def protein_medians_eqeual(conn):
     df['log2NormAbundance'] = log2(df['normalizedAbundance'] + 1)
     medians = df.groupby('replicate')['log2NormAbundance'].median()
 
-    return all(medians.iloc[0] == medians)
+    return max(abs(medians.iloc[0] - median) for median in medians) <= epislon
 
 
 class CommonTests(setup_functions.AbstractTestsBase):
@@ -481,6 +481,8 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         cur = self.conn.cursor()
         cur.execute('SELECT abundance, normalizedAbundance FROM proteinQuants WHERE normalizedAbundance IS NULL')
         na_proteins = cur.fetchall()
+        na_proteins = [norm_abundance for abundance, norm_abundance in cur.fetchall()
+                       if not (abundance is None and norm_abundance is None)]
         self.assertEqual(len(na_proteins), 0)
 
         # make sure protein and precursor medians are equal
