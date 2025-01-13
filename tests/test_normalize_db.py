@@ -152,6 +152,74 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
         self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
 
 
+class TestMedianDiaNN(unittest.TestCase, CommonTests):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalize_db_median_DiaNN_keep_missing'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        cls.precursor_method = 'median'
+        cls.protein_method = 'median'
+
+        # set up test db
+        setup_functions.make_work_dir(cls.work_dir, True)
+        parse_command = ['dia_qc', 'parse', '--projectName=Sp3',
+                         '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
+                         f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
+                         f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
+        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        cls.command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
+        cls.normalize_result = setup_functions.run_command(cls.command, cls.work_dir,
+                                                           prefix='normalize')
+
+        cls.conn = None
+        if cls.normalize_result.returncode == 0:
+            if os.path.isfile(cls.db_path):
+                cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_NAs_empty(self):
+        '''
+        Test that a protein's quantity is NULL when all its precursor quantities are NULL.
+        '''
+        self.assertIsNotNone(self.conn)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        df_pre = pd.read_sql('''
+            SELECT
+                p.replicateId, ptp.proteinId, p.peptideId, p.precursorCharge,
+                p.totalAreaFragment as area, p.normalizedArea
+            FROM precursors p
+            LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', self.conn)
+
+        self.assertSeriesEqual(df_pre['area'].isna(), df_pre['normalizedArea'].isna(),
+                               check_names=False)
+
+        protein_keys = ['replicateId', 'proteinId']
+        na_precursors = df_pre.groupby(protein_keys)['area'].apply(lambda x: all(pd.isna(x)))
+        na_precursors.name = 'all_na'
+
+        df_prot = pd.read_sql('''
+            SELECT
+                q.replicateId, q.proteinId, q.abundance, q.normalizedAbundance
+            FROM proteinQuants q
+            LEFT JOIN proteins prot ON prot.proteinId == q.proteinId;''', self.conn)
+
+        self.assertSeriesEqual(df_prot['abundance'].isna(),
+                               df_prot['normalizedAbundance'].isna(),
+                               check_names=False)
+
+        df_prot = df_prot.set_index(protein_keys).join(na_precursors)
+        self.assertFalse(any(df_prot['all_na'].isna()))
+        self.assertSeriesEqual(df_prot['all_na'], df_prot['abundance'].isna(),
+                               check_names=False)
+
+
 class TestMultiProject(CommonTests):
     @classmethod
     def run_commands(cls):

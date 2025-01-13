@@ -86,9 +86,9 @@ def _main(args):
     cur.executemany('''
                     UPDATE precursors
                         SET normalizedArea = ?
-                    WHERE replicateId = ? AND
-                          peptideId = ? AND
-                          precursorCharge = ? ;''',
+                    WHERE replicateId == ? AND
+                          peptideId == ? AND
+                          precursorCharge == ? ;''',
                     prec_data)
     conn.commit()
     LOGGER.info('Done updating precursor normalizedArea values.')

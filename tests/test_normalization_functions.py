@@ -165,6 +165,61 @@ class TestSingleNormalization(unittest.TestCase, TestNormalizationBase):
             self.assertTrue(manager._read_precursors())
 
 
+class TestMedianDiaNN(unittest.TestCase, TestNormalizationBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_normalization_functions_DiaNN'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        # set up test db
+        setup_functions.make_work_dir(cls.work_dir, True)
+        parse_command = ['dia_qc', 'parse', '--projectName=Sp3',
+                         '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
+                         f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
+                         f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
+        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
+
+        cls.conn = None
+        if cls.parse_result.returncode == 0:
+            if os.path.isfile(cls.db_path):
+                cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_na_precursors(self):
+        self.assertIsNotNone(self.conn)
+
+        manager = normalization.MedianNormalizer(self.conn, keep_na=True)
+
+        with self.assertNoLogs(normalization.LOGGER, level='WARNING') as cm:
+            manager.normalize()
+
+        df_pre = manager.precursors.copy()
+        self.assertSeriesEqual(df_pre['area'].isna(), df_pre['normalizedArea'].isna(),
+                               check_names=False)
+
+        # add proteinID column back to precursor df
+        df_ptp = pd.read_sql('SELECT peptideId, proteinId FROM peptideToProtein;', self.conn)
+        df_pre = df_pre.set_index('peptideId')
+        df_ptp = df_ptp.set_index('peptideId')
+        df_pre = df_pre.join(df_ptp).reset_index()
+
+        protein_keys = ['replicateId', 'proteinId']
+        df_pre = df_pre.set_index(protein_keys)
+        na_precursors = df_pre.groupby(protein_keys)['area'].apply(lambda x: all(pd.isna(x)))
+        na_precursors.name = 'all_na'
+
+        df_prot = manager.proteins.copy()
+        self.assertSeriesEqual(df_prot['abundance'].isna(),
+                               df_prot['normalizedAbundance'].isna(),
+                               check_names=False)
+
+        df_prot = df_prot.set_index(protein_keys).join(na_precursors)
+        self.assertFalse(any(df_prot['all_na'].isna()))
+        self.assertSeriesEqual(df_prot['all_na'], df_prot['abundance'].isna(),
+                               check_names=False)
+
+
 class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
     TEST_PROJECT = 'GPF'
 

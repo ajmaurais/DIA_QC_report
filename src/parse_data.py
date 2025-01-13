@@ -232,7 +232,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         initial_peptide_id = 0
 
     if protein_quants is None:
-        protein_quants = precursors.groupby(['replicateName', 'proteinName'])['totalAreaFragment'].sum().reset_index()
+        protein_quants = precursors.groupby(['replicateName', 'proteinName'])['totalAreaFragment'].sum(min_count=1).reset_index()
         protein_quants = protein_quants.rename(columns={'proteinName': 'name',
                                                         'totalAreaFragment': 'abundance'})
 

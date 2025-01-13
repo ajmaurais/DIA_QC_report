@@ -673,5 +673,72 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
                 self.assertAlmostEqual(data[precursor][rep], db_data[precursor][rep])
 
 
-if __name__ == '__main__':
-    unittest.main()
+class TestDiaNN(unittest.TestCase, setup_functions.AbstractTestsBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_parse_DiaNN'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        # set up test db
+        setup_functions.make_work_dir(cls.work_dir, True)
+        parse_command = ['dia_qc', 'parse', '--projectName=Sp3',
+                         '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
+                         f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
+                         f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
+        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
+
+        if cls.parse_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+        cls.conn = None
+        if cls.parse_result.returncode == 0 and os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_all_normalized_NA(self):
+        '''
+        Test that all normalized protein and precursor quantities are NULL,
+        which they should be at this point.
+        '''
+        self.assertIsNotNone(self.conn)
+        self.assertFalse(db_utils.is_normalized(self.conn))
+
+        df_pre = pd.read_sql('''
+            SELECT
+                p.replicateId, p.peptideId, p.precursorCharge, p.normalizedArea
+            FROM precursors p;''', self.conn)
+
+        self.assertTrue(all(df_pre['normalizedArea'].isna()))
+
+        df_prot = pd.read_sql('SELECT replicateId, proteinId, normalizedAbundance FROM proteinQuants',
+                              self.conn)
+
+        self.assertTrue(all(df_prot['normalizedAbundance'].isna()))
+
+
+    def test_protein_NAs(self):
+        '''
+        Test that a protein's quantity is NULL when all its precursor quantities are NULL.
+        '''
+        self.assertIsNotNone(self.conn)
+
+        df_pre = pd.read_sql('''
+            SELECT
+                p.replicateId, ptp.proteinId, p.peptideId, p.precursorCharge, p.totalAreaFragment as area
+            FROM precursors p
+            LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', self.conn)
+
+        protein_keys = ['replicateId', 'proteinId']
+        na_precursors = df_pre.groupby(protein_keys)['area'].apply(lambda x: all(pd.isna(x)))
+        na_precursors.name = 'all_na'
+
+        df_prot = pd.read_sql('''
+            SELECT
+                q.replicateId, q.proteinId, q.abundance
+            FROM proteinQuants q; ''', self.conn)
+
+        df_prot = df_prot.set_index(protein_keys).join(na_precursors)
+        self.assertFalse(any(df_prot['all_na'].isna()))
+        self.assertSeriesEqual(df_prot['all_na'], df_prot['abundance'].isna(),
+                               check_names=False)

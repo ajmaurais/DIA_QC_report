@@ -168,7 +168,7 @@ class MedianNormalizer(NormalizationManagerBase):
             return False
 
         # median normalize proteins
-        self.proteins = self.precursors.groupby(['replicateId', 'proteinId'])['area'].sum()
+        self.proteins = self.precursors.groupby(['replicateId', 'proteinId'])['area'].sum(min_count=1)
         self.proteins.name = 'abundance'
         self.proteins = self.proteins.reset_index()
         self.proteins = median_normalize_df(self.proteins, ['replicateId'], 'abundance')
