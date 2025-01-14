@@ -122,8 +122,9 @@ class ImputationManagerBase(TransformationManagerBase):
         pass
 
 
-def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
-                  is_imputed_col='isImputed', max_missing=None,
+def knn_impute_df(df, key_cols, value_col,
+                  replicate_col='replicateId', is_imputed_col='isImputed',
+                  max_missing=None, skip_all_missing=True,
                   n_neighbors=5, weights='uniform'):
     '''
     KNN impute peak areas in a long formated dataframe.
@@ -146,6 +147,10 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
     max_missing: int
         Maximum number of missing values; above which imputation is skipped.
         If None, no threshold is used. Default is None.
+    skip_all_missing: bool
+        If True, don't impute values for groups that are all missing.
+        If False, values for compleetly missing groups are set to 0.
+        Default is True.
     n_neighbors: int
         n_neighbors passed to sklearn.impute.KNNImputer. Default is 5
     weights: int
@@ -170,10 +175,19 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
     # pivot df wider
     df_w = df.pivot(index=_key_cols, columns=replicate_col, values=value_col)
 
+    # drop rows with all missing values
+    if skip_all_missing:
+        mask = df_w.apply(lambda x: all(pd.isna(x)), axis=1)
+        df_w = df_w[~mask]
+
     # drop rows with more than max_missing values
     if max_missing is not None:
         mask = df_w.apply(lambda x: pd.isna(x).sum(), axis=1) < max_missing
         df_w = df_w[mask]
+
+    # Return if there are no rows remaining after applying max_missing and skip_all_missing filters.
+    if len(df_w.index) == 0:
+        return df
 
     # transpose so peptides are columns
     df_w = df_w.T

@@ -406,10 +406,37 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
     def test_missing_threshold(self):
         self.assertIsNotNone(self.conn)
 
+        cur = self.conn.cursor()
+        cur.execute('SELECT id FROM replicates;')
+        n_reps = len(cur.fetchall())
+
+        def group_na_count(row):
+            if any(row['isImputed']):
+                return row['value'].isna().sum()
+            return 0
+
+        for t in (0.25, 0.5, 0.75, 1):
+            manager = imputation.KNNImputer(self.conn,
+                                            missing_threshold=t)
+            with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+                self.assertTrue(manager.impute())
+
+            # test precursors
+            prec_keys = ['peptideId', 'precursorCharge']
+            prec_nas = manager.precursors.rename(columns={'area': 'value'})
+            prec_nas = prec_nas.groupby(prec_keys).apply(group_na_count, include_groups=False)
+            self.assertTrue(all(prec_nas / n_reps < t))
+
+            # test proteins
+            prot_keys = ['proteinId']
+            prot_nas = manager.proteins.rename(columns={'abundance': 'value'})
+            prot_nas = prot_nas.groupby(prot_keys).apply(group_na_count, include_groups=False)
+            self.assertTrue(all(prot_nas / n_reps < t))
+
 
     def test_imputation(self):
         '''
-        Test that imputed values equal the median of non-imputed values in the group.
+        Test that imputed values equal the median of non-imputed values for all replicates.
         '''
 
         cur = self.conn.cursor()
@@ -429,3 +456,126 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
         # test proteins
         df_prot = manager.proteins.copy()
         self.check_imputation(df_prot, 'proteinId', 'abundance')
+
+
+class TestMultiImputation(unittest.TestCase, TestImputationBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions_multi/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        parse_result = setup_functions.setup_multi_db(cls.data_dir,
+                                                      cls.work_dir,
+                                                      clear_dir=True)
+
+        cls.conn = None
+        if all(r.returncode == 0 for r in parse_result):
+            if os.path.isfile(cls.db_path):
+                conn = sqlite3.connect(cls.db_path)
+
+                cur = conn.cursor()
+                cur.execute('SELECT project, COUNT(id) FROM replicates GROUP BY project;')
+                n_reps = {row[0]: row[1] for row in cur.fetchall()}
+
+                # set db quantities randomly to NULL
+                TestImputationBase.set_random_nulls(conn, min_missing=0,
+                                                    max_missing=min(n_reps.values()))
+                conn.close()
+
+        else:
+            return
+
+        normalize_command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
+        normalize_result = setup_functions.run_command(normalize_command,
+                                                       cls.work_dir,
+                                                       prefix='normalize')
+
+        if normalize_result.returncode == 0:
+            if os.path.isfile(cls.db_path):
+                cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_group_by_project(self):
+        '''
+        Test that imputed values equal the median of non-imputed values in the project.
+        '''
+
+        cur = self.conn.cursor()
+        cur.execute('SELECT id FROM replicates;')
+        n_reps = len(cur.fetchall())
+
+        manager = imputation.KNNImputer(self.conn,
+                                        n_neighbors=n_reps,
+                                        missing_threshold=1)
+        with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+            self.assertTrue(manager.impute())
+
+        # test precursors
+        df_pre = manager.precursors.copy()
+        for _, group in df_pre.groupby('project'):
+            self.check_imputation(group, ['peptideId', 'precursorCharge'], 'area')
+
+        # test proteins
+        df_prot = manager.proteins.copy()
+        for _, group in df_prot.groupby('project'):
+            self.check_imputation(group, 'proteinId', 'abundance')
+
+
+    def test_no_group_by_project(self):
+        '''
+        Test that imputed values equal the median of non-imputed values for all replicates.
+        '''
+
+        cur = self.conn.cursor()
+        cur.execute('SELECT id FROM replicates;')
+        n_reps = len(cur.fetchall())
+
+        manager = imputation.KNNImputer(self.conn,
+                                        n_neighbors=n_reps,
+                                        missing_threshold=1,
+                                        group_by_project=False)
+        with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+            self.assertTrue(manager.impute())
+
+        # test precursors
+        df_pre = manager.precursors.copy()
+        self.check_imputation(df_pre, ['peptideId', 'precursorCharge'], 'area')
+
+        # test proteins
+        df_prot = manager.proteins.copy()
+        self.check_imputation(df_prot, 'proteinId', 'abundance')
+
+
+    def test_missing_threshold(self):
+        self.assertIsNotNone(self.conn)
+
+        cur = self.conn.cursor()
+        cur.execute('SELECT project, COUNT(id) FROM replicates GROUP BY project;')
+        projects = {row[0]: row[1] for row in cur.fetchall()}
+
+        def group_na_count(row):
+            if any(row['isImputed']):
+                return row['value'].isna().sum()
+            return 0
+
+        for t in (0.25, 0.5, 0.75, 1):
+            manager = imputation.KNNImputer(self.conn,
+                                            missing_threshold=t)
+            with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+                self.assertTrue(manager.impute())
+
+            for project, n_reps in projects.items():
+                # test precursors
+                prec_keys = ['peptideId', 'precursorCharge']
+                prec_nas = manager.precursors[manager.precursors['project'] == project]
+                prec_nas = prec_nas.rename(columns={'area': 'value'})
+                prec_nas = prec_nas.groupby(prec_keys).apply(group_na_count, include_groups=False)
+                self.assertTrue(all(prec_nas / n_reps < t))
+
+                # test proteins
+                prot_keys = ['proteinId']
+                prot_nas = manager.proteins[manager.proteins['project'] == project]
+                prot_nas = prot_nas.rename(columns={'abundance': 'value'})
+                prot_nas = prot_nas.groupby(prot_keys).apply(group_na_count, include_groups=False)
+                self.assertTrue(all(prot_nas / n_reps < t))
