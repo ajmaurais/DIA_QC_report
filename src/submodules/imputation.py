@@ -187,6 +187,7 @@ def knn_impute_df(df, key_cols, value_col,
 
     # Return if there are no rows remaining after applying max_missing and skip_all_missing filters.
     if len(df_w.index) == 0:
+        LOGGER.warning('Not enough values for imputation!')
         return df
 
     # transpose so peptides are columns

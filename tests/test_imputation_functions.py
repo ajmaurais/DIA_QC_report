@@ -93,7 +93,7 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
         key_cols = self.PRECURSOR_KEY_COLS
 
         df = create_missing_values(self.df, key_cols,
-                                   value_col='area', seed=1,
+                                   value_col='area', seed=3,
                                    min_missing=0, max_missing=self.n_reps - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
@@ -117,7 +117,7 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
         key_cols = self.PRECURSOR_KEY_COLS
 
         df = create_missing_values(self.df, key_cols,
-                                   value_col='area', seed=1,
+                                   value_col='area', seed=4,
                                    min_missing=0, max_missing=self.n_reps - 1)
 
         self.assertTrue(any(pd.isna(df['area'])))
@@ -142,6 +142,50 @@ class TestKNNImputeDF(unittest.TestCase, setup_functions.AbstractTestsBase):
                     self.assertEqual(sum(group['area_imputed'].isna()), n_na)
                 else:
                     self.assertFalse(any(group['area_imputed'].isna()))
+
+
+    def test_skip_all_missing(self):
+        key_cols = self.PRECURSOR_KEY_COLS
+
+        # Set values to null for a random subset of peptides
+        df = self.df.copy()
+        peptides = df['modifiedSequence'].drop_duplicates().to_list()
+        na_peptides = set(random.sample(peptides, len(peptides) // 10))
+        df.loc[df['modifiedSequence'].apply(lambda x: x in na_peptides), 'area'] = pd.NA
+
+        # test with skip_all_missing = True
+        df_i = imputation.knn_impute_df(df, key_cols, 'area', replicate_col='replicate',
+                                        skip_all_missing=True)
+        df_i['all_missing'] = df_i['modifiedSequence'].apply(lambda x: x in na_peptides)
+        self.assertFalse(any(df_i.loc[df_i['all_missing'], 'isImputed']))
+        self.assertTrue(all(pd.isna(df_i.loc[df_i['all_missing'], 'area'])))
+
+        # test with skip_all_missing = False
+        df_i = imputation.knn_impute_df(df, key_cols, 'area', replicate_col='replicate',
+                                        skip_all_missing=False)
+        df_i['all_missing'] = df_i['modifiedSequence'].apply(lambda x: x in na_peptides)
+        self.assertTrue(all(df_i.loc[df_i['all_missing'], 'isImputed']))
+        self.assertTrue(all(df_i.loc[df_i['all_missing'], 'area'] == 0))
+
+
+    def test_return_if_empty(self):
+        '''
+        Make sure there isn't an exception if no rows pass missing value filters.
+        '''
+        key_cols = self.PRECURSOR_KEY_COLS
+
+        df = self.df.copy()
+        df['area'] = pd.NA
+
+        with self.assertLogs(imputation.LOGGER, level='WARNING') as cm:
+            df = imputation.knn_impute_df(df, key_cols, 'area', replicate_col='replicate')
+        self.assertTrue(any('Not enough values for imputation!' in entry for entry in cm.output))
+        self.assertFalse(any(df['isImputed']))
+
+        with self.assertRaises(TypeError):
+            with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+                imputation.knn_impute_df(df, key_cols, 'area', replicate_col='replicate',
+                                         skip_all_missing=False)
 
 
 class TestImputationBase(setup_functions.AbstractTestsBase):
@@ -480,7 +524,8 @@ class TestMultiImputation(unittest.TestCase, TestImputationBase):
 
                 # set db quantities randomly to NULL
                 TestImputationBase.set_random_nulls(conn, min_missing=0,
-                                                    max_missing=min(n_reps.values()))
+                                                    max_missing=min(n_reps.values()),
+                                                    seed=2)
                 conn.close()
 
         else:
