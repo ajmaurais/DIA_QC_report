@@ -57,5 +57,5 @@ class TransformationManagerBase(ABC):
         return precursors, proteins
 
 
-    def get_wide_tables(self, normalized=True, use_db_ids=False):
-        pass
+    # def get_wide_tables(self, normalized=True, use_db_ids=False):
+    #     pass

@@ -132,7 +132,7 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
     ----------
     df: pd.DataFrame
         Long formated dataframe
-    key_cols: list
+    key_cols: list, str
         The names of column(s) which uniquely identify each row.
     replicate_col: str
         The name of the column that uniquely identify each replicate.
@@ -150,9 +150,15 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
         n_neighbors passed to sklearn.impute.KNNImputer. Default is 5
     weights: int
         weights passed to sklearn.impute.KNNImputer. Default is 'uniform'
+
+    Returns
+    -------
+    df_imputed: pd.DataFrame
+        A dataframe the same shape as `df` where the `value_col` and `is_imputed_col` have been updated.
     '''
 
     imputed_value_col = cammel_case('imputed', value_col)
+    _key_cols = [key_cols] if isinstance(key_cols, str) else key_cols
 
     # reset existing imputed values
     df = df.copy()
@@ -162,9 +168,9 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
         df[is_imputed_col] = False
 
     # pivot df wider
-    df_w = df.pivot(index=key_cols, columns=replicate_col, values=value_col)
+    df_w = df.pivot(index=_key_cols, columns=replicate_col, values=value_col)
 
-    # drop rows with more than missing_threshold missing values
+    # drop rows with more than max_missing values
     if max_missing is not None:
         mask = df_w.apply(lambda x: pd.isna(x).sum(), axis=1) < max_missing
         df_w = df_w[mask]
@@ -175,21 +181,75 @@ def knn_impute_df(df, key_cols, value_col, replicate_col='replicateId',
     # impute missing values
     imputer = skl_KNNImputer(n_neighbors=n_neighbors, weights=weights,
                              keep_empty_features=True)
-    df_w = df_w.T
-
     df_i = pd.DataFrame(imputer.fit_transform(df_w), columns=df_w.columns, index=df_w.index)
     df_i = df_i.T
     df_i = df_i.melt(value_name=imputed_value_col, ignore_index=False).reset_index()
 
     # Join imputed values to df and clean up
-    df = df.set_index(key_cols + [replicate_col])
-    df_i = df_i.set_index(key_cols + [replicate_col])
+    df = df.set_index(_key_cols + [replicate_col])
+    df_i = df_i.set_index(_key_cols + [replicate_col])
     df = df.join(df_i)
     df[is_imputed_col] = pd.isna(df[value_col]) & ~pd.isna(df[imputed_value_col])
     df[value_col] = df.apply(lambda x: x[imputed_value_col] if x[is_imputed_col] else x[value_col], axis=1)
     df = df.drop(columns=[imputed_value_col]).reset_index()
 
     return df
+
+
+def split_by_project(df, project_col='project', drop=False):
+    '''
+    Split dataframe into a dict where the keys are the project name
+    and the values are a subset dataframe for the project.
+
+    Parameters
+    ----------
+    df: pd.DataFrame
+        The dataframe to split.
+    project_col: str
+        The name of the column to split on. Default is 'project'
+    drop: bool
+        Should the `project_col` be dropped? Default is False.
+
+    Returns
+    -------
+    df_dict: Dictionary
+        A dictionary of key, pd.DataFrame pairs.
+    '''
+    projects = dict()
+    for project in df[project_col].drop_duplicates().to_list():
+        projects[project] = df[df[project_col] == project]
+        if drop:
+            projects[project] = projects[project].drop(columns=[project_col])
+    return projects
+
+
+def bind_rows(df_dict, key_name=None):
+    '''
+    Take a dictionary of pd.DataFrame(s) and return a single dataframe where all the dataframes
+    in have been stacked on top of each other.
+
+    Parameters
+    ----------
+    df_dict: Dictionary
+        A dictionary of key, pd.DataFrame pairs.
+    key_name: str
+        The name of the column to add for the dictionary key.
+        If None, a column is not added for the key. Default is None.
+
+    Returns
+    -------
+    df: pd.DataFrame
+        A single combined dataframe.
+    '''
+    merged_dfs = []
+    for key, df in df_dict.items():
+        if key_name:
+            df = df.copy()
+            df[key_name] = key
+        merged_dfs.append(df)
+
+    # Combine all DataFrames
+    return pd.concat(merged_dfs, ignore_index=True)
 
 
 class KNNImputer(ImputationManagerBase):
@@ -217,21 +277,42 @@ class KNNImputer(ImputationManagerBase):
         self.n_neighbors = n_neighbors
 
 
+    def _impute(self, df, key_cols, value_col, group_by_project):
+        replicates = df['replicateId'].drop_duplicates().to_list()
+
+        # split df by project if applicable
+        if group_by_project:
+            projects = split_by_project(df)
+            for project in projects:
+                max_missing = int(len(replicates) * self.missing_threshold)
+                projects[project] = knn_impute_df(projects[project],
+                                                  key_cols, value_col,
+                                                  max_missing=max_missing,
+                                                  n_neighbors=self.n_neighbors)
+            return bind_rows(projects)
+
+        return knn_impute_df(df, key_cols, value_col,
+                             max_missing=int(len(replicates) * self.missing_threshold),
+                             n_neighbors=self.n_neighbors)
+
+
     def impute(self):
+
+        cur = self.conn.cursor()
+        cur.execute('SELECT DISTINCT project FROM replicates;')
+        n_projects = len(cur.fetchall())
+        group_by_project = False if n_projects == 1 else self.group_by_project
+
         if self.impute_data in ('precursors', 'both'):
             if not self._read_precursors():
                 return False
-            replicates = self.precursors['replicateId'].drop_duplicates().to_list()
-            self.precursors = knn_impute_df(self.precursors, ['peptideId', 'precursorCharge'], 'area',
-                                            max_missing=int(len(replicates) * self.missing_threshold),
-                                            n_neighbors=self.n_neighbors)
+            self.precursors = self._impute(self.precursors, ['peptideId', 'precursorCharge'], 'area',
+                                           group_by_project)
 
         if self.impute_data in ('proteins', 'both'):
             if not self._read_proteins():
                 return False
-            replicates = self.proteins['replicateId'].drop_duplicates().to_list()
-            self.proteins = knn_impute_df(self.proteins, ['proteinId'], 'abundance',
-                                          max_missing=int(len(replicates) * self.missing_threshold),
-                                          n_neighbors=self.n_neighbors)
+            self.proteins = self._impute(self.proteins, 'proteinId', 'abundance',
+                                         group_by_project)
 
         return True

@@ -221,6 +221,30 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
         conn.commit()
 
 
+    def check_imputation(self, df, group_by_cols, value_col):
+        '''
+        Test that the imputed values in each group are equal to the median of non-imputed values.
+
+        Parameters
+        ----------
+        query: str
+            Dataframe should have `group_by_cols`, `value_col` and 'isNormalized' column.
+        group_by_cols: list
+            List of columns in query to group by for imputation test.
+        '''
+
+        for _, group in df.groupby(group_by_cols):
+            non_impute_median = group.loc[~group['isImputed'], value_col].mean()
+            imputed = group[group['isImputed']][value_col]
+
+            if len(imputed) > 0:
+                self.assertTrue(all(imputed == imputed.iloc[0]))
+                self.assertSeriesEqual(imputed, pd.Series([non_impute_median] * len(imputed)),
+                                       check_names=False, check_index=False)
+
+
+
+
     def test_abc_instantiation_fails(self):
         self.assertIsNotNone(self.conn)
 
@@ -378,3 +402,30 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
         with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
             self.assertTrue(manager._read_proteins())
 
+
+    def test_missing_threshold(self):
+        self.assertIsNotNone(self.conn)
+
+
+    def test_imputation(self):
+        '''
+        Test that imputed values equal the median of non-imputed values in the group.
+        '''
+
+        cur = self.conn.cursor()
+        cur.execute('SELECT id FROM replicates;')
+        n_reps = len(cur.fetchall())
+
+        manager = imputation.KNNImputer(self.conn,
+                                        n_neighbors=n_reps,
+                                        missing_threshold=1)
+        with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+            self.assertTrue(manager.impute())
+
+        # test precursors
+        df_pre = manager.precursors.copy()
+        self.check_imputation(df_pre, ['peptideId', 'precursorCharge'], 'area')
+
+        # test proteins
+        df_prot = manager.proteins.copy()
+        self.check_imputation(df_prot, 'proteinId', 'abundance')
