@@ -65,6 +65,8 @@ class Option:
              Default is None.
         max_inclusive: bool
             Default False.
+        help_str: str
+            Default is None.
 
         Raises
         ------
@@ -101,6 +103,34 @@ class Option:
             self.default = default
         else:
             raise ValueError(f"Invalid default argument: '{default}'!")
+
+
+    def get_help(self):
+        ''' Return help message for option '''
+
+        msg = [f'{self.name}:']
+        if self.choices is not None:
+            msg.append(str(self.choices))
+        else:
+            msg.append(self.dtype.__name__)
+
+        if self.min_value is not None or self.max_value is not None:
+            msg.append(self._format_range(err_prefix=False))
+
+        ret = ' '.join(msg)
+
+        if self.help_str is not None or self.default is not None:
+            ret += '\n\t'
+            if self.help_str:
+                ret += f'{self.help_str}'
+            if self.default:
+                ret += f"{' ' if self.help_str else ''}Default is: "
+                if self.dtype is str:
+                    ret += f"'{self.default}'"
+                else:
+                    ret += str(self.default)
+
+        return ret
 
 
     def set_choices(self, choices):
@@ -151,7 +181,7 @@ class Option:
         return True
 
 
-    def _format_range_err(self):
+    def _format_range(self, err_prefix=False):
         err_l = list()
 
         if self.min_value is not None:
@@ -160,7 +190,10 @@ class Option:
             err_l.append(f"<{'=' if self.max_inclusive else ''} {self.max_value}")
 
         if len(err_l) > 0:
-            return 'Value must be ' + ' and '.join(err_l) + '!'
+            if err_prefix:
+                return 'Value must be ' + ' and '.join(err_l) + '!'
+            return ' and '.join(err_l)
+
         return ''
 
 
@@ -226,7 +259,7 @@ class Option:
             return False
 
         if not self.in_range(_value):
-            _quiet_log_error(quiet, self._format_range_err())
+            _quiet_log_error(quiet, self._format_range(err_prefix=True))
             return False
 
         return True
@@ -263,15 +296,18 @@ class MethodOptions:
         A dictionary of Option(s) objects for the transformer class.
     values: dict
         A dictionary of parsed and validated option names and values.
+    description: str
+        The description for the
     OPTION_RE: re.Pattern
         Regex used to parse option string arguemnts.
     '''
 
     OPTION_RE = re.compile(r'''[ \t]*([a-zA-Z\-_]+)[ \t]*[= \t]{1}[ \t]*((['"])[a-zA-Z0-9\-_ \.]+\3|[a-zA-Z0-9\.\-_]+)''')
 
-    def __init__(self):
+    def __init__(self, description=None):
         self.options = dict()
         self.values = dict()
+        self.description = description
 
 
     def add_option(self, name, **kwargs):
@@ -286,6 +322,39 @@ class MethodOptions:
             Additional arguments passed to Option constructor.
         '''
         self.options[name] = Option(name, **kwargs)
+
+
+    def get_help(self, out):
+        '''
+        Print description and help message for options.
+
+        Parameters
+        ----------
+        out: ostream
+            Output stream to write to.
+        '''
+        if self.description:
+            out.write(f'{self.description}\n\n')
+
+        for i, opt in enumerate(self.options.values()):
+            if i > 0:
+                out.write('\n')
+            out.write(opt.get_help())
+
+
+    def get_option_dict(self):
+        ''' Get a dictionary of validated names and values with default arguments added. '''
+        defaults = {n: o.default for n, o in self.options.items() if o.default is not None}
+
+        # first add explicit options
+        ret = self.values.copy()
+
+        # add default values for arguments that have defaults but are not in ret
+        for name, default in defaults.items():
+            if name not in ret:
+                ret[name] = default
+
+        return ret
 
 
     @staticmethod

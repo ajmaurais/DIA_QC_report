@@ -1,22 +1,26 @@
 
 import unittest
+from io import StringIO
 
 import setup_functions
 
 import DIA_QC_report.submodules.transformation as transformation
 
 
-VALID_OPTIONS = {'weights':      {'default': 'uniform',
-                                  'choices': ('uniform', 'weighted'),
-                                  'dtype': str},
-                 'n_neighbors':  {'default': 5,
-                                  'dtype': int,
-                                  'min_value': 0,
-                                  'min_inclusive': False},
+VALID_OPTIONS = {'weights':     {'default': 'uniform',
+                                 'choices': ('uniform', 'weighted'),
+                                 'help_str': 'How to weight neighbors.',
+                                 'dtype': str},
+                 'n_neighbors': {'default': 5,
+                                 'dtype': int,
+                                 'help_str': 'Number of nearset neighbors.',
+                                 'min_value': 0,
+                                 'min_inclusive': False},
                  'max_missing': {'dtype': float,
                                  'default': 0.5,
                                  'min_value': 0,
                                  'max_value': 1,
+                                 'help_str': 'Maximum percent of missing values.',
                                  'max_inclusive': True},
                  'min_i':       {'dtype': int,
                                  'min_value': 0,
@@ -25,6 +29,7 @@ VALID_OPTIONS = {'weights':      {'default': 'uniform',
                                  'max_value': 10,
                                  'max_inclusive': False},
                  'bool_test':   {'dtype': bool,
+                                 'help_str': 'Should this be true?',
                                  'default': True}}
 
 
@@ -34,7 +39,7 @@ def get_err_message(opt, err_type, value):
     elif err_type == 'choice':
         return f"Value '{value}' must be in {str(opt.choices)}"
     elif err_type == 'range':
-        return opt._format_range_err()
+        return opt._format_range(err_prefix=True)
     else:
         raise RuntimeError('Unknown err_type!')
 
@@ -64,6 +69,21 @@ class TestOption(unittest.TestCase):
         for name, kwargs in init_args:
             self.assertRaisesRegex(ValueError, error_msgs[name],
                                    transformation.Option, name, **kwargs)
+
+    def test_get_help(self):
+        messages = {'max_missing': 'max_missing: float > 0 and <= 1\n\t'
+                                   'Maximum percent of missing values. Default is: 0.5',
+                    'n_neighbors': 'n_neighbors: int > 0\n\t'
+                                   'Number of nearset neighbors. Default is: 5',
+                    'min_i': 'min_i: int >= 0',
+                    'max_i': 'max_i: int < 10',
+                    'bool_test': 'bool_test: bool\n\tShould this be true? Default is: True',
+                    'weights': "weights: ('uniform', 'weighted')\n\t"
+                               "How to weight neighbors. Default is: 'uniform'"}
+
+        for name, message in messages.items():
+            o = transformation.Option(name, **VALID_OPTIONS[name])
+            self.assertEqual(o.get_help(), message)
 
 
     def test_valid_choice(self):
@@ -115,7 +135,7 @@ class TestOption(unittest.TestCase):
 
         for name, msg in messages.items():
             o = transformation.Option(name, **VALID_OPTIONS[name])
-            self.assertEqual(o._format_range_err(), msg)
+            self.assertEqual(o._format_range(err_prefix=True), msg)
 
 
     def test_parse(self):
@@ -177,7 +197,7 @@ class TestMethodOptionsRegex(unittest.TestCase):
             self.assertEqual(value, v)
 
 
-class TestMethodOptionsParseOption(unittest.TestCase):
+class TestMethodOptions(unittest.TestCase):
     def setUp(self):
         self.options = transformation.MethodOptions()
 
@@ -197,6 +217,83 @@ class TestMethodOptionsParseOption(unittest.TestCase):
         final_values = {'weights': 'weighted', 'n_neighbors': 7, 'max_missing': 0.5}
         for name, value in final_values.items():
             self.assertEqual(self.options.values[name], value)
+
+
+    def test_get_option_dict_defaults(self):
+        defaults = {name: args['default'] for name, args in VALID_OPTIONS.items() if 'default' in args}
+
+        default_options = self.options.get_option_dict()
+        self.assertDictEqual(default_options, defaults)
+
+
+    def test_get_option_dict_set_defaults(self):
+        test_values = {'weights': ('weights=uniform', 'uniform'),
+                       'n_neighbors': ('n_neighbors 7', 7),
+                       'max_missing': ('max_missing="0.6"', 0.6),
+                       'bool_test': ('bool_test=False', False)}
+
+        with self.assertNoLogs(transformation.LOGGER, level='ERROR'):
+            self.assertTrue(self.options.parse_strings([x[0] for x in test_values.values()]))
+
+        options = self.options.get_option_dict()
+        self.assertEqual(len(options), len(test_values))
+        for name, value in options.items():
+            self.assertEqual(value, test_values[name][1])
+
+
+    def test_get_option_dict_set_many(self):
+        target_values = {name: args['default'] for name, args in VALID_OPTIONS.items() if 'default' in args}
+
+        test_values = {'weights': ('weights=uniform', 'uniform'),
+                       'n_neighbors': ('n_neighbors 7', 7),
+                       'min_i': ('min_i=1', 1),
+                       'max_i': ('max_i -90', -90)}
+
+        new_values = {name: v[1] for name, v in test_values.items()}
+        target_values.update(new_values)
+
+        with self.assertNoLogs(transformation.LOGGER, level='ERROR'):
+            self.assertTrue(self.options.parse_strings([x[0] for x in test_values.values()]))
+
+        options = self.options.get_option_dict()
+        self.assertDictEqual(options, target_values)
+
+
+    def test_get_help(self):
+        target = ["weights: ('uniform', 'weighted')",
+                  "\tHow to weight neighbors. Default is: 'uniform'",
+                  "n_neighbors: int > 0",
+                  "\tNumber of nearset neighbors. Default is: 5",
+                  "max_missing: float > 0 and <= 1",
+                  "\tMaximum percent of missing values. Default is: 0.5",
+                  "min_i: int >= 0",
+                  "max_i: int < 10",
+                  "bool_test: bool",
+                  "\tShould this be true? Default is: True"]
+        target = '\n'.join(target)
+
+        ostream = StringIO()
+        self.options.get_help(ostream)
+        ostream.seek(0)
+        result = ostream.read()
+
+        # test without description
+        self.assertEqual(result, target)
+
+        # test description
+        opts = transformation.MethodOptions(description='The description.')
+        for name, kwargs in VALID_OPTIONS.items():
+            opts.add_option(name, **kwargs)
+
+        target = f'{opts.description}\n\n{target}'
+
+        ostream = StringIO()
+        opts.get_help(ostream)
+        ostream.seek(0)
+        result = ostream.read()
+
+        self.assertEqual(result, target)
+
 
 
     def test_parse_options_invalid(self):
