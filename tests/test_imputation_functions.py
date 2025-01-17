@@ -287,8 +287,6 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
                                        check_names=False, check_index=False)
 
 
-
-
     def test_abc_instantiation_fails(self):
         self.assertIsNotNone(self.conn)
 

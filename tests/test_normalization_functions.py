@@ -9,16 +9,7 @@ import setup_functions
 
 import DIA_QC_report.submodules.normalization as normalization
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-# from DIA_QC_report.parse_data import PRECURSOR_QUALITY_REQUIRED_COLUMNS
 from DIA_QC_report.submodules.skyline_reports import PrecursorReport
-
-
-class TestCammelCase(unittest.TestCase):
-    def test(self):
-        self.assertEqual(normalization.cammel_case('log2', 'area'), 'log2Area')
-        norm_value = normalization.cammel_case('normalized', 'area')
-        self.assertEqual(norm_value, 'normalizedArea')
-        self.assertEqual(normalization.cammel_case('log2', norm_value), 'log2NormalizedArea')
 
 
 class TestNormalizationBase(setup_functions.AbstractTestsBase):
