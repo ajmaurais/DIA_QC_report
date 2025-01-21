@@ -34,7 +34,7 @@ class NormalizationManagerBase(TransformationManagerBase):
     '''
 
     def __init__(self, conn, keep_na=False):
-        super().__init__(conn)
+        super().__init__(conn=conn)
         self.keep_na = keep_na
 
 

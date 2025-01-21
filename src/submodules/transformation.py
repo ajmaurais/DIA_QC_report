@@ -419,7 +419,7 @@ class TransformationManagerBase(ABC):
         Long formatted dataframe of protein quantities.
     '''
 
-    def __init__(self, conn):
+    def __init__(self, conn=None):
         self.conn = conn
         self.precursors = None
         self.proteins = None

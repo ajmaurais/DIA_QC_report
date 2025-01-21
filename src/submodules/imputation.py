@@ -9,7 +9,8 @@ from .logger import LOGGER
 from .transformation import cammel_case
 from .transformation import TransformationManagerBase
 
-IMPUTATION_METHODS = ('k-means',)
+IMPUTATION_METHODS = ('KNN',)
+NULL_DB_ERROR = 'Database connection not set!'
 
 
 class ImputationManagerBase(TransformationManagerBase):
@@ -153,7 +154,7 @@ def knn_impute_df(df, key_cols, value_col,
         Default is True.
     n_neighbors: int
         n_neighbors passed to sklearn.impute.KNNImputer. Default is 5
-    weights: int
+    weights: str
         weights passed to sklearn.impute.KNNImputer. Default is 'uniform'
 
     Returns
@@ -279,7 +280,7 @@ class KNNImputer(ImputationManagerBase):
         Number of nearest neigbors. Passed to KNN imputaion algorithm.
     '''
 
-    def __init__(self, conn, n_neighbors=5, **kwargs):
+    def __init__(self, conn=None, n_neighbors=5, weights='uniform', **kwargs):
         '''
         Parameters
         ----------
@@ -288,8 +289,10 @@ class KNNImputer(ImputationManagerBase):
         **kwargs: dict
             Additional kwargs passed to ImputationManagerBase
         '''
-        super().__init__(conn, **kwargs)
+        super().__init__(conn=conn, **kwargs)
+
         self.n_neighbors = n_neighbors
+        self.weights = weights
 
 
     def _impute(self, df, key_cols, value_col, group_by_project):
@@ -312,6 +315,8 @@ class KNNImputer(ImputationManagerBase):
 
 
     def impute(self):
+        if self.conn is None:
+            raise RuntimeError(NULL_DB_ERROR)
 
         cur = self.conn.cursor()
         cur.execute('SELECT DISTINCT project FROM replicates;')

@@ -294,6 +294,13 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
             imputation.ImputationManagerBase(self.conn)
 
 
+    def test_null_conn_impute_fails(self):
+        manager = imputation.KNNImputer()
+        with self.assertRaises(RuntimeError) as e:
+            manager.impute()
+        self.assertEqual(imputation.NULL_DB_ERROR, str(e.exception))
+
+
     def test_db_has_missing_values(self):
         '''
         Test that test database was initialized properly.
@@ -326,7 +333,7 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
 
 
     def do_level_test(self, level, df_precursor, df_protein):
-        manager = imputation.KNNImputer(self.conn, level=level)
+        manager = imputation.KNNImputer(conn=self.conn, level=level)
         with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
             self.assertTrue(manager.impute())
 
@@ -369,7 +376,7 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
     def test_all_reps_skipped(self):
         self.assertIsNotNone(self.conn)
 
-        manager = imputation.KNNImputer(self.conn)
+        manager = imputation.KNNImputer(conn=self.conn)
         try:
             cur = self.conn.cursor()
             cur.execute('UPDATE replicates SET includeRep = FALSE;')
@@ -430,7 +437,7 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
     def test_read_precursors(self):
         self.assertIsNotNone(self.conn)
 
-        manager = imputation.KNNImputer(self.conn)
+        manager = imputation.KNNImputer(conn=self.conn)
 
         with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
             self.assertTrue(manager._read_precursors())
@@ -439,7 +446,7 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
     def test_read_proteins(self):
         self.assertIsNotNone(self.conn)
 
-        manager = imputation.KNNImputer(self.conn)
+        manager = imputation.KNNImputer(conn=self.conn)
 
         with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
             self.assertTrue(manager._read_proteins())
@@ -458,7 +465,7 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
             return 0
 
         for t in (0.25, 0.5, 0.75, 1):
-            manager = imputation.KNNImputer(self.conn,
+            manager = imputation.KNNImputer(conn=self.conn,
                                             missing_threshold=t)
             with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
                 self.assertTrue(manager.impute())
@@ -485,7 +492,7 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
         cur.execute('SELECT id FROM replicates;')
         n_reps = len(cur.fetchall())
 
-        manager = imputation.KNNImputer(self.conn,
+        manager = imputation.KNNImputer(conn=self.conn,
                                         n_neighbors=n_reps,
                                         missing_threshold=1)
         with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
@@ -548,7 +555,7 @@ class TestMultiImputation(unittest.TestCase, TestImputationBase):
         cur.execute('SELECT id FROM replicates;')
         n_reps = len(cur.fetchall())
 
-        manager = imputation.KNNImputer(self.conn,
+        manager = imputation.KNNImputer(conn=self.conn,
                                         n_neighbors=n_reps,
                                         missing_threshold=1)
         with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
@@ -574,7 +581,7 @@ class TestMultiImputation(unittest.TestCase, TestImputationBase):
         cur.execute('SELECT id FROM replicates;')
         n_reps = len(cur.fetchall())
 
-        manager = imputation.KNNImputer(self.conn,
+        manager = imputation.KNNImputer(conn=self.conn,
                                         n_neighbors=n_reps,
                                         missing_threshold=1,
                                         group_by_project=False)
@@ -603,7 +610,7 @@ class TestMultiImputation(unittest.TestCase, TestImputationBase):
             return 0
 
         for t in (0.25, 0.5, 0.75, 1):
-            manager = imputation.KNNImputer(self.conn,
+            manager = imputation.KNNImputer(conn=self.conn,
                                             missing_threshold=t)
             with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
                 self.assertTrue(manager.impute())
