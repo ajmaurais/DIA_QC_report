@@ -1,8 +1,11 @@
 
 from abc import ABC
 import re
+from textwrap import fill as fill_text
 
 from .logger import LOGGER
+
+HELP_TAB = '    '
 
 
 def cammel_case(prefix, suffix):
@@ -105,7 +108,7 @@ class Option:
             raise ValueError(f"Invalid default argument: '{default}'!")
 
 
-    def get_help(self):
+    def get_help(self, max_width=120):
         ''' Return help message for option '''
 
         msg = [f'{self.name}:']
@@ -120,15 +123,17 @@ class Option:
         ret = ' '.join(msg)
 
         if self.help_str is not None or self.default is not None:
-            ret += '\n\t'
+            second_line = ''
             if self.help_str:
-                ret += f'{self.help_str}'
+                second_line += f'{self.help_str}'
             if self.default:
-                ret += f"{' ' if self.help_str else ''}Default is: "
+                second_line += f"{' ' if self.help_str else ''}Default is: "
                 if self.dtype is str:
-                    ret += f"'{self.default}'"
+                    second_line += f"'{self.default}'"
                 else:
-                    ret += str(self.default)
+                    second_line += str(self.default)
+            ret += '\n' + fill_text(second_line, width=max_width,
+                                    initial_indent=HELP_TAB, subsequent_indent=HELP_TAB)
 
         return ret
 
@@ -324,7 +329,7 @@ class MethodOptions:
         self.options[name] = Option(name, **kwargs)
 
 
-    def get_help(self, out):
+    def get_help(self, out, max_width=120):
         '''
         Print description and help message for options.
 
@@ -339,7 +344,8 @@ class MethodOptions:
         for i, opt in enumerate(self.options.values()):
             if i > 0:
                 out.write('\n')
-            out.write(opt.get_help())
+            out.write(opt.get_help(max_width=max_width))
+        out.write('\n')
 
 
     def get_option_dict(self):

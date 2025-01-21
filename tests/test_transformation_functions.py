@@ -67,23 +67,54 @@ class TestOption(unittest.TestCase):
                       'invalid_default': r"Invalid default argument: '[a-zA-Z0-9\_-]+'!"}
 
         for name, kwargs in init_args:
-            self.assertRaisesRegex(ValueError, error_msgs[name],
-                                   transformation.Option, name, **kwargs)
+            with self.assertRaisesRegex(ValueError, error_msgs[name]):
+                transformation.Option(name, **kwargs)
+
 
     def test_get_help(self):
-        messages = {'max_missing': 'max_missing: float > 0 and <= 1\n\t'
-                                   'Maximum percent of missing values. Default is: 0.5',
-                    'n_neighbors': 'n_neighbors: int > 0\n\t'
-                                   'Number of nearset neighbors. Default is: 5',
+        messages = {'max_missing': f'max_missing: float > 0 and <= 1\n{transformation.HELP_TAB}'
+                                    'Maximum percent of missing values. Default is: 0.5',
+                    'n_neighbors': f'n_neighbors: int > 0\n{transformation.HELP_TAB}'
+                                    'Number of nearset neighbors. Default is: 5',
                     'min_i': 'min_i: int >= 0',
                     'max_i': 'max_i: int < 10',
-                    'bool_test': 'bool_test: bool\n\tShould this be true? Default is: True',
-                    'weights': "weights: ('uniform', 'weighted')\n\t"
-                               "How to weight neighbors. Default is: 'uniform'"}
+                    'bool_test': f'bool_test: bool\n{transformation.HELP_TAB}'
+                                  'Should this be true? Default is: True',
+                    'weights': f"weights: ('uniform', 'weighted')\n{transformation.HELP_TAB}"
+                                "How to weight neighbors. Default is: 'uniform'"}
 
         for name, message in messages.items():
             o = transformation.Option(name, **VALID_OPTIONS[name])
             self.assertEqual(o.get_help(), message)
+
+
+    def test_help_width(self):
+        messages = {'max_missing': ('max_missing: float > 0 and <= 1',
+                                    'Maximum percent of missing values. Default is: 0.5'),
+                    'n_neighbors': ('n_neighbors: int > 0',
+                                    'Number of nearset neighbors. Default is: 5'),
+                    'min_i': ('min_i: int >= 0', None),
+                    'max_i': ('max_i: int < 10', None),
+                    'bool_test': ('bool_test: bool', 'Should this be true? Default is: True'),
+                    'weights': ("weights: ('uniform', 'weighted')",
+                                "How to weight neighbors. Default is: 'uniform'")}
+
+        for name, message in messages.items():
+            o = transformation.Option(name, **VALID_OPTIONS[name])
+            for length in (10, 15, 20, 50, 100):
+                lines = o.get_help(max_width=length).split('\n')
+
+                # check that all first lines match exactly
+                self.assertEqual(lines[0], messages[name][0])
+
+                if messages[name][1] is not None:
+                    # make sure all lines after first line are less than max length
+                    self.assertLessEqual(max(len(l) for l in lines[1:]), length)
+
+                    # make sure that all lines after first line begin with tab
+                    for l in lines[1:]:
+                        self.assertRegex(l, f'^{transformation.HELP_TAB}')
+
 
 
     def test_valid_choice(self):
@@ -260,16 +291,16 @@ class TestMethodOptions(unittest.TestCase):
 
 
     def test_get_help(self):
-        target = ["weights: ('uniform', 'weighted')",
-                  "\tHow to weight neighbors. Default is: 'uniform'",
-                  "n_neighbors: int > 0",
-                  "\tNumber of nearset neighbors. Default is: 5",
-                  "max_missing: float > 0 and <= 1",
-                  "\tMaximum percent of missing values. Default is: 0.5",
-                  "min_i: int >= 0",
-                  "max_i: int < 10",
-                  "bool_test: bool",
-                  "\tShould this be true? Default is: True"]
+        target = [ "weights: ('uniform', 'weighted')",
+                  f"{transformation.HELP_TAB}How to weight neighbors. Default is: 'uniform'",
+                   "n_neighbors: int > 0",
+                  f"{transformation.HELP_TAB}Number of nearset neighbors. Default is: 5",
+                   "max_missing: float > 0 and <= 1",
+                  f"{transformation.HELP_TAB}Maximum percent of missing values. Default is: 0.5",
+                   "min_i: int >= 0",
+                   "max_i: int < 10",
+                   "bool_test: bool",
+                  f"{transformation.HELP_TAB}Should this be true? Default is: True\n"]
         target = '\n'.join(target)
 
         ostream = StringIO()
@@ -293,7 +324,6 @@ class TestMethodOptions(unittest.TestCase):
         result = ostream.read()
 
         self.assertEqual(result, target)
-
 
 
     def test_parse_options_invalid(self):
