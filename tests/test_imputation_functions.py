@@ -21,15 +21,15 @@ def create_missing_values(df, key_cols,
     Parameters
     ----------
     df: pd.DataFrame
-        A long formated dataframe with peptide/protein quantities
+        A long formatted dataframe with peptide/protein quantities
     key_cols: list
         A list of key columns which uniquely identify each peptide or protein
     replicate_col: str
-        The name of the replicate colum.
+        The name of the replicate column.
     value_col: str
         The name of the value column.
     min_missing: int
-        Mininum number of missing values.
+        Minimum number of missing values.
     max_missing: int
         Maximum number of missing values.
     seed: int
@@ -38,7 +38,7 @@ def create_missing_values(df, key_cols,
     Returns
     -------
     df_na: pd.DataFrame
-        A long formated dataframe the same shape as `df` with random values in
+        A long formatted dataframe the same shape as `df` with random values in
         `value_col` set to pd.NA.
     '''
     replicates = df['replicate'].drop_duplicates().to_list()
@@ -212,7 +212,7 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
         conn: sqlite3.Connection
             A connection to a batch database.
         min_missing: int
-            Mininum number of missing values.
+            Minimum number of missing values.
         max_missing: int
             Maximum number of missing values.
         seed: int

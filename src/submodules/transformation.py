@@ -32,7 +32,7 @@ class Option:
     choices: tuple
         The valid choices for option value.
     min_value: (int, float)
-        For numeric dtypes the mininum value.
+        For numeric dtypes the minimum value.
     min_inclusive: bool
         Is min_value inclusive?
     max_value: (int, float)
@@ -304,7 +304,7 @@ class MethodOptions:
     description: str
         The description for the
     OPTION_RE: re.Pattern
-        Regex used to parse option string arguemnts.
+        Regex used to parse option string arguments.
     '''
 
     OPTION_RE = re.compile(r'''[ \t]*([a-zA-Z\-_]+)[ \t]*[= \t]{1}[ \t]*((['"])[a-zA-Z0-9\-_ \.]+\3|[a-zA-Z0-9\.\-_]+)''')

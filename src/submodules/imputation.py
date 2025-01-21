@@ -41,7 +41,7 @@ class ImputationManagerBase(TransformationManagerBase):
             Data level to impute. 0 for unnormalized, 1 for normalized.
             Default is 0.
         missing_threshold: float
-            Mininum percent of non-missing values to impute value.
+            Minimum percent of non-missing values to impute value.
             Default is 0.5.
         impute_data: str
             Impute 'precursors', 'proteins', or 'both'. Default is 'both'.
@@ -128,12 +128,12 @@ def knn_impute_df(df, key_cols, value_col,
                   max_missing=None, skip_all_missing=True,
                   n_neighbors=5, weights='uniform'):
     '''
-    KNN impute peak areas in a long formated dataframe.
+    KNN impute peak areas in a long formatted dataframe.
 
     Parameters
     ----------
     df: pd.DataFrame
-        Long formated dataframe
+        Long formatted dataframe
     key_cols: list, str
         The names of column(s) which uniquely identify each row.
     replicate_col: str
@@ -150,7 +150,7 @@ def knn_impute_df(df, key_cols, value_col,
         If None, no threshold is used. Default is None.
     skip_all_missing: bool
         If True, don't impute values for groups that are all missing.
-        If False, values for compleetly missing groups are set to 0.
+        If False, values for completely missing groups are set to 0.
         Default is True.
     n_neighbors: int
         n_neighbors passed to sklearn.impute.KNNImputer. Default is 5
@@ -272,12 +272,12 @@ class KNNImputer(ImputationManagerBase):
     '''
     KNN imputation manager.
 
-    Inherets from ImputationManagerBase
+    Inherits from ImputationManagerBase
 
     Attributes
     ----------
     n_neighbors: int
-        Number of nearest neigbors. Passed to KNN imputaion algorithm.
+        Number of nearest neighbors. Passed to KNN imputaion algorithm.
     '''
 
     def __init__(self, conn=None, n_neighbors=5, weights='uniform', **kwargs):

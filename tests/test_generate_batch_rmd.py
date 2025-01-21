@@ -154,7 +154,7 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.assertTrue("Unknown normalization method: 'Nothing'" in result.stderr)
 
         finally:
-            # reset protein_normalization_method to orriginal method
+            # reset protein_normalization_method to original method
             self.conn = db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, current_method)
 
 
@@ -178,7 +178,7 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.assertTrue('Missing normalization methods in metadata table!' in result.stderr)
 
         finally:
-            # reset orriginal precursor_normalization_method entry
+            # reset original precursor_normalization_method entry
             cur = self.conn.cursor()
             cur.executemany('INSERT INTO metadata (key, value) VALUES (?, ?);', current_entry)
             self.conn.commit()

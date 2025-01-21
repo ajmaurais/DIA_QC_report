@@ -292,7 +292,7 @@ norm.methods <- setNames(norm.methods$value, sub('_normalization_method$', '', n
 
 # make sure that we found both normalization methods
 if(length(norm.methods) != 2 | any(is.na(norm.methods))) {
-    stop('Error formating normalization methods!')
+    stop('Error formatting normalization methods!')
 }
 
 # fix special characters in replicate names so they can be R headers
