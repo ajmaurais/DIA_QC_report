@@ -94,6 +94,11 @@ Available commands:
         filter_replicates._main(args)
 
 
+    def impute(self, argv):
+        args = impute_missing.parse_args(argv, prog='dia_qc impute')
+        impute_missing._main(args)
+
+
     def normalize(self, argv):
         args = normalize_db.parse_args(argv, prog='dia_qc normalize')
         normalize_db._main(args)
