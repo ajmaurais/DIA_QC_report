@@ -9,7 +9,7 @@ from io import StringIO
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-import DIA_QC_report.submodules.imputation as imputaion
+import DIA_QC_report.submodules.imputation as imputation
 import DIA_QC_report.impute_missing as impute_missing
 
 
@@ -48,6 +48,42 @@ class TestGetManager(unittest.TestCase):
         self.assertTrue(error_msg in str(cm.exception))
 
 
+    def test_inavlid_kwargs(self):
+        args = [{'dummy': 0}, {'level': 0, 'another_dummy': 1}]
+
+        for arg in args:
+            self.do_invalid_kwarg_test('KNN', arg)
+
+
+    def test_default_args(self):
+        '''
+        Test that impute_missing.get_manager returns manager with default arguments
+        when method_args is None.
+        '''
+        manager, metadata = impute_missing.get_manager('KNN', None)
+
+        # metadata should have at least as many entrires as the number of
+        # KNNImputer.__init__ keyword arguments
+        args = dict(setup_functions.function_kwargs(imputation.KNNImputer.__init__))
+        args.pop('conn')
+        self.assertEqual(len(metadata), len(args))
+
+        default_manager = imputation.KNNImputer()
+
+        for k, v in metadata.items():
+            self.assertTrue(hasattr(default_manager, k))
+            self.assertTrue(hasattr(manager, k))
+            self.assertEqual(getattr(default_manager, k), v)
+            self.assertEqual(getattr(manager, k), v)
+
+
+    def test_invalid_method(self):
+        with self.assertRaises(ValueError) as cm:
+            impute_missing.get_manager('Dummy', [], method_help=True)
+
+        self.assertTrue("Unknown imputation method: 'Dummy'" in str(cm.exception))
+
+
     def test_method_help(self):
         with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
             with self.assertRaises(SystemExit) as cm:
@@ -56,13 +92,6 @@ class TestGetManager(unittest.TestCase):
         self.assertEqual(cm.exception.code, 0)
         mock_stdout.seek(0)
         self.assertTrue('Options for KNNImputer' in mock_stdout.read())
-
-
-    def test_invalid_method(self):
-        with self.assertRaises(ValueError) as cm:
-            impute_missing.get_manager('Dummy', [], method_help=True)
-
-        self.assertTrue("Unknown imputation method: 'Dummy'" in str(cm.exception))
 
 
     def test_KNN_invalid_args(self):

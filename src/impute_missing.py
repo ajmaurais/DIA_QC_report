@@ -59,8 +59,9 @@ def get_manager(method, method_args, method_help=False, **kwargs):
         parser.get_help(sys.stdout, max_width=os.get_terminal_size().columns)
         sys.exit(0)
 
-    if not parser.parse_strings(method_args):
-        sys.exit(1)
+    if method_args is not None:
+        if not parser.parse_strings(method_args):
+            sys.exit(1)
 
     manager_args = parser.get_option_dict()
     manager = Manager(**manager_args, **kwargs)
