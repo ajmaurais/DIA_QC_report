@@ -11,6 +11,16 @@ from numpy import isnan
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def function_kwargs(f):
+    '''
+    Yield pairs of argument names and default values for all the named kwargs in function `f`
+    '''
+    signature = inspect.signature(f)
+    for param in signature.parameters.values():
+        if param.default is not inspect.Parameter.empty:
+            yield param.name, param.default
+
+
 class AbstractTestsBase(ABC):
     '''
     Base class for abstract shared unittest base classes.

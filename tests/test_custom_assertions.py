@@ -1,9 +1,20 @@
 
 import unittest
-import pandas as pd
 from numpy import nan
+import pandas as pd
 
+from setup_functions import function_kwargs
 from setup_functions import AbstractTestsBase
+
+
+class TestFunctionKwargs(unittest.TestCase):
+    def kwarg_test_f(self, pos1, pos2, kw1=1, kw2=2):
+        pass
+
+    def test(self):
+        kwargs = dict(function_kwargs(self.kwarg_test_f))
+        self.assertDictEqual(kwargs, {'kw1': 1, 'kw2': 2})
+
 
 class TestCustomAssertion(unittest.TestCase, AbstractTestsBase):
     def setUp(self):
