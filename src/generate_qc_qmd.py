@@ -621,7 +621,7 @@ def _main(args):
         if db_is_normalized:
             quant_cols['normalizedArea'] = 'Normalized'
 
-        outF.write(add_header('Precursor areas', level=2))
+        outF.write(add_header('MS2 peak areas', level=2))
         outF.write(precursor_areas(quant_cols))
 
         # Batch effects section
