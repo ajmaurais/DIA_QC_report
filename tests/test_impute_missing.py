@@ -120,8 +120,61 @@ class TestGetManager(unittest.TestCase):
             self.do_valid_arg_test('KNN', method_args, method_kwargs, all_args)
 
 
-    def test_KNN_inavlid_kwargs(self):
-        args = [{'dummy': 0}, {'level': 0, 'another_dummy': 1}]
+class CommonTests(setup_functions.AbstractTestsBase):
+    def __init__(self):
+        self.work_dir = None
+        self.db_path = None
+        self.data_dir = None
+        self.conn = None
 
-        for arg in args:
-            self.do_invalid_kwarg_test('KNN', arg)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+class TestSingleImputation(unittest.TestCase, CommonTests):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_impute_missing_single/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        parse_command = ['dia_qc', 'parse', '-n=Sp3',
+                         f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
+                         f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+        parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
+
+        normalize_command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
+        normalize_result = setup_functions.run_command(normalize_command,
+                                                       cls.work_dir,
+                                                       prefix='normalize')
+
+        if sum((parse_result.returncode, normalize_result.returncode)) > 0:
+            raise RuntimeError('Error creating test DB!')
+
+        if os.path.isfile(cls.db_path):
+            cls.conn = sqlite3.connect(cls.db_path)
+
+
+    def test_imputation(self):
+        self.assertIsNotNone(self.conn)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        impute_command = ['dia_qc', 'impute', self.db_path]
+        impute_result = setup_functions.run_command(impute_command, self.work_dir)
+
+        self.assertEqual(impute_result.returncode, 0)
+
+        # test that metadata table is updated
+
+        # test that missing values meeting imputation criteria are updated
+
+        # test that non-missing values are not modified.
+
+
+class TestMultiImputation(unittest.TestCase, CommonTests):
+    pass
+

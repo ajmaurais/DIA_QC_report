@@ -126,10 +126,16 @@ def _main(args):
                                                missing_threshold=args.missing_threshold,
                                                group_by_project=args.group_by == 'project')
 
+    # updatet metadata to reflect --imputeData flag
+    if args.impute_data in ('both', 'peptide'):
+        peptide_metadata = {f'peptide_{k}': v for k, v in metadata.items()}
+    if args.impute_data in ('both', 'protein'):
+        protein_metadata = {f'protein_{k}': v for k, v in metadata.items()}
+
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)
     else:
-        LOGGER.error(f'Database file ({args.db}) does not exist!')
+        LOGGER.error('Database file (%s) does not exist!', args.db)
         sys.exit(1)
 
     # check database version
@@ -139,14 +145,16 @@ def _main(args):
     # add db connection to imputation_manager
     imputation_manager.conn = conn
 
+    imputation_manager.impute()
+
 
     # get commands previously run on db
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    metadata = {PRECURSOR_IMPUTE_METHOD: precursor_normalization_method,
-                PROTEIN_IMPUTE_METHOD: protein_normalization_method,
-                IS_IMPUTED: 'True'}
+    # metadata = {PRECURSOR_IMPUTE_METHOD: precursor_normalization_method,
+    #             PROTEIN_IMPUTE_METHOD: protein_normalization_method,
+    #             IS_IMPUTED: 'True'}
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 
