@@ -67,7 +67,7 @@ def _add_index_column(col, index, df_name=None, index_name=None):
     all_good = True
     for key in ret.drop_duplicates().tolist():
         if key not in index:
-            LOGGER.error(f'Missing required value: {key}{table_names}!')
+            LOGGER.error('Missing required value: %s%s!', key, table_names)
             all_good = False
 
     # Exit now if there are one or more missing values
@@ -79,7 +79,7 @@ def _add_index_column(col, index, df_name=None, index_name=None):
 
 def write_db(fname, replicates, precursors, protein_quants=None,
              sample_metadata=None, sample_metadata_types=None,
-             project_name=None, overwriteMode='error',
+             project_name=None, overwrite_mode='error',
              group_precursors_by='protein'):
     '''
     Write reports to precursor sqlite database.
@@ -100,7 +100,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         Dict mapping metadata annotationKey to annotationType (optional)
     project_name: str
         The project name to use in the replicates table.
-    overwriteMode: str
+    overwrite_mode: str
         Behavior when the output file already exists.
         Choices are 'error', 'overwrite', or 'append'
     group_precursors_by: str
@@ -128,18 +128,22 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     conn = None
     append = False
     if os.path.isfile(fname):
-        if overwriteMode == 'error':
-            LOGGER.error(f'{fname} already exists. Use the --overwriteMode option to append or overwrite')
+        if overwrite_mode == 'error':
+            LOGGER.error('%s already exists. Use the --overwriteMode option to append or overwrite',
+                         fname)
             return False
 
-        if overwriteMode == 'overwrite':
-            LOGGER.warning(f'{fname} already exists. Overwriting...')
+        if overwrite_mode == 'overwrite':
+            LOGGER.info('%s already exists. Overwriting...', fname)
             os.remove(fname)
             conn = _initialize(fname)
 
-        elif overwriteMode == 'append':
+        elif overwrite_mode == 'append':
             conn = sqlite3.connect(fname)
             append = True
+
+            LOGGER.info("Appending %sto database '%s'",
+                        '' if project_name is None else f"'{project_name}' " , fname)
 
             # check database version
             if not check_schema_version(conn):
@@ -149,11 +153,12 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             if (current_group_by := get_meta_value(conn, 'group_precursors_by')) is None:
                 return False
             if current_group_by != group_precursors_by:
-                LOGGER.error(f"Database grouping method '{current_group_by}' does not match '{group_precursors_by}'")
+                LOGGER.error("Database grouping method '%s' does not match '%s'",
+                             current_group_by, group_precursors_by)
                 return False
 
         else:
-            LOGGER.error(f'"{overwriteMode}" is an unknown overwriteMode!')
+            LOGGER.error("'%s' is an unknown overwriteMode!", overwrite_mode)
             return False
 
     else:
@@ -192,7 +197,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         cur.execute('SELECT DISTINCT project FROM replicates WHERE project = ?', (project_name,))
         existing_project = cur.fetchall()
         if len(existing_project) > 0:
-            LOGGER.error(f'{project_name} already exists in db!')
+            LOGGER.error('%s already exists in db!', project_name)
             conn.close()
             return False
 
@@ -294,7 +299,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     if sample_metadata is not None:
         missing_metadata = [x for x in sample_metadata['Replicate'].drop_duplicates().to_list() if x not in repIndex]
         for rep in missing_metadata:
-            LOGGER.warning(f'Metadata row: \"{rep}\" does not exist in replicate report!')
+            LOGGER.warning('Metadata row: "%s" does not exist in replicate report!', rep)
 
         sample_metadata = sample_metadata.loc[sample_metadata['Replicate'].apply(lambda x: x in repIndex),]
 
@@ -373,7 +378,7 @@ def check_duplicate_precursors(precursors, mode):
     # If this is true it means that there are duplicate precursos with the same sequence, charge, and area,
     # but some other floating point column has a non-unique value.
     if n_unique_areas != n_unique_rows:
-        LOGGER.error(f'There are {n_unique_rows - n_unique_areas} precursor rows which are not unique!')
+        LOGGER.error('There are %s precursor rows which are not unique!', n_unique_rows - n_unique_areas)
         return None
 
     # If there are no precursors with non-unique areas, simply return precursor df
@@ -382,10 +387,10 @@ def check_duplicate_precursors(precursors, mode):
 
     # If there duplicate precursors return None
     if mode == 'e':
-        LOGGER.error(f'There are {n_unique_areas - n_unique} non-unique precursor areas!')
+        LOGGER.error('There are %s non-unique precursor areas!', n_unique_areas - n_unique)
         return None
 
-    LOGGER.warning(f'There are {n_unique_areas - n_unique} non-unique precursor areas!')
+    LOGGER.warning('There are %s non-unique precursor areas!', n_unique_areas - n_unique)
 
     precursors = precursors.set_index(keys=key_cols)
     keep_cols = [col.name for col in precursor_cols
@@ -393,7 +398,7 @@ def check_duplicate_precursors(precursors, mode):
 
     # Select first precursor
     if mode == 'f':
-        LOGGER.warning(f'Selecting first occurrence of duplicate precursors...')
+        LOGGER.warning('Selecting first occurrence of duplicate precursors...')
         areas = precursors[[col.name for col in precursor_cols if col.is_numeric]].loc[~precursors.index.duplicated()]
 
         ret = precursors[keep_cols].merge(areas, how='left', left_index=True, right_index=True)
@@ -417,7 +422,7 @@ def check_duplicate_precursors(precursors, mode):
         # check that each group has at least 1 precursor area that was manually set
         manually_adj = non_unique.groupby(key_cols)['userSetTotal'].agg(lambda x: any(x))
         if not all(manually_adj):
-            LOGGER.error(f'{sum(~manually_adj)} precursor groups have no user set peak boundaries!')
+            LOGGER.error('%s precursor groups have no user set peak boundaries!', sum(~manually_adj))
             return None
 
         # remove precursors which were not manually set
@@ -426,8 +431,8 @@ def check_duplicate_precursors(precursors, mode):
         selections = selections[~selections.index.duplicated(keep='first')]
 
         if non_unique_len != len(selections.index):
-            LOGGER.warning(f'After selecting precursors with user set peak boundaries, '
-                           f'{non_unique_len - len(selections.index)} non-unique precursors remain.')
+            LOGGER.warning('After selecting precursors with user set peak boundaries, %s non-unique precursors remain.',
+                           non_unique_len - len(selections.index))
 
     # Interactive selection mode
     if mode == 'i':
@@ -492,7 +497,8 @@ def parse_args(argv, prog=None):
     #                           'by summing all the precursors belonging to that protein.')
     parser.add_argument('-o', '--ofname', default='data.db3',
                         help='Output database name. Default is ./data.db3')
-    parser.add_argument('-w', '--overwriteMode', choices=['error', 'overwrite', 'append'], default='error',
+    parser.add_argument('-w', '--overwriteMode', choices=['error', 'overwrite', 'append'],
+                        default='error', dest='overwrite_mode',
                         help='Behavior if output database already exists. '
                              'By default the script will exit with an error if the database file already exists.')
     parser.add_argument('-d', '--duplicatePrecursors', default='e', choices=DUPLICATE_PRECURSOR_CHOICES,
@@ -523,6 +529,9 @@ def _main(args):
             sys.exit(1)
         metadata = metadata_reader.df
         metadata_types = metadata_reader.types
+
+    if args.project_name is not None:
+        LOGGER.info('Working on %s', args.project_name)
 
     # read replicates
     replicates = ReplicateReport().read_report(args.replicates)
@@ -572,7 +581,7 @@ def _main(args):
                 if protein_quants is not None:
                     protein_quants['replicateName'] = protein_quants['replicateName'].apply(lambda x: rep_name_map[x])
             except KeyError as e:
-                LOGGER.error(f'KeyError: {str(e)}')
+                LOGGER.error('KeyError: %s', str(e))
                 LOGGER.error('Replicate and precursor report replicate names do not match!')
                 sys.exit(1)
 
@@ -587,11 +596,16 @@ def _main(args):
     if not write_db(args.ofname, replicates, precursors,
                     protein_quants=protein_quants,
                     sample_metadata=metadata, sample_metadata_types=metadata_types,
-                    project_name=args.project_name, overwriteMode=args.overwriteMode,
+                    project_name=args.project_name, overwrite_mode=args.overwrite_mode,
                     group_precursors_by=args.group_precursors_by):
-        LOGGER.error(f'Failed to {"create" if args.overwriteMode != "append" else "append to"} database!')
+        LOGGER.error('Failed to %s database!',
+                     "create" if args.overwrite_mode != "append" else "append to")
         sys.exit(1)
-    LOGGER.info('Done writing database...')
+
+    if args.project_name is not None:
+        LOGGER.info('Done writing %s to database.', args.project_name)
+    else:
+        LOGGER.info('Done writing database.')
 
 
 def main():
