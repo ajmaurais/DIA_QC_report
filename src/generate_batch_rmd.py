@@ -596,7 +596,7 @@ def parse_args(argv, prog=None):
                                     "Setting this option could cause an error when the rmd renders.")
     file_settings.add_argument('--savePlots', default=None, dest='plot_ext',
                                help='Save all plots to file with specified extension.')
-    file_settings.add_argument('--static', default=False,
+    file_settings.add_argument('--static', default=False, action='store_true',
                                help="Don't Add interactive tool tip to PCA and precursor plots.")
 
     batch_vars = parser.add_argument_group('Batch variables',
