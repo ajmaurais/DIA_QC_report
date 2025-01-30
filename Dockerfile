@@ -9,7 +9,7 @@ RUN dnf update && \
     chmod +x /usr/local/bin/entrypoint
 
 # install rDIAUtils dependencies
-RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'BiocManager', 'rmarkdown', 'svglite'), \
+RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'ggiraph', 'BiocManager', 'rmarkdown', 'svglite'), \
                                                      repo='https://ftp.osuosl.org/pub/cran/'), \
                                     warning=function(w) stop(w))" && \
     Rscript -e "withCallingHandlers(BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE), \
