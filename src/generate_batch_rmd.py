@@ -596,8 +596,10 @@ def parse_args(argv, prog=None):
                                     "Setting this option could cause an error when the rmd renders.")
     file_settings.add_argument('--savePlots', default=None, dest='plot_ext',
                                help='Save all plots to file with specified extension.')
-    file_settings.add_argument('--static', default=False, action='store_true',
-                               help="Don't Add interactive tool tip to PCA and precursor plots.")
+    file_settings.add_argument('--interactive', default='3',
+                               help='One digit bit mask. 0 for all static plots, 1 for interactive '
+                                    'peak areas plot, 2 for interactive PCA plots, '
+                                    '3 for all interactive plots.')
 
     batch_vars = parser.add_argument_group('Batch variables',
                      'Batch variables are optional. By default the project column in the replicates '
@@ -671,7 +673,7 @@ def _main(args):
     string_args = ['batch1', 'batch2', 'covariate_vars', 'color_vars', 'control_key']
     string_args = {x: getattr(args, x) for x in string_args}
 
-    # check table_args
+    # check bitmask options
     if not validate_bit_mask(args.precursorTables, 3, 2):
         LOGGER.error('Error parsing --precursorTables')
         sys.exit(1)
@@ -680,11 +682,16 @@ def _main(args):
         sys.exit(1)
     if not validate_bit_mask(args.metadataTables, 1, 2):
         LOGGER.error('Error parsing --metadataTables')
+        sys.exit(1)
+    if not validate_bit_mask(args.interactive, 2, 1):
+        LOGGER.error('Error parsing --interactive')
+        sys.exit(1)
 
-    # parse table_args
+    # parse bitmask options
     protein_tables = parse_bitmask_options(args.proteinTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     precursor_tables = parse_bitmask_options(args.precursorTables, ('wide', 'long'), PYTHON_METHOD_NAMES)
     metadata_tables = parse_bitmask_options(args.metadataTables, ('wide', 'long'), ('write',))
+    interactive_plots = parse_bitmask_options(args.interactive, ('plots',), ('area_dist', 'pca'))
 
     try:
         # Initialize db connection
@@ -765,7 +772,7 @@ def _main(args):
         outF.write(add_header('Precursor normalization', level=1))
         outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.tiff' if args.plot_ext else None,
                                        skip_bc=skip_bc,
-                                       interactive=not args.static))
+                                       interactive=interactive_plots['plots']['area_dist']))
 
         # CV distribution plot
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
@@ -782,7 +789,7 @@ def _main(args):
                             color_vars=args.color_vars,
                             skip_bc=skip_bc,
                             plot_file_path=f'plots/precursor_pca.{args.plot_ext}' if args.plot_ext else None,
-                            interactive=not args.static))
+                            interactive=interactive_plots['plots']['pca']))
 
         # protein PCA plot
         outF.write(add_header('Protein batch correction PCA', level=1))
@@ -790,7 +797,7 @@ def _main(args):
                             color_vars=args.color_vars,
                             skip_bc=skip_bc,
                             plot_file_path=f'plots/protein_pca.{args.plot_ext}' if args.plot_ext else None,
-                            interactive=not args.static))
+                            interactive=interactive_plots['plots']['pca']))
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
