@@ -354,7 +354,7 @@ dat.{p} <- dat.{p} %>%
     return text
 
 
-def precursor_norm_plot(plot_file_path=None, skip_bc=False):
+def precursor_norm_plot(plot_file_path=None, skip_bc=False, interactive=True):
     '''
     Generate precursor normalization box plot.
     '''
@@ -370,9 +370,15 @@ dat.p$method <- factor(dat.p$method, levels=precursor.methods,
                        labels=c('Unnormalized', 'Median Normalized'{'' if skip_bc else ", 'Normalized, Batch Corrected'"}))
 dat.p$acquiredRank <- as.numeric(as.factor(rank(-dat.p$acquiredRank)))
 
-p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if skip_bc else ', color=get(batch1)'})) +
-    facet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top') +
-    geom_boxplot(outlier.size = 0.5) +'''
+p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if skip_bc else ', color=get(batch1)'}'''
+
+    if interactive:
+        text += ',\n\t\t\t\t tooltip=replicate, data_id=replicate'
+
+    text += ')) +\n'
+
+    text += f'''\tfacet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top') +
+    {'ggiraph::geom_boxplot_interactive' if interactive else 'geom_boxplot'}(outlier.size = 0.5) +'''
 
     if not skip_bc:
         text += '''
@@ -389,7 +395,7 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if sk
     if plot_file_path:
         text += ggsave(plot_file_path, 'p.norm', (fig_height, fig_width))
 
-    text += '\np.norm\n```\n\n\n'
+    text += f"\n{'ggiraph::girafe(ggobj=p.norm)' if interactive else 'p.norm'}\n```\n\n\n"
     return text
 
 
@@ -449,7 +455,8 @@ p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
     return text
 
 
-def pca_plot(p, color_vars=None, plot_file_path=None, skip_bc=False):
+def pca_plot(p, color_vars=None, plot_file_path=None,
+             skip_bc=False, interactive=True):
 
     n_methods = 2 if skip_bc else 3
 
@@ -469,7 +476,8 @@ def pca_plot(p, color_vars=None, plot_file_path=None, skip_bc=False):
     text += f'''names({p}.methods) <- c('Unnormalized', paste(norm.methods['{p}'], 'Normalized'){'' if skip_bc else ", 'Batch corrected'"})
 pca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
     color.cols=c('Acquisition\\nnumber'='acquiredRank'{batch_var_text}{color_vars_text}),
-    dat.metadata=dat.metadata)\n'''
+    dat.metadata=dat.metadata,
+    interactive={'T' if interactive else 'F'})\n'''
 
     if plot_file_path:
         text += ggsave(plot_file_path, f'pca.{p}', (fig_height, fig_width))
@@ -588,6 +596,8 @@ def parse_args(argv, prog=None):
                                     "Setting this option could cause an error when the rmd renders.")
     file_settings.add_argument('--savePlots', default=None, dest='plot_ext',
                                help='Save all plots to file with specified extension.')
+    file_settings.add_argument('--static', default=False,
+                               help="Don't Add interactive tool tip to PCA and precursor plots.")
 
     batch_vars = parser.add_argument_group('Batch variables',
                      'Batch variables are optional. By default the project column in the replicates '
@@ -754,7 +764,8 @@ def _main(args):
         # precursor normalization plot
         outF.write(add_header('Precursor normalization', level=1))
         outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.tiff' if args.plot_ext else None,
-                                       skip_bc=skip_bc))
+                                       skip_bc=skip_bc,
+                                       interactive=not args.static))
 
         # CV distribution plot
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
@@ -770,14 +781,16 @@ def _main(args):
         outF.write(pca_plot('precursor',
                             color_vars=args.color_vars,
                             skip_bc=skip_bc,
-                            plot_file_path=f'plots/precursor_pca.{args.plot_ext}' if args.plot_ext else None))
+                            plot_file_path=f'plots/precursor_pca.{args.plot_ext}' if args.plot_ext else None,
+                            interactive=not args.static))
 
         # protein PCA plot
         outF.write(add_header('Protein batch correction PCA', level=1))
         outF.write(pca_plot('protein',
                             color_vars=args.color_vars,
                             skip_bc=skip_bc,
-                            plot_file_path=f'plots/protein_pca.{args.plot_ext}' if args.plot_ext else None))
+                            plot_file_path=f'plots/protein_pca.{args.plot_ext}' if args.plot_ext else None,
+                            interactive=not args.static))
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
