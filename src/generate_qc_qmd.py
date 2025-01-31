@@ -355,7 +355,11 @@ for col in ('Unnormalized', {"'Normalized'" if show_normalized else ''}):
 
 skip_pca_plot = False
 if max(len(data.index) for data in pc_data.values()) == 0:
-    print('Can not perform PC analysis! 0 precursors found in all replicates.')
+    print('Cannot perform PC analysis! 0 precursors found in all replicates.')
+    skip_pca_plot = True
+
+elif len(pc_data['Unnormalized'].columns) == 1:
+    print('Cannot perform PC analysis with only 1 replicate!')
     skip_pca_plot = True
 
 else:
