@@ -1,6 +1,5 @@
 
 import unittest
-import argparse
 import os
 import sqlite3
 import pandas as pd
@@ -13,10 +12,11 @@ from DIA_QC_report.submodules.dia_db_utils import read_wide_metadata
 
 class TestMakeQCqmd(unittest.TestCase):
     TEST_PROJECT = 'Strap'
-    RENDER_QMD = False
 
     @classmethod
     def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_qc_qmd/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -43,7 +43,7 @@ class TestMakeQCqmd(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
@@ -89,10 +89,11 @@ class TestMakeQCqmd(unittest.TestCase):
 
 class TestMissingMetadata(unittest.TestCase):
     TEST_PROJECT = 'Strap'
-    RENDER_QMD = False
 
     @classmethod
     def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_missing_metadata/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -168,7 +169,7 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
@@ -190,10 +191,11 @@ class TestMissingMetadata(unittest.TestCase):
 
 class TestBadMetadataHeaders(unittest.TestCase):
     TEST_PROJECT = 'Strap'
-    RENDER_QMD = False
 
     @classmethod
     def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_bad_metadata_headers/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -230,7 +232,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix='render_bad_header_qmd')
@@ -239,10 +241,10 @@ class TestBadMetadataHeaders(unittest.TestCase):
 
 
 class TestSingleReplicate(unittest.TestCase):
-    RENDER_QMD = False
-
     @classmethod
     def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_single_replicate/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -279,7 +281,7 @@ class TestSingleReplicate(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
@@ -288,10 +290,10 @@ class TestSingleReplicate(unittest.TestCase):
 
 
 class TestSingleReplicate(unittest.TestCase):
-    RENDER_QMD = False
-
     @classmethod
     def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_single_replicate/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -327,7 +329,7 @@ class TestSingleReplicate(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir)
             self.assertEqual(render_result.returncode, 0)
@@ -336,10 +338,11 @@ class TestSingleReplicate(unittest.TestCase):
 
 class TestAllPrecursorsMissing(unittest.TestCase):
     TEST_PROJECT = 'GPF'
-    RENDER_QMD = False
 
     @classmethod
     def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_missing_precursors/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -377,7 +380,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         self.assertEqual(unorm_result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{unorm_qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{unorm_qmd_name}')
@@ -398,23 +401,9 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         self.assertEqual(norm_db_result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{norm_qmd_name}.qmd'))
 
-        if self.RENDER_QMD:
+        if self.render_qmd:
             render_command = ['quarto', 'render', f'{norm_qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{norm_qmd_name}')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{norm_qmd_name}.html'))
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Tests for generate_qc_qmd')
-    parser.add_argument('-r', '--render', action='store_true', default=False,
-                        help='Also test if qmd file can be rendered?')
-    args, unittest_args = parser.parse_known_args()
-
-    TestMakeQCqmd.RENDER_QMD = args.render
-    TestMissingMetadata.RENDER_QMD = args.render
-    TestAllPrecursorsMissing.RENDER_QMD = args.render
-
-    unittest_args.insert(0, __file__)
-    unittest.main(argv=unittest_args, verbosity=2)

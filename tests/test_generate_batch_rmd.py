@@ -1,8 +1,6 @@
 
 import unittest
 from unittest import mock
-import argparse
-import sys
 import os
 import sqlite3
 import re
@@ -10,7 +8,7 @@ import re
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
-import DIA_QC_report.generate_batch_rmd as generate_batch_rmd
+from DIA_QC_report import generate_batch_rmd
 from DIA_QC_report.submodules.normalization import NORMALIZATION_METHODS
 
 
@@ -64,19 +62,13 @@ class TestNormMethodsKnown(unittest.TestCase):
 
 
 class TestMakeBatchRmd(unittest.TestCase):
-    RENDER_RMD = False
-
     @classmethod
     def setUpClass(cls):
+        cls.render_rmd = os.getenv('RENDER_RMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_batch_rmd/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
-
-        # remove tables subdirectory in work_dir if necissary
-        if os.path.isdir(f'{cls.work_dir}/tables'):
-            for file in os.listdir(f'{cls.work_dir}/tables'):
-                os.remove(f'{cls.work_dir}/tables/{file}')
-            os.rmdir(f'{cls.work_dir}/tables')
 
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
                                                            cls.work_dir,
@@ -114,12 +106,13 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
-        if self.RENDER_RMD:
+        if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
             self.assertEqual(render_result.returncode, 0)
 
+            self.assertFalse(os.path.isdir(f'{self.work_dir}/plots'))
             for file in [f'{rmd_name}.html',
                          'proteins_batch_corrected_wide.tsv',
                          'precursors_batch_corrected_wide.tsv',
@@ -201,7 +194,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
             rmd_name = 'single_batch'
             command = ['dia_qc', 'batch_rmd',
-                       '--proteinTables=00', '--precursorTables=00',
+                       '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
                        '-o', f'{rmd_name}.rmd', self.db_path]
             result = setup_functions.run_command(command, self.work_dir)
 
@@ -219,7 +212,7 @@ class TestMakeBatchRmd(unittest.TestCase):
                 for d in ('long', 'wide'):
                     self.assertTrue(f'WARNING: {name} batch corrected {d} table not available when batch correction is skipped!' in result.stderr)
 
-            if self.RENDER_RMD:
+            if self.render_rmd:
                 render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
                 render_result = setup_functions.run_command(render_command, self.work_dir,
                                                             prefix=f'render_{rmd_name}')
@@ -262,10 +255,11 @@ class TestMakeBatchRmd(unittest.TestCase):
 
 class TestMissingMetadata(unittest.TestCase):
     TEST_PROJECT = 'Strap'
-    RENDER_RMD = False
 
     @classmethod
     def setUpClass(cls):
+        cls.render_rmd = os.getenv('RENDER_RMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_batch_rmd_missing_metadata/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -318,7 +312,7 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
         self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
 
-        if self.RENDER_RMD:
+        if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
@@ -329,10 +323,10 @@ class TestMissingMetadata(unittest.TestCase):
 
 
 class TestBadMetadataHeaders(unittest.TestCase):
-    RENDER_RMD = False
-
     @classmethod
     def setUpClass(cls):
+        cls.render_rmd = os.getenv('RENDER_RMD', 'False').lower() == 'true'
+
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_batch_rmd_bad_metadata_headers/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -383,7 +377,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
-        if self.RENDER_RMD:
+        if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
@@ -411,7 +405,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
-        if self.RENDER_RMD:
+        if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
@@ -422,17 +416,3 @@ class TestBadMetadataHeaders(unittest.TestCase):
                          'precursors_batch_corrected_wide.tsv',
                          'metadata_wide.tsv']:
                 self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Tests for generate_batch_rmd')
-    parser.add_argument('-r', '--render', action='store_true', default=False,
-                        help='Also test if rmd file can be rendered?')
-    args, unittest_args = parser.parse_known_args()
-
-    TestMakeBatchRmd.RENDER_RMD = args.render
-    TestMissingMetadata.RENDER_RMD = args.render
-    TestBadMetadataHeaders.RENDER_RMD = args.render
-
-    unittest_args.insert(0, __file__)
-    unittest.main(argv=unittest_args, verbosity=2)
