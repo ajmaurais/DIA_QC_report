@@ -57,10 +57,10 @@ def write_precusor_tables(conn, dest, tables):
     # wide tables, if any
     for method, write in tables['wide'].items():
         if write:
-            df.pivot(index=['protein', 'modifiedSequence', 'precursorCharge'],
-                     columns='replicate',
-                     values=PRECURSOR_METHOD_NAMES[method]).to_csv(f'{dest}/precursors_wide_{method}.tsv',
-                                                                       sep='\t', index=True)
+            df_w = df.pivot(index=['protein', 'modifiedSequence', 'precursorCharge'],
+                            columns='replicate',
+                            values=PRECURSOR_METHOD_NAMES[method])
+            df_w.to_csv(f'{dest}/precursors_wide_{method}.tsv', sep='\t', index=True)
 
 
 def write_protein_tables(conn, dest, tables):
@@ -98,9 +98,9 @@ def write_protein_tables(conn, dest, tables):
     # wide tables, if any
     for method, write in tables['wide'].items():
         if write:
-            df.pivot(index='protein', columns='replicate',
-                     values=PROTEIN_METHOD_NAMES[method]).to_csv(f'{dest}/proteins_wide_{method}.tsv',
-                                                                 sep='\t', index=True)
+            df_w = df.pivot(index='protein', columns='replicate',
+                            values=PROTEIN_METHOD_NAMES[method])
+            df_w.to_csv(f'{dest}/proteins_wide_{method}.tsv', sep='\t', index=True)
 
 
 def write_metadata_tables(conn, dest, tables):
@@ -116,9 +116,8 @@ def write_metadata_tables(conn, dest, tables):
         df.to_csv(f'{dest}/metadata_long.tsv', sep='\t', index=False)
 
     if tables['wide']['write']:
-        df.pivot(index='replicate',
-                columns='key',
-                values='value').to_csv(f'{dest}/metadata_wide.tsv', sep='\t', index=False)
+        df_w = df.pivot(index='replicate', columns='key', values='value')
+        df_w.to_csv(f'{dest}/metadata_wide.tsv', sep='\t', index=False)
 
 
 def _any_tables(table_opts):

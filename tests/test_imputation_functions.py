@@ -194,6 +194,7 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
         self.db_path = None
         self.data_dir = None
         self.conn = None
+        self.Manager = imputation.ImputationManagerBase
 
 
     @classmethod
@@ -289,13 +290,19 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
 
     def test_abc_instantiation_fails(self):
         self.assertIsNotNone(self.conn)
-
         with self.assertRaises(TypeError):
             imputation.ImputationManagerBase(self.conn)
 
 
+    def test_both_impute_data_false_fails(self):
+        with self.assertRaises(ValueError) as e:
+            self.Manager(impute_precursors=False, impute_proteins=False)
+        self.assertEqual('Either impute_precursors or impute_proteins must be True!',
+                         str(e.exception))
+
+
     def test_null_conn_impute_fails(self):
-        manager = imputation.KNNImputer()
+        manager = self.Manager()
         with self.assertRaises(RuntimeError) as e:
             manager.impute()
         self.assertEqual(imputation.NULL_DB_ERROR, str(e.exception))
@@ -333,8 +340,8 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
 
 
     def do_level_test(self, level, df_precursor, df_protein):
-        manager = imputation.KNNImputer(conn=self.conn, level=level)
-        with self.assertNoLogs(imputation.LOGGER, level='WARNING') as cm:
+        manager = self.Manager(conn=self.conn, level=level)
+        with self.assertNoLogs(imputation.LOGGER, level='WARNING'):
             self.assertTrue(manager.impute())
 
         db_pre = manager.precursors
@@ -359,6 +366,10 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
     def test_imputation_level(self):
         self.assertIsNotNone(self.conn)
 
+        with self.assertRaises(ValueError) as e:
+            self.Manager(conn=self.conn, level=3)
+        self.assertEqual('level must be 0 or 1', str(e.exception))
+
         df_pre = pd.read_sql('''SELECT replicateId, peptideId, precursorCharge,
                                 totalAreaFragment as quant, normalizedArea as normQuant
                                 FROM precursors;''', self.conn)
@@ -376,7 +387,7 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
     def test_all_reps_skipped(self):
         self.assertIsNotNone(self.conn)
 
-        manager = imputation.KNNImputer(conn=self.conn)
+        manager = self.Manager(conn=self.conn)
         try:
             cur = self.conn.cursor()
             cur.execute('UPDATE replicates SET includeRep = FALSE;')
@@ -399,6 +410,7 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
 
     @classmethod
     def setUpClass(cls):
+        cls.Manager = imputation.KNNImputer
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions_single/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -510,6 +522,7 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
 class TestMultiImputation(unittest.TestCase, TestImputationBase):
     @classmethod
     def setUpClass(cls):
+        cls.Manager = imputation.KNNImputer
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions_multi/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'

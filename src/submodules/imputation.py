@@ -31,7 +31,9 @@ class ImputationManagerBase(TransformationManagerBase):
 
     def __init__(self, conn,
                  level=0, missing_threshold=0.5,
-                 impute_data='both', group_by_project=True):
+                 impute_precursors=True,
+                 impute_proteins=True,
+                 group_by_project=True):
         '''
         Parameters
         ----------
@@ -43,26 +45,27 @@ class ImputationManagerBase(TransformationManagerBase):
         missing_threshold: float
             Minimum percent of non-missing values to impute value.
             Default is 0.5.
-        impute_data: str
-            Impute 'precursors', 'proteins', or 'both'. Default is 'both'.
+        impute_precursors: bool
+            Impute precursors? Default is True.
+        impute_proteins: bool
+            Impute proteins? Default is True.
         group_by_project: bool
             Only use replicates in the same project to
             Default is 'project'.
         '''
         super().__init__(conn)
 
-        if level in [0, 1]:
-            self.level = level
-        else:
-            raise RuntimeError('level must be 0 or 1')
+        if level not in (0, 1):
+            raise ValueError('level must be 0 or 1')
+        self.level = level
 
         self.missing_threshold = missing_threshold
         self.group_by_project = group_by_project
 
-        if impute_data in ('precursors', 'proteins', 'both'):
-            self.impute_data = impute_data
-        else:
-            raise RuntimeError("impute_data must be 'precursors', 'proteins', or 'both'")
+        if not any((impute_precursors, impute_proteins)):
+            raise ValueError('Either impute_precursors or impute_proteins must be True!')
+        self.impute_precursors = impute_precursors
+        self.impute_proteins = impute_proteins
 
 
     def _read_precursors(self):
@@ -323,16 +326,16 @@ class KNNImputer(ImputationManagerBase):
         n_projects = len(cur.fetchall())
         group_by_project = False if n_projects == 1 else self.group_by_project
 
-        if self.impute_data in ('precursors', 'both'):
+        if self.impute_precursors:
             if not self._read_precursors():
                 return False
-            self.precursors = self._impute(self.precursors, ['peptideId', 'precursorCharge'], 'area',
-                                           group_by_project)
+            self.precursors = self._impute(self.precursors, ['peptideId', 'precursorCharge'],
+                                           'area', group_by_project)
 
-        if self.impute_data in ('proteins', 'both'):
+        if self.impute_proteins:
             if not self._read_proteins():
                 return False
-            self.proteins = self._impute(self.proteins, 'proteinId', 'abundance',
-                                         group_by_project)
+            self.proteins = self._impute(self.proteins, 'proteinId',
+                                         'abundance', group_by_project)
 
         return True

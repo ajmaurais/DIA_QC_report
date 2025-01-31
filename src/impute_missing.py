@@ -8,6 +8,7 @@ from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import METADATA_TIME_FORMAT
 from .submodules.dia_db_utils import IS_IMPUTED, PRECURSOR_IMPUTE_METHOD, PROTEIN_IMPUTE_METHOD
 from .submodules.dia_db_utils import update_meta_value
+from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 from .submodules.transformation import MethodOptions
 from .submodules.imputation import IMPUTATION_METHODS
 from .submodules.imputation import KNNImputer
@@ -16,10 +17,10 @@ from . import __version__ as PROGRAM_VERSION
 
 COMMAND_DESCRIPTION = 'Impute missing precursor and/or protein values.'
 
-IMPUTE_DATA_OPTIONS = ('both', 'precursors', 'proteins')
 
-
-def get_manager(method, method_args, method_help=False, **kwargs):
+def get_manager(method, method_args, method_help=False,
+                impute_precursors=True, impute_proteins=True,
+                **kwargs):
     '''
     Get imputation manager and data processing metadata for imputation method.
 
@@ -31,6 +32,10 @@ def get_manager(method, method_args, method_help=False, **kwargs):
         The list of method specific options strings.
     method_help:
         Show imputation method help and exit?
+    impute_precursors: bool
+        Impute precursors? Default is True.
+    impute_proteins: bool
+        Impute proteins? Default is True.
     **kwargs: dict
         Additional arguments passed to all imputation manager for all methods.
 
@@ -40,6 +45,10 @@ def get_manager(method, method_args, method_help=False, **kwargs):
         If method_help is True show method help and exit with code 0.
         If method_args are invalid exit with code 1.
     '''
+
+    if not (impute_precursors or impute_proteins):
+        LOGGER.warning('Both precursor and protein imputation is skipped.')
+        sys.exit(0)
 
     metadata = kwargs.copy()
     parser = MethodOptions()
@@ -64,19 +73,28 @@ def get_manager(method, method_args, method_help=False, **kwargs):
             sys.exit(1)
 
     manager_args = parser.get_option_dict()
-    manager = Manager(**manager_args, **kwargs)
+    manager = Manager(impute_precursors=impute_precursors, impute_proteins=impute_proteins,
+                      **manager_args, **kwargs)
     metadata.update(manager_args)
 
-    return manager, metadata
+    ret_metadata = dict()
+    if impute_precursors:
+        for key, value in metadata.items():
+            ret_metadata[f'precursor_imputation_{key}'] = value
+    if impute_proteins:
+        for key, value in metadata.items():
+            ret_metadata[f'protein_imputation_{key}'] = value
+
+    return manager, ret_metadata
 
 
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     impute_settings = parser.add_argument_group('Global imputation settings')
-    impute_settings.add_argument('-i', '--imputeData', choices=IMPUTE_DATA_OPTIONS,
-                                 default='both', dest='impute_data',
-                                 help='Which data to impute. Default is "both".')
+    impute_settings.add_argument('-i', '--imputeData', default='3', dest='impute_data',
+                                 help='One digit bit mask. 1 for precursor imputation, 2 for protein '
+                                      'imputation, 3 for both precursor and protein imputation.')
     impute_settings.add_argument('-m', '--method', choices=IMPUTATION_METHODS, default='KNN',
                                  help='Normalization method to use. Default is "k-means"')
     impute_settings.add_argument('-l', '--level', choices=(0, 1), default=0,
@@ -118,19 +136,21 @@ def _main(args):
     Actual main method. `args` Should be an initialized argparse namespace.
     '''
 
+    if not validate_bit_mask(args.interactive, 2, 1):
+        LOGGER.error('Error parsing --imputeData')
+        sys.exit(1)
+
+    # parse bitmask options
+    impute_data = parse_bitmask_options(args.interactive, ('impute',), ('precursors', 'proteins'))
+
     # initialize imputation manager
     imputation_manager, metadata = get_manager(args.method, args.method_settings,
                                                method_help=args.method_help,
-                                               impute_data=args.impute_data,
+                                               impute_precursors=impute_data['impute']['precursors'],
+                                               impute_proteins=impute_data['impute']['proteins'],
                                                level=args.level,
                                                missing_threshold=args.missing_threshold,
                                                group_by_project=args.group_by == 'project')
-
-    # updatet metadata to reflect --imputeData flag
-    if args.impute_data in ('both', 'peptide'):
-        peptide_metadata = {f'peptide_{k}': v for k, v in metadata.items()}
-    if args.impute_data in ('both', 'protein'):
-        protein_metadata = {f'protein_{k}': v for k, v in metadata.items()}
 
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)

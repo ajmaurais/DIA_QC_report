@@ -24,6 +24,10 @@ class TestGetManager(unittest.TestCase):
     def do_valid_arg_test(self, method, method_args, method_kwargs, all_kwargs):
         manager, metadata = impute_missing.get_manager(method, method_args, **method_kwargs)
 
+        ret_metadata = dict()
+        impute_data = method_kwargs.get('impute_data', 'both')
+
+
         for key, value in all_kwargs.items():
             self.assertTrue(key in metadata)
             self.assertEqual(value, metadata[key])
