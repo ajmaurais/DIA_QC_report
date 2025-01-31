@@ -381,11 +381,9 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if sk
     {'ggiraph::geom_boxplot_interactive' if interactive else 'geom_boxplot'}(outlier.size = 0.5) +'''
 
     if not skip_bc:
-        text += '''
-    scale_color_discrete(name='Batch') +'''
+        text += '''\n\tscale_color_discrete(name='Batch') +'''
 
-    text += '''
-    coord_flip() +
+    text += '''\n\tcoord_flip() +
     ylab('log2(Area)') +
     xlab('Acquisition number') +
     theme_bw() +
@@ -482,7 +480,8 @@ pca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
     if plot_file_path:
         text += ggsave(plot_file_path, f'pca.{p}', (fig_height, fig_width))
 
-    text += f'\npca.{p}\n```\n\n\n'
+    html_plot = f'ggiraph::girafe(ggobj=pca.{p})' if interactive else f'pca.{p}'
+    text += f'\n{html_plot}\n```\n\n\n'
 
     return text
 

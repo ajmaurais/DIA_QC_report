@@ -253,6 +253,133 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
 
 
+class TestInteractive(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.render_rmd = os.getenv('RENDER_RMD', 'False').lower() == 'true'
+
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_batch_rmd_interactive/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        # remove plots subdirectory in work_dir if necissary
+        if os.path.isdir(f'{cls.work_dir}/plots'):
+            for file in os.listdir(f'{cls.work_dir}/plots'):
+                os.remove(f'{cls.work_dir}/plots/{file}')
+            os.rmdir(f'{cls.work_dir}/plots')
+
+        cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
+                                                           cls.work_dir,
+                                                           clear_dir=True)
+
+        if not all(result.returncode == 0 for result in cls.parse_results):
+            raise RuntimeError('Setup of test db failed!')
+
+        normalize_command = ['dia_qc', 'normalize', cls.db_path]
+        cls.normalize_result = setup_functions.run_command(normalize_command,
+                                                           cls.work_dir,
+                                                           prefix='normalize_db')
+
+        cls.conn = None
+        if cls.normalize_result.returncode == 0:
+            if os.path.isfile(cls.db_path):
+                cls.conn = sqlite3.connect(cls.db_path)
+
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.conn is not None:
+            cls.conn.close()
+
+
+    def test_savePlots(self):
+        self.assertTrue(self.conn is not None)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        rmd_name = 'savePlots'
+        command = ['dia_qc', 'batch_rmd', '--savePlots=pdf',
+                   '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
+                   '-o', f'{rmd_name}.rmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
+
+        if self.render_rmd:
+            render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{rmd_name}')
+            self.assertEqual(render_result.returncode, 0)
+
+            self.assertTrue(os.path.isdir(f'{self.work_dir}/plots'))
+            for file in [f'{rmd_name}.html',
+                         'plots/cv_dist.pdf',
+                         'plots/precursor_normalization.tiff',
+                         'plots/precursor_pca.pdf',
+                         'plots/protein_pca.pdf']:
+                self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
+
+
+    def area_dist_interactive(self, rmd_path):
+        self.assertTrue(os.path.isfile(rmd_path))
+        with open(rmd_path, 'r') as inF:
+            text = inF.read()
+
+        not_i = generate_batch_rmd.precursor_norm_plot(None, interactive=False)
+        if not_i in text:
+            self.assertFalse('ggiraph::girafe' in not_i)
+            return False
+
+        i = generate_batch_rmd.precursor_norm_plot(None, interactive=True)
+        if i in text:
+            self.assertTrue('ggiraph::girafe' in i)
+            return True
+
+        return None
+
+
+    def pca_interactive(self, rmd_path):
+        self.assertTrue(os.path.isfile(rmd_path))
+        with open(rmd_path, 'r') as inF:
+            text = inF.read()
+
+        not_i_prec = generate_batch_rmd.pca_plot('precursor', interactive=False)
+        not_i_prot = generate_batch_rmd.pca_plot('protein', interactive=False)
+        if not_i_prec in text and not_i_prot in text:
+            self.assertFalse('ggiraph::girafe' in not_i_prec)
+            self.assertFalse('ggiraph::girafe' in not_i_prot)
+            return False
+
+        i_prec = generate_batch_rmd.pca_plot('precursor', interactive=True)
+        i_prot = generate_batch_rmd.pca_plot('protein', interactive=True)
+        if i_prec in text and i_prot in text:
+            self.assertTrue('ggiraph::girafe' in i_prec)
+            self.assertTrue('ggiraph::girafe' in i_prot)
+            return True
+
+        return None
+
+
+    def test_interactive_options(self):
+        self.assertTrue(self.conn is not None)
+        self.assertTrue(db_utils.is_normalized(self.conn))
+
+        for option in ('0', '1', '2', '3'):
+            rmd_name = f'test_interactive_{option}.rmd'
+            command = ['dia_qc', 'batch_rmd', f'--interactive={option}',
+                       '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
+                       '-o', rmd_name, self.db_path]
+            result = setup_functions.run_command(command, self.work_dir)
+            self.assertEqual(result.returncode, 0)
+
+            plots = db_utils.parse_bitmask_options(option, ('plots',), ('area_dist', 'pca'))
+
+            self.assertEqual(self.area_dist_interactive(f'{self.work_dir}{rmd_name}'),
+                             plots['plots']['area_dist'])
+            self.assertEqual(self.pca_interactive(f'{self.work_dir}/{rmd_name}'),
+                             plots['plots']['pca'])
+
+
 class TestMissingMetadata(unittest.TestCase):
     TEST_PROJECT = 'Strap'
 
