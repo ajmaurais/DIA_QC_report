@@ -4,17 +4,13 @@ import re
 from textwrap import fill as fill_text
 
 from .logger import LOGGER
+from .logger import quiet_log_info, quiet_log_warning, quiet_log_error
 
 HELP_TAB = '    '
 
 
 def cammel_case(prefix, suffix):
     return f'{prefix}{suffix[0].upper()}{suffix[1:]}'
-
-
-def _quiet_log_error(quiet, *args):
-    if not quiet:
-        LOGGER.error(*args)
 
 
 class Option:
@@ -254,17 +250,17 @@ class Option:
         and whether value can be converted to option dtype.
         '''
         if not self.can_convert(value):
-            _quiet_log_error(quiet, 'Cannot convert value <%s> to %s!', value, str(self.dtype))
+            quiet_log_error(quiet, 'Cannot convert value <%s> to %s!', value, str(self.dtype))
             return False
 
         _value = self._convert_to_dtype(value)
 
         if not self.valid_choice(_value):
-            _quiet_log_error(quiet, "Value '%s' must be in %s!", _value, self.choices)
+            quiet_log_error(quiet, "Value '%s' must be in %s!", _value, self.choices)
             return False
 
         if not self.in_range(_value):
-            _quiet_log_error(quiet, self._format_range(err_prefix=True))
+            quiet_log_error(quiet, self._format_range(err_prefix=True))
             return False
 
         return True
@@ -391,13 +387,13 @@ class MethodOptions:
         for arg in args:
             match = self.OPTION_RE.search(arg)
             if match is None:
-                _quiet_log_error(quiet, "Could not parse option argument: '%s'", arg)
+                quiet_log_error(quiet, "Could not parse option argument: '%s'", arg)
                 all_good = False
                 continue
 
             key, value = self._get_re_key_value_str(match)
             if key not in self.options:
-                _quiet_log_error(quiet, "Unknown option: '%s'", key)
+                quiet_log_error(quiet, "Unknown option: '%s'", key)
                 all_good = False
                 continue
 

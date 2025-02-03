@@ -1,6 +1,5 @@
 
 import unittest
-from unittest import mock
 import os
 import sqlite3
 import re
@@ -184,13 +183,12 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.conn.commit()
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_single_batch_works(self):
         self.assertTrue(self.conn is not None)
 
         try:
             # set 'Strap' project replicates skipped
-            self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',)))
+            self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',), quiet=True))
 
             rmd_name = 'single_batch'
             command = ['dia_qc', 'batch_rmd',
@@ -220,7 +218,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         finally:
             # Set all replicates to be included
-            db_utils.mark_all_reps_included(self.conn)
+            db_utils.mark_all_reps_included(self.conn, quiet=True)
 
 
     def test_controlKey_check(self):

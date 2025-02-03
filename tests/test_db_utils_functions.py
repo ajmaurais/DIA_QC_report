@@ -1,6 +1,7 @@
 
 import unittest
 import random
+import re
 from itertools import combinations
 from unittest import mock
 import os
@@ -13,13 +14,35 @@ import pandas as pd
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
+from DIA_QC_report.submodules import logger
 from DIA_QC_report.submodules.dtype import Dtype
 from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report.submodules.skyline_reports import ReplicateReport
 from DIA_QC_report import __version__ as PROGRAM_VERSION
 
 
-class TestDBHelperFunctions(unittest.TestCase):
+class TestDBFunctionsBase(setup_functions.AbstractTestsBase):
+    def mark_reps_skipped(self, *args, **kwargs):
+        with self.assertLogs(logger.LOGGER, level='INFO') as cm:
+            ret=db_utils.mark_reps_skipped(*args, **kwargs)
+
+        self.assertEqual(len(cm.output), 1)
+        self.assertIsNotNone(re.search('Excluding [0-9]+ replicates.', cm.output[0]))
+
+        return ret
+
+
+    def mark_all_reps_included(self, *args, **kwargs):
+        with self.assertLogs(logger.LOGGER, level='INFO') as cm:
+            db_utils.mark_all_reps_included(*args, **kwargs)
+
+        self.assertEqual(len(cm.output), 1)
+        messages = [re.compile(m) for m in ('All replicates are already included.',
+                                            'Setting [0-9]+ includeRep values to TRUE')]
+        self.assertTrue(any(p.search(cm.output[0]) is not None for p in messages))
+
+
+class TestDBHelperFunctions(unittest.TestCase, TestDBFunctionsBase):
     TEST_PROJECT = 'Strap'
     N_REPS = 20
 
@@ -49,66 +72,71 @@ class TestDBHelperFunctions(unittest.TestCase):
             cls.conn.close()
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_mark_reps_skipped_errors(self):
         self.assertTrue(self.conn is not None)
-        self.assertFalse(db_utils.mark_reps_skipped(self.conn, reps=('dummy',)))
+        with self.assertLogs(logger.LOGGER, level='ERROR') as cm:
+            self.assertFalse(db_utils.mark_reps_skipped(self.conn, reps=('dummy',)))
+
+        self.assertEqual(len(cm.output), 1)
+        self.assertIsNotNone("Replicate 'dummy' is not in database!" in cm.output[0])
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_mark_reps_skipped_included(self):
         self.assertTrue(self.conn is not None)
 
-        def excluded_reps():
-            cur = self.conn.cursor()
+        def excluded_reps(conn):
+            cur = conn.cursor()
             cur.execute('SELECT replicate FROM replicates WHERE includeRep == FALSE;')
             return [x[0] for x in cur.fetchall()]
 
-        def included_reps():
-            cur = self.conn.cursor()
+        def included_reps(conn):
+            cur = conn.cursor()
             cur.execute('SELECT replicate FROM replicates WHERE includeRep == TRUE;')
             return [x[0] for x in cur.fetchall()]
 
-        included = included_reps()
-        self.assertTrue(len(included), self.N_REPS)
-
+        test_conn = sqlite3.connect(':memory:')
         try:
+            self.conn.backup(test_conn)
+
+            included = included_reps(test_conn)
+            self.assertTrue(len(included), self.N_REPS)
+
             # Select single rep to exclude
             random.seed(1)
             single_rep = included.pop(random.randint(0, self.N_REPS - 1))
-            self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=[single_rep]))
-            self.assertEqual(len(excluded_reps()), 1)
-            self.assertEqual(len(included_reps()), self.N_REPS - 1)
-            self.assertTrue(single_rep in excluded_reps())
+            self.assertTrue(self.mark_reps_skipped(test_conn, reps=[single_rep]))
+            self.assertEqual(len(excluded_reps(test_conn)), 1)
+            self.assertEqual(len(included_reps(test_conn)), self.N_REPS - 1)
+            self.assertTrue(single_rep in excluded_reps(test_conn))
 
             # Select multiple reps to exclude
             excluded = [included[i] for i in {random.randint(0, self.N_REPS - 2) for _ in range(10)}]
             included = [x for x in included if x not in excluded]
-            self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=excluded))
+            self.assertTrue(self.mark_reps_skipped(test_conn, reps=excluded))
             excluded.append(single_rep)
-            db_excluded = excluded_reps()
+            db_excluded = excluded_reps(test_conn)
             self.assertEqual(len(db_excluded), len(excluded))
-            self.assertEqual(len(included_reps()), len(included))
+            self.assertEqual(len(included_reps(test_conn)), len(included))
             self.assertTrue(all(rep in db_excluded for rep in excluded + [single_rep]))
 
             # Set all reps included
-            db_utils.mark_all_reps_included(self.conn)
-            included = included_reps()
+            self.mark_all_reps_included(test_conn)
+            included = included_reps(test_conn)
             self.assertEqual(len(included), self.N_REPS)
-            self.assertEqual(len(excluded_reps()), 0)
+            self.assertEqual(len(excluded_reps(test_conn)), 0)
 
             # Exclude project
-            self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=[self.TEST_PROJECT]))
-            self.assertEqual(len(excluded_reps()), self.N_REPS)
-            self.assertEqual(len(included_reps()), 0)
+            self.assertTrue(self.mark_reps_skipped(test_conn, projects=[self.TEST_PROJECT]))
+            self.assertEqual(len(excluded_reps(test_conn)), self.N_REPS)
+            self.assertEqual(len(included_reps(test_conn)), 0)
 
             # Set all reps included again
-            db_utils.mark_all_reps_included(self.conn)
-            self.assertEqual(len(included_reps()), self.N_REPS)
-            self.assertEqual(len(excluded_reps()), 0)
+            self.mark_all_reps_included(test_conn)
+            self.assertEqual(len(included_reps(test_conn)), self.N_REPS)
+            self.assertEqual(len(excluded_reps(test_conn)), 0)
 
         finally:
-            db_utils.mark_all_reps_included(self.conn)
+            test_conn.close()
 
 
     def test_metadata_functions(self):
@@ -123,37 +151,38 @@ class TestDBHelperFunctions(unittest.TestCase):
         dia_qc_version = db_utils.get_meta_value(self.conn, 'dia_qc version')
         self.assertEqual(PROGRAM_VERSION, dia_qc_version)
 
-        # set dia_qc version to NULL and check that we get a warning.
-        self.conn = db_utils.update_meta_value(self.conn, 'dia_qc version', 'NULL')
-        with self.assertLogs(db_utils.LOGGER, level='WARNING') as cm:
-            self.assertTrue(db_utils.check_schema_version(self.conn))
-        self.assertTrue(any(f'The database was created with dia_qc version NULL but the current version is {PROGRAM_VERSION}' in out
-                            for out in cm.output))
-        self.assertEqual(db_utils.get_meta_value(self.conn, 'dia_qc version'), 'NULL')
-        self.assertEqual(len(cm.output), 1)
+        test_conn = sqlite3.connect(':memory:')
+        try:
+            self.conn.backup(test_conn)
 
-        # set dia_qc version back to correct version
-        self.conn = db_utils.update_meta_value(self.conn, 'dia_qc version', dia_qc_version)
-        self.assertEqual(db_utils.get_meta_value(self.conn, 'dia_qc version'), dia_qc_version)
-        with self.assertNoLogs(db_utils.LOGGER) as cm:
-            self.assertTrue(db_utils.check_schema_version(self.conn))
+            # set dia_qc version to NULL and check that we get a warning.
+            db_utils.update_meta_value(test_conn, 'dia_qc version', 'NULL')
+            with self.assertLogs(db_utils.LOGGER, level='WARNING') as cm:
+                self.assertTrue(db_utils.check_schema_version(test_conn))
+            message = f'The database was created with dia_qc version NULL but the current version is {PROGRAM_VERSION}'
+            self.assertEqual(len(cm.output), 1)
+            self.assertTrue(message in cm.output[0])
+            self.assertEqual(db_utils.get_meta_value(test_conn, 'dia_qc version'), 'NULL')
+            self.assertEqual(len(cm.output), 1)
 
-        # set current version to 'NULL' and make sure validation fails
-        self.conn = db_utils.update_meta_value(self.conn, 'schema_version', 'NULL')
-        with self.assertLogs(db_utils.LOGGER, level='ERROR') as cm:
-            self.assertFalse(db_utils.check_schema_version(self.conn))
-        self.assertEqual(db_utils.get_meta_value(self.conn, 'schema_version'), 'NULL')
-        self.assertEqual(len(cm.output), 1)
-        self.assertTrue(any(f'Database schema version (NULL) does not match program ({db_utils.SCHEMA_VERSION})' in out
-                            for out in cm.output))
+            # set dia_qc version back to correct version
+            db_utils.update_meta_value(test_conn, 'dia_qc version', dia_qc_version)
+            self.assertEqual(db_utils.get_meta_value(test_conn, 'dia_qc version'), dia_qc_version)
+            with self.assertNoLogs(db_utils.LOGGER) as cm:
+                self.assertTrue(db_utils.check_schema_version(test_conn))
 
-        # set schema back to correct version
-        self.conn = db_utils.update_meta_value(self.conn, 'schema_version', schema_version)
-        self.assertEqual(db_utils.get_meta_value(self.conn, 'schema_version'), schema_version)
-        self.assertTrue(db_utils.check_schema_version(self.conn))
+            # set current version to 'NULL' and make sure validation fails
+            db_utils.update_meta_value(test_conn, 'schema_version', 'NULL')
+            with self.assertLogs(db_utils.LOGGER, level='ERROR') as cm:
+                self.assertFalse(db_utils.check_schema_version(test_conn))
+            self.assertEqual(db_utils.get_meta_value(test_conn, 'schema_version'), 'NULL')
+            self.assertEqual(len(cm.output), 1)
+            self.assertTrue(f'Database schema version (NULL) does not match program ({db_utils.SCHEMA_VERSION})' in cm.output[0])
+
+        finally:
+            test_conn.close()
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_is_normalized(self):
         self.assertTrue(self.conn is not None)
 
@@ -171,31 +200,40 @@ class TestDBHelperFunctions(unittest.TestCase):
         self.assertTrue(self.conn is not None)
 
         def get_dtypes():
-            cur = self.conn.cursor()
+            cur = test_conn.cursor()
             cur.execute('SELECT annotationKey, annotationType FROM sampleMetadataTypes;')
             return dict((x[0], x[1]) for x in cur.fetchall())
 
-        current_types = {'string_var': 'STRING',
-                         'bool_var': 'BOOL',
-                         'int_var': 'INT',
-                         'float_var': 'FLOAT',
-                         'na_var': 'NULL'}
-        db_current_types = get_dtypes()
-        self.assertDictEqual(current_types, db_current_types)
+        test_conn = sqlite3.connect(':memory:')
+        try:
+            self.conn.backup(test_conn)
 
-        new_types = {'string_var': Dtype.INT,
-                     'bool_var': Dtype.STRING,
-                     'int_var': Dtype.FLOAT,
-                     'float_var': Dtype.INT,
-                     'na_var': Dtype.NULL}
-        self.conn = db_utils.update_metadata_dtypes(self.conn, new_types)
 
-        result_types = {'string_var': 'STRING',
-                        'bool_var': 'STRING',
-                        'int_var': 'FLOAT',
-                        'float_var': 'FLOAT',
-                        'na_var': 'NULL'}
-        db_new_types = get_dtypes()
+            current_types = {'string_var': 'STRING',
+                             'bool_var': 'BOOL',
+                             'int_var': 'INT',
+                             'float_var': 'FLOAT',
+                             'na_var': 'NULL'}
+            db_current_types = get_dtypes()
+            self.assertDictEqual(current_types, db_current_types)
+
+            new_types = {'string_var': Dtype.INT,
+                         'bool_var': Dtype.STRING,
+                         'int_var': Dtype.FLOAT,
+                         'float_var': Dtype.INT,
+                         'na_var': Dtype.NULL}
+            db_utils.update_metadata_dtypes(test_conn, new_types)
+
+            result_types = {'string_var': 'STRING',
+                            'bool_var': 'STRING',
+                            'int_var': 'FLOAT',
+                            'float_var': 'FLOAT',
+                            'na_var': 'NULL'}
+            db_new_types = get_dtypes()
+
+        finally:
+            test_conn.close()
+
         self.assertDictEqual(result_types, db_new_types)
 
 
@@ -209,6 +247,101 @@ class TestDBHelperFunctions(unittest.TestCase):
         result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr)
+
+
+    def test_reset_imputed_values(self):
+        test_conn = sqlite3.connect(':memory:')
+
+        random.seed(7)
+        try:
+            self.conn.backup(test_conn)
+
+            # count number of distinct proteins in db
+            cur = test_conn.cursor()
+            cur.execute('SELECT DISTINCT proteinId FROM proteins;')
+            n_proteins = len(cur.fetchall())
+
+            # add fake imputation metadata
+            impute_metadata = {db_utils.PRECURSOR_IMPUTE_METHOD: 'KNN',
+                               db_utils.PROTEIN_IMPUTE_METHOD: 'KNN'}
+            for k, v in impute_metadata.items():
+                db_utils.update_meta_value(test_conn, k, v)
+
+            # make sure metadata was updated
+            cur = test_conn.cursor()
+            cur.execute('SELECT key FROM metadata;')
+            metadata = {x[0] for x in cur.fetchall()}
+            for key in impute_metadata:
+                self.assertIn(key, metadata)
+
+            # randomly select proteins and precursors
+            df = pd.read_sql('''
+                SELECT p.replicateId, p.peptideId, ptp.proteinId, p.precursorCharge
+                FROM precursors p
+                LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', test_conn)
+
+            null_proteins = random.sample(df['proteinId'].drop_duplicates().to_list(),
+                                          int(n_proteins * 0.2))
+            null_reps = random.sample(df['replicateId'].drop_duplicates().to_list(),
+                                      self.N_REPS - 1)
+
+            null_protein_ids = {(r, p) for r in null_reps for p in null_proteins}
+            mask = df.apply(lambda x: x['proteinId'] in null_proteins and
+                                      x['replicateId'] in null_reps,
+                            axis=1)
+            null_prec_ids = {(row.replicateId, row.peptideId) for row in df[mask].itertuples()}
+
+            # update fake isImputed values in database
+            cur = test_conn.cursor()
+            cur.executemany('''
+                UPDATE precursors
+                    SET isImputed = TRUE
+                WHERE replicateId = ? AND peptideId = ?''', null_prec_ids)
+            cur.executemany('''
+                UPDATE proteinQuants
+                    SET isImputed = TRUE
+                WHERE replicateId = ? AND proteinId = ?''', null_protein_ids)
+            test_conn.commit()
+
+            # make sure the fake imputed values were set
+            cur.execute('SELECT replicateId, peptideId, isImputed, totalAreaFragment FROM precursors;')
+            precursor_data = {(r, p): (i, a) for r, p, i, a in cur.fetchall()}
+            for key in null_prec_ids:
+                self.assertEqual(precursor_data[key][0], 1)
+                self.assertIsNotNone(precursor_data[key][1])
+            cur.execute('SELECT replicateId, proteinId, isImputed, abundance FROM proteinQuants;')
+            protein_data = {(r, p): (i, a) for r, p, i, a in cur.fetchall()}
+            for key in null_protein_ids:
+                self.assertEqual(protein_data[key][0], 1)
+                self.assertIsNotNone(protein_data[key][1])
+
+            # run reset_imputed_values on test db
+            with self.assertLogs(logger.LOGGER, level='INFO') as cm:
+                db_utils.reset_imputed_values(test_conn)
+            self.assertTrue(all(re.search(r'Setting imputed (protein|precursor) quantities to NULL\.', out)
+                                for out in cm.output))
+
+            # make sure the metadata was reset
+            cur = test_conn.cursor()
+            cur.execute('SELECT key FROM metadata;')
+            metadata = {x[0] for x in cur.fetchall()}
+            for key in impute_metadata:
+                self.assertNotIn(key, metadata)
+
+            # make sure the fake imputed values were reset
+            cur.execute('SELECT replicateId, peptideId, isImputed, totalAreaFragment FROM precursors;')
+            precursor_data = {(r, p): (i, a) for r, p, i, a in cur.fetchall()}
+            for key in null_prec_ids:
+                self.assertEqual(precursor_data[key][0], 0)
+                self.assertIsNone(precursor_data[key][1])
+            cur.execute('SELECT replicateId, proteinId, isImputed, abundance FROM proteinQuants;')
+            protein_data = {(r, p): (i, a) for r, p, i, a in cur.fetchall()}
+            for key in null_protein_ids:
+                self.assertEqual(protein_data[key][0], 0)
+                self.assertIsNone(protein_data[key][1])
+
+        finally:
+            test_conn.close()
 
 
 class TestCommandLog(unittest.TestCase):
@@ -262,8 +395,7 @@ class TestCommandLog(unittest.TestCase):
             self.assertEqual(db_utils.get_last_command(self.conn), [command])
 
 
-class TestUpdateAcquiredRanks(unittest.TestCase):
-
+class TestUpdateAcquiredRanks(unittest.TestCase, TestDBFunctionsBase):
     @classmethod
     def setUpClass(cls):
         dfs = []
@@ -356,7 +488,6 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         self.assertDictEqual(self.acquired_ranks, db_ranks)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_mark_project_skipped(self):
         self.replicates.to_sql('replicates', self.conn, if_exists='append',
                                 index=True, index_label='id')
@@ -365,7 +496,7 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         db_ranks = self.get_db_ranks(self.conn)
         self.assertDictEqual(self.acquired_ranks, db_ranks)
 
-        db_utils.mark_reps_skipped(self.conn, projects=('Strap',))
+        self.mark_reps_skipped(self.conn, projects=('Strap',))
         db_utils.update_acquired_ranks(self.conn)
 
         db_ranks = self.get_db_ranks(self.conn)
@@ -373,7 +504,6 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
         self.assertDictEqual(proj_ranks, db_ranks)
 
 
-    @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
     def test_mark_replicates_skipped(self):
         self.replicates.to_sql('replicates', self.conn, if_exists='append',
                                 index=True, index_label='id')
@@ -387,13 +517,16 @@ class TestUpdateAcquiredRanks(unittest.TestCase):
             for i in random.sample(range(max_rep_index), random.randint(1, max_subset_len)):
                 skip_reps.append(self.replicates.loc[i, 'replicate'])
 
-            self.assertTrue(db_utils.mark_reps_skipped(self.conn, reps=skip_reps))
+            self.assertTrue(self.mark_reps_skipped(self.conn, reps=skip_reps))
+
             db_utils.update_acquired_ranks(self.conn)
 
             db_ranks = self.get_db_ranks(self.conn)
             proj_ranks = self.update_ground_truth_ranks(db_ranks.keys())
             self.assertDictEqual(proj_ranks, db_ranks)
-            db_utils.mark_all_reps_included(self.conn)
+
+            with self.assertLogs(logger.LOGGER, level='INFO'):
+                db_utils.mark_all_reps_included(self.conn)
 
 
 class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):
@@ -407,7 +540,6 @@ class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase)
 
     @classmethod
     def setUpClass(cls):
-
         # read replicates
         rep_path = f'{setup_functions.TEST_DIR}/data/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv'
         cls.replicates = ReplicateReport(quiet=True).read_report(rep_path)
@@ -447,7 +579,6 @@ class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase)
 
 
     def setUp(self):
-
         # read metadata
         meta_reader = Metadata()
         self.assertTrue(meta_reader.read(self.metadata_path))
@@ -527,18 +658,3 @@ class TestReadWideMetadata(unittest.TestCase, setup_functions.AbstractTestsBase)
 
             self.assertDataDictEqual(metadata_dict,
                                      self.subset_data_dict(self.metadata_dict, sele))
-
-
-class TestResetImputedValues(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        pass
-
-    def test_proteins(self):
-        pass
-
-    def test_precursors(self):
-        pass
-
-    def test_all(self):
-        pass

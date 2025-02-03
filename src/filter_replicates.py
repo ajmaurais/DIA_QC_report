@@ -6,11 +6,12 @@ import os
 from datetime import datetime
 
 from .submodules.dia_db_utils import update_meta_value
-from .submodules.dia_db_utils import IS_IMPUTED, IS_NORMALIZED
+from .submodules.dia_db_utils import IS_NORMALIZED, PRECURSOR_NORM_METHOD, PROTEIN_NORM_METHOD
+from .submodules.dia_db_utils import reset_imputed_values
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import mark_all_reps_included, mark_reps_skipped
 from .submodules.dia_db_utils import update_command_log
-from .submodules.dia_db_utils import is_normalized, is_imputed
+from .submodules.dia_db_utils import is_normalized
 from .submodules.logger import LOGGER
 from . import __version__ as PROGRAM_VERSION
 
@@ -20,7 +21,7 @@ CONFLICTING_ARG_MESSAGE = 'exclude Rep/Project and --include_all arguments confl
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION + '''
 Replicates or projects to exclude from imputation and normalization.
-The replicates.includeRep value will simply be set to FALSE the replicate 
+The replicates.includeRep value will simply be set to FALSE the replicate
 will not be deleted from the database.''')
 
     parser.add_argument('-x', '--excludeRep', action='append', default=[],
@@ -48,7 +49,7 @@ def _main(args):
     if os.path.isfile(args.db):
         conn = sqlite3.connect(args.db)
     else:
-        LOGGER.error(f'Database file ({args.db}) does not exist!')
+        LOGGER.error('Database file (%s) does not exist!', args.db)
         sys.exit(1)
 
     # check database version
@@ -65,12 +66,7 @@ def _main(args):
         mark_all_reps_included(conn)
 
     # unset imputed values if applicable
-    # if is_imputed(conn):
-    #     cur = conn.cursor()
-    #     LOGGER.info('Setting existing precursor normalizedArea values to NULL.')
-    #     cur.execute('UPDATE precursors SET totalAreaFragment = NULL WHERE isImputed == 1')
-    #     cur.execute('UPDATE precursors SET isImputed = 0')
-    #     conn.commit()
+    reset_imputed_values(conn)
 
     # unset normalized values if applicable
     if is_normalized(conn):
@@ -85,7 +81,8 @@ def _main(args):
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
     metadata = {IS_NORMALIZED: 'False',
-                IS_IMPUTED: 'False'} # set to false if we are changing replicates
+                PRECURSOR_NORM_METHOD: None,
+                PROTEIN_NORM_METHOD: None}
     for key, value in metadata.items():
         conn = update_meta_value(conn, key, value)
 

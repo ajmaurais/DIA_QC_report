@@ -11,6 +11,7 @@ import pandas as pd
 
 from .dtype import Dtype
 from .logger import LOGGER
+from .logger import quiet_log_info, quiet_log_warning, quiet_log_error
 from .. import __version__ as PROGRAM_VERSION
 
 METADATA_TIME_FORMAT = '%m/%d/%Y %H:%M:%S'
@@ -23,7 +24,6 @@ PROTEIN_NORM_METHOD = 'protein_normalization_method'
 IS_NORMALIZED = 'is_normalized'
 PRECURSOR_IMPUTE_METHOD = 'precursor_imputation_method'
 PROTEIN_IMPUTE_METHOD = 'protein_imputation_method'
-IS_IMPUTED = 'is_imputed'
 
 SCHEMA_VERSION = '2.4.0'
 
@@ -121,14 +121,14 @@ CREATE TABLE peptideToProtein (
 )''']
 
 
-def get_meta_value(conn, key):
+def get_meta_value(conn, key, quiet=False):
     ''' Get the value for a key from the metadata table '''
     cur = conn.cursor()
     cur.execute('SELECT value FROM metadata WHERE key == ?', (key,))
     value = cur.fetchall()
     if len(value) == 1:
         return value[0][0]
-    LOGGER.error("Could not get key '%s' from metadata table!", key)
+    quiet_log_error(quiet, "Could not get key '%s' from metadata table!", key)
     return None
 
 
@@ -154,10 +154,11 @@ def is_normalized(conn):
     return True
 
 
-def is_imputed(conn):
-    ''' Determine if metadata.is_imputed is True '''
-    normalized = get_meta_value_bool(conn, IS_IMPUTED)
-    if normalized is None or normalized == False:
+def any_imputed(conn):
+    ''' Determine if any protein or precursor values are imputed '''
+    precursor_imputation = get_meta_value(conn, PRECURSOR_IMPUTE_METHOD, quiet=True)
+    protein_imputation = get_meta_value(conn, PROTEIN_IMPUTE_METHOD, quiet=True)
+    if precursor_imputation is None and protein_imputation is None:
         return False
     return True
 
@@ -315,7 +316,7 @@ def update_metadata_dtypes(conn, new_types):
     return conn
 
 
-def mark_reps_skipped(conn, reps=None, projects=None):
+def mark_reps_skipped(conn, reps=None, projects=None, quiet=False):
     '''
     Mark replicates and/or projects skipped.
     '''
@@ -338,7 +339,7 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     def check_missing(var_name, missing_vals):
         if len(missing_vals) > 0:
             for rep in reps:
-                LOGGER.error("%s '%s' is not in database!", var_name, rep)
+                quiet_log_error(quiet, "%s '%s' is not in database!", var_name, rep)
             return True
         return False
 
@@ -362,9 +363,10 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     rep_index_to_false = Counter(rep_index_to_false)
     for rep_i, count in rep_index_to_false.items():
         if count > 1:
-            LOGGER.warning("Replicate '%s' was set to be excluded %i times!", db_reps[rep_i][1], count)
+            quiet_log_warning(quiet, "Replicate '%s' was set to be excluded %i times!",
+                              db_reps[rep_i][1], count)
 
-    LOGGER.info('Excluding %i replicates.', len(rep_index_to_false))
+    quiet_log_info(quiet, 'Excluding %i replicates.', len(rep_index_to_false))
     cur = conn.cursor()
     cur.executemany('UPDATE replicates SET includeRep = FALSE WHERE id = ?;',
                     [(db_reps[rep_i][0],) for rep_i in rep_index_to_false])
@@ -372,16 +374,6 @@ def mark_reps_skipped(conn, reps=None, projects=None):
     conn = update_acquired_ranks(conn)
 
     return True
-
-
-def _quiet_log_info(quiet, *args):
-    if not quiet:
-        LOGGER.info(*args)
-
-
-def _quiet_log_warning(quiet, *args):
-    if not quiet:
-        LOGGER.warning(*args)
 
 
 def mark_all_reps_included(conn, quiet=False):
@@ -393,12 +385,12 @@ def mark_all_reps_included(conn, quiet=False):
     include_rep_counts = Counter({x[0]: x[1] for x in cur.fetchall()})
 
     if 0 in include_rep_counts:
-        _quiet_log_info(quiet, 'Setting %i includeRep values to TRUE.', include_rep_counts[0])
+        quiet_log_info(quiet, 'Setting %i includeRep values to TRUE.', include_rep_counts[0])
         cur.execute('UPDATE replicates SET includeRep = TRUE;')
         conn.commit()
         conn = update_acquired_ranks(conn)
     else:
-        _quiet_log_warning(quiet, 'All replicates are already included.')
+        quiet_log_warning(quiet, 'All replicates are already included.')
 
 
 def reset_imputed_values(conn, proteins=True, precursors=True, quiet=False):
@@ -417,9 +409,13 @@ def reset_imputed_values(conn, proteins=True, precursors=True, quiet=False):
     quiet: bool
         Don't print to log? Default is False.
     '''
+    if not any_imputed(conn):
+        return
+
     if precursors:
-        _quiet_log_info(quiet, 'Setting imputed precursor quantities to NULL.')
+        quiet_log_info(quiet, 'Setting imputed precursor quantities to NULL.')
         cur = conn.cursor()
+        cur.execute("DELETE FROM metadata WHERE key GLOB 'precursor_imputation_*'")
         cur.execute(''' UPDATE precursors
                         SET totalAreaFragment = NULL, normalizedArea = NULL
                         WHERE isImputed == 1; ''')
@@ -427,8 +423,9 @@ def reset_imputed_values(conn, proteins=True, precursors=True, quiet=False):
         conn.commit()
 
     if proteins:
-        _quiet_log_info(quiet, 'Setting imputed protein quantities to NULL.')
+        quiet_log_info(quiet, 'Setting imputed protein quantities to NULL.')
         cur = conn.cursor()
+        cur.execute("DELETE FROM metadata WHERE key GLOB 'protein_imputation_*'")
         cur.execute(''' UPDATE proteinQuants
                         SET abundance = NULL, normalizedAbundance = NULL
                         WHERE isImputed == 1; ''')
@@ -438,7 +435,7 @@ def reset_imputed_values(conn, proteins=True, precursors=True, quiet=False):
 
 def read_wide_metadata(conn, meta_vars=None, read_all=True):
     '''
-    Read metadata and replicates from database.
+    Read replicate metadata and replicates from database.
 
     Parameters
     ----------
