@@ -9,9 +9,9 @@ from itertools import product
 
 import setup_functions
 
-import DIA_QC_report.submodules.dia_db_utils as db_utils
-import DIA_QC_report.submodules.imputation as imputation
-import DIA_QC_report.impute_missing as impute_missing
+from DIA_QC_report.submodules import dia_db_utils as db_utils
+from DIA_QC_report.submodules import imputation
+from DIA_QC_report import impute_missing
 
 
 class TestGetManager(unittest.TestCase):

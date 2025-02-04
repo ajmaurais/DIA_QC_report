@@ -91,6 +91,47 @@ def get_manager(method, method_args, method_help=False,
     return manager, ret_metadata
 
 
+def update_db(conn, imputation_manager):
+    '''
+    Update database with imputed values in imputation manager.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection
+    imputation_manager: imputation.ImputationManagerBase
+        A child class of ImputationManagerBase where the impute method has already been called.
+    '''
+    # add imputed values to db
+    if imputation_manager.impute_precursors:
+        df = imputation_manager.precursors[imputation_manager.precursors['isImputed']]
+        prec_data = [(row.area,
+                      row.replicateId,
+                      row.peptideId,
+                      row.precursorCharge) for row in df.itertuples()]
+        cur = conn.cursor()
+        cur.executemany(f'''
+                        UPDATE precursors SET
+                            {'totalAreaFragment' if imputation_manager.level == 0 else 'normalizedArea'} = ?,
+                            isImputed = 1
+                        WHERE replicateId == ? AND
+                            peptideId == ? AND
+                            precursorCharge == ? ;''', prec_data)
+        conn.commit()
+
+    if imputation_manager:
+        df = imputation_manager.proteins[imputation_manager.proteins['isImputed']]
+        prot_data = [(row.abundance,
+                      row.replicateId,
+                      row.proteinId) for row in df.itertuples()]
+        cur = conn.cursor()
+        cur.executemany(f'''
+                        UPDATE proteinQuants SET
+                            {'abundance' if imputation_manager.level == 0 else 'normalizedAbundance'} = ?,
+                            isImputed = 1
+                        WHERE replicateId = ? AND proteinId = ? ;''', prot_data)
+        conn.commit()
+
+
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
@@ -167,43 +208,16 @@ def _main(args):
     if not check_schema_version(conn):
         sys.exit(1)
 
-    # add db connection to imputation_manager
+    # delete existing imputed values in db
+    reset_imputed_values(conn, precursors=impute_precursors, proteins=impute_proteins)
+
+    # add db connection to imputation_manager and impute
     imputation_manager.conn = conn
     if not imputation_manager.impute():
         sys.exit(1)
 
-    # delete existing imputed values in db
-    reset_imputed_values(conn, precursors=impute_precursors, proteins=impute_proteins)
-
-    # add imputed values to db
-    if impute_precursors:
-        df = imputation_manager.precursors[imputation_manager.precursors['isImputed']]
-        prec_data = [(row.area,
-                      row.replicateId,
-                      row.peptideId,
-                      row.precursorCharge) for row in df.itertuples()]
-        cur = conn.cursor()
-        cur.executemany(f'''
-                        UPDATE precursors SET
-                            {'totalAreaFragment' if args.level == 0 else 'normalizedArea'} = ?,
-                            isImputed = 1
-                        WHERE replicateId == ? AND
-                            peptideId == ? AND
-                            precursorCharge == ? ;''', prec_data)
-        conn.commit()
-
-    if impute_proteins:
-        df = imputation_manager.proteins[imputation_manager.proteins['isImputed']]
-        prot_data = [(row.abundance,
-                      row.replicateId,
-                      row.proteinId) for row in df.itertuples()]
-        cur = conn.cursor()
-        cur.executemany(f'''
-                        UPDATE proteinQuants SET
-                            {'abundance' if args.level == 0 else 'normalizedAbundance'} = ?,
-                            isImputed = 1
-                        WHERE replicateId = ? AND proteinId = ? ;''', prot_data)
-        conn.commit()
+    # add imputed values from manager to db
+    update_db(conn, imputation_manager)
 
     # update commandLog
     update_command_log(conn, sys.argv, os.getcwd())

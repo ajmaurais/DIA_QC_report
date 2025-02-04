@@ -2,9 +2,7 @@
 import unittest
 from io import StringIO
 
-import setup_functions
-
-import DIA_QC_report.submodules.transformation as transformation
+from DIA_QC_report.submodules import transformation
 
 
 VALID_OPTIONS = {'weights':     {'default': 'uniform',

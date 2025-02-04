@@ -298,7 +298,7 @@ class MethodOptions:
     values: dict
         A dictionary of parsed and validated option names and values.
     description: str
-        The description for the
+        The description for the transformer to show in the help message.
     OPTION_RE: re.Pattern
         Regex used to parse option string arguments.
     '''
