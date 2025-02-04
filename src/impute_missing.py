@@ -66,12 +66,13 @@ def get_manager(method, method_args, method_help=False,
 
     parser.description = f'Options for {Manager.__name__}'
     if method_help:
-        parser.get_help(sys.stdout, max_width=os.get_terminal_size().columns)
+        terminal_width = os.get_terminal_size().columns if sys.stderr.isatty() else 100
+        parser.get_help(sys.stdout, max_width=terminal_width)
         sys.exit(0)
 
     if method_args is not None:
         if not parser.parse_strings(method_args):
-            sys.exit(1)
+            sys.exit(2)
 
     manager_args = parser.get_option_dict()
     manager = Manager(impute_precursors=impute_precursors, impute_proteins=impute_proteins,
@@ -118,7 +119,7 @@ def update_db(conn, imputation_manager):
                             precursorCharge == ? ;''', prec_data)
         conn.commit()
 
-    if imputation_manager:
+    if imputation_manager.impute_proteins:
         df = imputation_manager.proteins[imputation_manager.proteins['isImputed']]
         prot_data = [(row.abundance,
                       row.replicateId,
@@ -141,7 +142,7 @@ def parse_args(argv, prog=None):
                                       'imputation, 3 for both precursor and protein imputation.')
     impute_settings.add_argument('-m', '--method', choices=IMPUTATION_METHODS, default='KNN',
                                  help='Normalization method to use. Default is "KNN"')
-    impute_settings.add_argument('-l', '--level', choices=(0, 1), default=0,
+    impute_settings.add_argument('-l', '--level', choices=(0, 1), default=0, type=int,
                                  help='Which values to use for imputation. '
                                  '0 for unnormalized, 1 for normalized. Default is 0')
     impute_settings.add_argument('-t', '--missingThreshold', default=0.5,

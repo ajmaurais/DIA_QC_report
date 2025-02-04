@@ -88,6 +88,11 @@ class AbstractTestsBase(ABC):
 
 
     @abstractmethod
+    def assertGreater(self, lhs, rhs):
+        pass
+
+
+    @abstractmethod
     def fail(self, msg):
         pass
 
