@@ -217,8 +217,6 @@ def update_meta_value(conn, key, value):
                 (key, value, value))
     conn.commit()
 
-    return conn
-
 
 def update_command_log(conn, command, wd):
     ''' Update commandLog table. '''
@@ -235,8 +233,6 @@ def update_command_log(conn, command, wd):
             (command, version, workingDirectory, time, user, hostname)
         VALUES (?, ?, ?, ?, ?, ?); ''', data)
     conn.commit()
-
-    return conn
 
 
 def get_last_command(conn):
@@ -313,8 +309,6 @@ def update_metadata_dtypes(conn, new_types):
         cur.execute(insert_query, (annotationKey, annotationType, annotationType))
     conn.commit()
 
-    return conn
-
 
 def mark_reps_skipped(conn, reps=None, projects=None, quiet=False):
     '''
@@ -371,7 +365,7 @@ def mark_reps_skipped(conn, reps=None, projects=None, quiet=False):
     cur.executemany('UPDATE replicates SET includeRep = FALSE WHERE id = ?;',
                     [(db_reps[rep_i][0],) for rep_i in rep_index_to_false])
     conn.commit()
-    conn = update_acquired_ranks(conn)
+    update_acquired_ranks(conn)
 
     return True
 
@@ -388,7 +382,7 @@ def mark_all_reps_included(conn, quiet=False):
         quiet_log_info(quiet, 'Setting %i includeRep values to TRUE.', include_rep_counts[0])
         cur.execute('UPDATE replicates SET includeRep = TRUE;')
         conn.commit()
-        conn = update_acquired_ranks(conn)
+        update_acquired_ranks(conn)
     else:
         quiet_log_warning(quiet, 'All replicates are already included.')
 

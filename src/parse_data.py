@@ -193,8 +193,6 @@ def write_db(fname, replicates, precursors, protein_quants=None,
 
     # deal with existing replicates, proteins, and protein to precursor pairs
     if append:
-        conn = sqlite3.connect(fname)
-
         cur = conn.cursor()
         cur.execute('SELECT DISTINCT project FROM replicates WHERE project = ?', (project_name,))
         existing_project = cur.fetchall()
@@ -310,7 +308,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
             return False
 
         if append:
-            conn = update_metadata_dtypes(conn, sample_metadata_types)
+            update_metadata_dtypes(conn, sample_metadata_types)
         else:
             insert_query = 'INSERT INTO sampleMetadataTypes (annotationKey, annotationType) VALUES (?, ?)'
             cur = conn.cursor()
@@ -323,8 +321,8 @@ def write_db(fname, replicates, precursors, protein_quants=None,
 
     # update metadata tablr
     for key, value in log_metadata.items():
-        conn = update_meta_value(conn, key, value)
-    conn = update_acquired_ranks(conn)
+        update_meta_value(conn, key, value)
+    update_acquired_ranks(conn)
 
     # update commandLog
     update_command_log(conn, sys.argv, os.getcwd())

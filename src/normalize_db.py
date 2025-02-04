@@ -116,7 +116,7 @@ def _main(args):
                 PROTEIN_NORM_METHOD: protein_normalization_method,
                 IS_NORMALIZED: 'True'}
     for key, value in metadata.items():
-        conn = update_meta_value(conn, key, value)
+        update_meta_value(conn, key, value)
 
     conn.close()
 

@@ -125,7 +125,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         try:
             # set is_normalized metadata entry to False
-            self.conn = db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'False')
+            db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'False')
 
             # make sure generate_batch_rmd fails
             command = ['dia_qc', 'batch_rmd', self.db_path]
@@ -135,7 +135,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         finally:
             # reset is_normalized metadata entry to True
-            self.conn = db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'True')
+            db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'True')
 
 
     def test_norm_method_found_unknown_value(self):
@@ -144,7 +144,7 @@ class TestMakeBatchRmd(unittest.TestCase):
         current_method = db_utils.get_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD)
         try:
             # set is_normalized metadata entry to False
-            self.conn = db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, 'Nothing')
+            db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, 'Nothing')
 
             # make sure generate_batch_rmd fails
             command = ['dia_qc', 'batch_rmd', self.db_path]
@@ -154,7 +154,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
         finally:
             # reset protein_normalization_method to original method
-            self.conn = db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, current_method)
+            db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, current_method)
 
 
     def test_norm_method_found_missing_key(self):

@@ -84,7 +84,7 @@ def _main(args):
                 PRECURSOR_NORM_METHOD: None,
                 PROTEIN_NORM_METHOD: None}
     for key, value in metadata.items():
-        conn = update_meta_value(conn, key, value)
+        update_meta_value(conn, key, value)
 
     conn.close()
 
