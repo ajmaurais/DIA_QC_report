@@ -245,7 +245,7 @@ def split_by_project(df, project_col='project', drop=False):
 def bind_rows(df_dict, key_name=None):
     '''
     Take a dictionary of pd.DataFrame(s) and return a single dataframe where all the dataframes
-    in have been stacked on top of each other.
+    in the dict have been stacked on top of each other.
 
     Parameters
     ----------
@@ -281,6 +281,8 @@ class KNNImputer(ImputationManagerBase):
     ----------
     n_neighbors: int
         Number of nearest neighbors. Passed to KNN imputaion algorithm.
+    weights: str
+        One of ('uniform', 'weighted'). Passed to KNN imputation algorithm.
     '''
 
     def __init__(self, conn=None, n_neighbors=5, weights='uniform', **kwargs):

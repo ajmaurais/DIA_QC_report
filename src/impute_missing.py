@@ -4,11 +4,12 @@ import argparse
 import sqlite3
 import os
 
-from .submodules.dia_db_utils import check_schema_version
-from .submodules.dia_db_utils import METADATA_TIME_FORMAT
-from .submodules.dia_db_utils import IS_IMPUTED, PRECURSOR_IMPUTE_METHOD, PROTEIN_IMPUTE_METHOD
-from .submodules.dia_db_utils import update_meta_value
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
+from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import PRECURSOR_IMPUTE_METHOD, PROTEIN_IMPUTE_METHOD
+from .submodules.dia_db_utils import update_meta_value
+from .submodules.dia_db_utils import reset_imputed_values
+from .submodules.dia_db_utils import update_command_log
 from .submodules.transformation import MethodOptions
 from .submodules.imputation import IMPUTATION_METHODS
 from .submodules.imputation import KNNImputer
@@ -81,9 +82,11 @@ def get_manager(method, method_args, method_help=False,
     if impute_precursors:
         for key, value in metadata.items():
             ret_metadata[f'precursor_imputation_{key}'] = value
+            ret_metadata[PRECURSOR_IMPUTE_METHOD] = method
     if impute_proteins:
         for key, value in metadata.items():
             ret_metadata[f'protein_imputation_{key}'] = value
+            ret_metadata[PROTEIN_IMPUTE_METHOD] = method
 
     return manager, ret_metadata
 
@@ -96,7 +99,7 @@ def parse_args(argv, prog=None):
                                  help='One digit bit mask. 1 for precursor imputation, 2 for protein '
                                       'imputation, 3 for both precursor and protein imputation.')
     impute_settings.add_argument('-m', '--method', choices=IMPUTATION_METHODS, default='KNN',
-                                 help='Normalization method to use. Default is "k-means"')
+                                 help='Normalization method to use. Default is "KNN"')
     impute_settings.add_argument('-l', '--level', choices=(0, 1), default=0,
                                  help='Which values to use for imputation. '
                                  '0 for unnormalized, 1 for normalized. Default is 0')
@@ -136,18 +139,20 @@ def _main(args):
     Actual main method. `args` Should be an initialized argparse namespace.
     '''
 
-    if not validate_bit_mask(args.interactive, 2, 1):
+    if not validate_bit_mask(args.impute_data, 2, 1):
         LOGGER.error('Error parsing --imputeData')
         sys.exit(1)
 
     # parse bitmask options
-    impute_data = parse_bitmask_options(args.interactive, ('impute',), ('precursors', 'proteins'))
+    impute_data = parse_bitmask_options(args.impute_data, ('impute',), ('precursors', 'proteins'))
+    impute_precursors = impute_data['impute']['precursors']
+    impute_proteins = impute_data['impute']['proteins']
 
     # initialize imputation manager
     imputation_manager, metadata = get_manager(args.method, args.method_settings,
                                                method_help=args.method_help,
-                                               impute_precursors=impute_data['impute']['precursors'],
-                                               impute_proteins=impute_data['impute']['proteins'],
+                                               impute_precursors=impute_precursors,
+                                               impute_proteins=impute_proteins,
                                                level=args.level,
                                                missing_threshold=args.missing_threshold,
                                                group_by_project=args.group_by == 'project')
@@ -164,19 +169,49 @@ def _main(args):
 
     # add db connection to imputation_manager
     imputation_manager.conn = conn
+    if not imputation_manager.impute():
+        sys.exit(1)
 
-    imputation_manager.impute()
+    # delete existing imputed values in db
+    reset_imputed_values(conn, precursors=impute_precursors, proteins=impute_proteins)
 
+    # add imputed values to db
+    if impute_precursors:
+        df = imputation_manager.precursors[imputation_manager.precursors['isImputed']]
+        prec_data = [(row.area,
+                      row.replicateId,
+                      row.peptideId,
+                      row.precursorCharge) for row in df.itertuples()]
+        cur = conn.cursor()
+        cur.executemany(f'''
+                        UPDATE precursors SET
+                            {'totalAreaFragment' if args.level == 0 else 'normalizedArea'} = ?,
+                            isImputed = 1
+                        WHERE replicateId == ? AND
+                            peptideId == ? AND
+                            precursorCharge == ? ;''', prec_data)
+        conn.commit()
 
-    # get commands previously run on db
+    if impute_proteins:
+        df = imputation_manager.proteins[imputation_manager.proteins['isImputed']]
+        prot_data = [(row.abundance,
+                      row.replicateId,
+                      row.proteinId) for row in df.itertuples()]
+        cur = conn.cursor()
+        cur.executemany(f'''
+                        UPDATE proteinQuants SET
+                            {'abundance' if args.level == 0 else 'normalizedAbundance'} = ?,
+                            isImputed = 1
+                        WHERE replicateId = ? AND proteinId = ? ;''', prot_data)
+        conn.commit()
+
+    # update commandLog
+    update_command_log(conn, sys.argv, os.getcwd())
 
     # Update normalization method in metadata
     LOGGER.info('Updating metadata...')
-    # metadata = {PRECURSOR_IMPUTE_METHOD: precursor_normalization_method,
-    #             PROTEIN_IMPUTE_METHOD: protein_normalization_method,
-    #             IS_IMPUTED: 'True'}
     for key, value in metadata.items():
-        conn = update_meta_value(conn, key, value)
+        update_meta_value(conn, key, value)
 
     conn.close()
 
@@ -188,4 +223,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

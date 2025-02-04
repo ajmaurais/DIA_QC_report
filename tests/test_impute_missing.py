@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 import sqlite3
 from io import StringIO
+from itertools import product
 
 import setup_functions
 
@@ -24,15 +25,22 @@ class TestGetManager(unittest.TestCase):
     def do_valid_arg_test(self, method, method_args, method_kwargs, all_kwargs):
         manager, metadata = impute_missing.get_manager(method, method_args, **method_kwargs)
 
-        ret_metadata = dict()
-        impute_data = method_kwargs.get('impute_data', 'both')
+        impute_data = {p: True if f'impute_{p}s' not in all_kwargs else all_kwargs.pop(f'impute_{p}s')
+                       for p in ('protein', 'precursor')}
 
+        for level, impute in impute_data.items():
+            if impute:
+                for key, value in all_kwargs.items():
+                    metadata_key = f'{level}_imputation_{key}'
+                    self.assertIn(metadata_key, metadata)
+                    self.assertEqual(value, metadata[metadata_key])
 
-        for key, value in all_kwargs.items():
-            self.assertTrue(key in metadata)
-            self.assertEqual(value, metadata[key])
-            self.assertTrue(hasattr(manager, key))
-            self.assertEqual(getattr(manager, key), value)
+                    self.assertTrue(hasattr(manager, key))
+                    self.assertEqual(getattr(manager, key), value)
+                    self.assertTrue(getattr(manager, f'impute_{level}s'))
+
+            else:
+                self.assertFalse(getattr(manager, f'impute_{level}s'))
 
 
     def do_invalid_arg_test(self, method, method_args, error_re):
@@ -64,21 +72,30 @@ class TestGetManager(unittest.TestCase):
         Test that impute_missing.get_manager returns manager with default arguments
         when method_args is None.
         '''
-        manager, metadata = impute_missing.get_manager('KNN', None)
+        method = 'KNN'
+        manager, metadata = impute_missing.get_manager(method, None)
 
-        # metadata should have at least as many entrires as the number of
-        # KNNImputer.__init__ keyword arguments
+        # metadata should have at least as many entrires for precursors and proteins
+        # as the number of KNNImputer.__init__ keyword arguments
         args = dict(setup_functions.function_kwargs(imputation.KNNImputer.__init__))
         args.pop('conn')
-        self.assertEqual(len(metadata), len(args))
+        target_metadata = [db_utils.PRECURSOR_IMPUTE_METHOD, db_utils.PROTEIN_IMPUTE_METHOD]
+        for level, value in product(['precursor', 'protein'], args):
+            target_metadata.append(f'{level}_imputation_{value}')
+
+        self.assertEqual(len(metadata), len(target_metadata))
 
         default_manager = imputation.KNNImputer()
 
+        self.assertEqual(metadata.pop(db_utils.PRECURSOR_IMPUTE_METHOD), method)
+        self.assertEqual(metadata.pop(db_utils.PROTEIN_IMPUTE_METHOD), method)
+
         for k, v in metadata.items():
-            self.assertTrue(hasattr(default_manager, k))
-            self.assertTrue(hasattr(manager, k))
-            self.assertEqual(getattr(default_manager, k), v)
-            self.assertEqual(getattr(manager, k), v)
+            key_arg_name = re.sub(r'^(precursor|protein)_imputation_', '', k)
+            self.assertTrue(hasattr(default_manager, key_arg_name))
+            self.assertTrue(hasattr(manager, key_arg_name))
+            self.assertEqual(getattr(default_manager, key_arg_name), v)
+            self.assertEqual(getattr(manager, key_arg_name), v)
 
 
     def test_invalid_method(self):
@@ -113,9 +130,9 @@ class TestGetManager(unittest.TestCase):
         args = [[['n_neighbors=6', "weights='uniform'"], {},
                  {'n_neighbors': 6, 'weights': 'uniform'}],
                 [['n_neighbors=8', "weights='uniform'"],
-                 {'impute_data': 'precursors', 'missing_threshold': 0.6},
+                 {'impute_proteins': False, 'missing_threshold': 0.6},
                  {'n_neighbors': 8, 'weights': 'uniform'}],
-                [[], {'impute_data': 'proteins', 'missing_threshold': 0.75}, {}]]
+                [[], {'impute_precursors': False, 'missing_threshold': 0.75}, {}]]
 
         for method_args, method_kwargs, target_args in args:
             all_args = method_kwargs.copy()
