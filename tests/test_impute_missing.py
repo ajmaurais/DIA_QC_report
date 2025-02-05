@@ -196,6 +196,32 @@ class CommonTests(setup_functions.AbstractTestsBase):
         return df_prec, df_prot
 
 
+    def get_quant_level(self, normalized=False):
+        '''
+        Get all the precursor and protein quantities which are unnormalized or normalized.
+
+        Parameters
+        ----------
+        normalized: bool
+            Should the quant value be normalized? Default is False.
+        '''
+        df_prec = pd.read_sql(f'''
+            SELECT
+                r.project, p.replicateId, p.peptideId, p.precursorCharge,
+                p.{'normalizedArea' if normalized else 'totalAreaFragment'}
+            FROM precursors p
+            LEFT JOIN replicates r ON r.id == p.replicateId; ''', self.conn)
+
+        df_prot = pd.read_sql(f'''
+            SELECT
+                r.project, q.replicateId, q.proteinId,
+                q.{'normalizedAbundance' if normalized else 'abundance'}
+            FROM proteinQuants q
+            LEFT JOIN replicates r ON r.id == q.replicateId; ''', self.conn)
+
+        return df_prec, df_prot
+
+
     def do_imputation_criteria_test(self, df,
                                     group_by_project=True,
                                     missing_threshold=0.5,
@@ -289,6 +315,7 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         self.assertNotIn(db_utils.PROTEIN_IMPUTE_METHOD, metadata_i)
 
         prec_lhs, prot_lhs = self.get_not_imputed()
+        prec_quant_lhs, prot_quant_lhs = self.get_quant_level(normalized=level==0)
 
         impute_result = setup_functions.run_command(command, self.work_dir)
 
@@ -338,6 +365,11 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         self.assertDataFrameEqual(prec_lhs, prec_rhs)
         self.assertDataFrameEqual(prot_lhs, prot_rhs)
 
+        # test that opposite level (unnormalized or normalized) are not modified
+        prec_quant_rhs, prot_quant_rhs = self.get_quant_level(normalized=level==0)
+        self.assertDataFrameEqual(prec_quant_lhs, prec_quant_rhs)
+        self.assertDataFrameEqual(prot_quant_lhs, prot_quant_rhs)
+
 
     def test_weights(self):
         impute_command = ['dia_qc', 'impute', '-t=0.5', '-s', 'weights=weighted', self.db_path]
@@ -373,6 +405,7 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         self.do_imputation_test(impute_command,
                                 impute_precursors=True,
                                 impute_proteins=False)
+
 
     def test_method_help(self):
         command = ['dia_qc', 'impute', '-m=KNN', '--methodHelp']

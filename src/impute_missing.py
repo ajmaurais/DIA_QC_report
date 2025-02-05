@@ -102,6 +102,8 @@ def update_db(conn, imputation_manager):
     imputation_manager: imputation.ImputationManagerBase
         A child class of ImputationManagerBase where the impute method has already been called.
     '''
+    LOGGER.info('Writing imputed values to database...')
+
     # add imputed values to db
     if imputation_manager.impute_precursors:
         df = imputation_manager.precursors[imputation_manager.precursors['isImputed']]
@@ -118,6 +120,7 @@ def update_db(conn, imputation_manager):
                             peptideId == ? AND
                             precursorCharge == ? ;''', prec_data)
         conn.commit()
+        LOGGER.info('Finished writing imputed precursors!')
 
     if imputation_manager.impute_proteins:
         df = imputation_manager.proteins[imputation_manager.proteins['isImputed']]
@@ -131,6 +134,7 @@ def update_db(conn, imputation_manager):
                             isImputed = 1
                         WHERE replicateId = ? AND proteinId = ? ;''', prot_data)
         conn.commit()
+        LOGGER.info('Finished writing imputed proteins!')
 
 
 def parse_args(argv, prog=None):

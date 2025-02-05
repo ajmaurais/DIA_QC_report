@@ -108,23 +108,27 @@ class TestNormalizationBase(setup_functions.AbstractTestsBase):
     def test_all_reps_skipped(self):
         self.assertIsNotNone(self.conn)
 
-        manager = normalization.MedianNormalizer(self.conn)
+        test_conn = sqlite3.connect(':memory:')
+        self.conn.backup(test_conn)
+        manager = normalization.MedianNormalizer(test_conn)
 
         try:
-            cur = self.conn.cursor()
+            cur = test_conn.cursor()
             cur.execute('UPDATE replicates SET includeRep = FALSE;')
-            self.conn.commit()
+            test_conn.commit()
 
             with self.assertLogs(normalization.LOGGER, level='ERROR') as cm:
                 self.assertFalse(manager._read_precursors())
-            self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
+            self.assertTrue(any('All replicates in database have been excluded!' in entry
+                                for entry in cm.output))
 
             with self.assertLogs(normalization.LOGGER, level='ERROR') as cm:
                 self.assertFalse(manager.normalize())
-            self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
+            self.assertTrue(any('All replicates in database have been excluded!' in entry
+                                for entry in cm.output))
 
         finally:
-            db_utils.mark_all_reps_included(self.conn, quiet=True)
+            test_conn.close()
 
 
 class TestSingleNormalization(unittest.TestCase, TestNormalizationBase):

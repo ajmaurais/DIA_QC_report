@@ -387,11 +387,13 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
     def test_all_reps_skipped(self):
         self.assertIsNotNone(self.conn)
 
-        manager = self.Manager(conn=self.conn)
+        test_conn = sqlite3.connect(':memory:')
+        self.conn.backup(test_conn)
+        manager = self.Manager(conn=test_conn)
         try:
-            cur = self.conn.cursor()
+            cur = test_conn.cursor()
             cur.execute('UPDATE replicates SET includeRep = FALSE;')
-            self.conn.commit()
+            test_conn.commit()
 
             with self.assertLogs(imputation.LOGGER, level='ERROR') as cm:
                 self.assertFalse(manager._read_precursors())
@@ -402,7 +404,7 @@ class TestImputationBase(setup_functions.AbstractTestsBase):
             self.assertTrue(any('All replicates in database have been excluded!' in entry for entry in cm.output))
 
         finally:
-            db_utils.mark_all_reps_included(self.conn, quiet=True)
+            test_conn.close()
 
 
 class TestSingleImputation(unittest.TestCase, TestImputationBase):
