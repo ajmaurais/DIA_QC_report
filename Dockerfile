@@ -1,25 +1,28 @@
-FROM amazonlinux:latest
+# FROM amazonlinux:latest
+FROM python:3.12-slim
 
 LABEL maintainer="Aaron Maurais -- MacCoss Lab"
 
-RUN dnf update && \
-    dnf -y install git wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
-    dnf clean all && \
+RUN apt-get update && \
+    apt-get install -y git wget unzip && \
+    apt-get clean all && \
     echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > /usr/local/bin/entrypoint && \
     chmod +x /usr/local/bin/entrypoint
 
-# install rDIAUtils dependencies
-RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'ggiraph', 'BiocManager', 'rmarkdown', 'svglite'), \
-                                                     repo='https://ftp.osuosl.org/pub/cran/'), \
-                                    warning=function(w) stop(w))" && \
-    Rscript -e "withCallingHandlers(BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE), \
-                                    warning=function(w) stop(w))"
+# openssl-devel libcurl-devel R-core-devel && \
 
-# install rDIAUtils R package
-COPY rDIAUtils /code/rDIAUtils
-RUN cd /code/rDIAUtils && \
-    Rscript -e "withCallingHandlers(install.packages('.', type='source', repo=NULL), \
-                                    warning=function(w) stop(w))"
+# install rDIAUtils dependencies
+# RUN Rscript -e "withCallingHandlers(install.packages(c('dplyr', 'tidyr', 'patchwork', 'viridis', 'ggiraph', 'BiocManager', 'rmarkdown', 'svglite'), \
+#                                                      repo='https://ftp.osuosl.org/pub/cran/'), \
+#                                     warning=function(w) stop(w))" && \
+#     Rscript -e "withCallingHandlers(BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE), \
+#                                     warning=function(w) stop(w))"
+# 
+# # install rDIAUtils R package
+# COPY rDIAUtils /code/rDIAUtils
+# RUN cd /code/rDIAUtils && \
+#     Rscript -e "withCallingHandlers(install.packages('.', type='source', repo=NULL), \
+#                                     warning=function(w) stop(w))"
  
 # install pandoc
 RUN mkdir -p /code/pandoc && cd /code/pandoc && \
@@ -46,7 +49,7 @@ RUN pip install setuptools jupyter plotly && \
     cd /code && rm -rf /code/DIA_QC_report
 
 # clean things up
-RUN dnf remove -y git wget tar pip
+RUN apt-get remove -y git wget
 
 # Git version information
 ARG GIT_BRANCH
@@ -72,5 +75,5 @@ ENV DIA_QC_REPORT_VERSION=${DIA_QC_REPORT_VERSION}
 WORKDIR /data
 
 CMD []
-ENTRYPOINT ["/usr/local/bin/entrypoint"]
+# ENTRYPOINT ["/usr/local/bin/entrypoint"]
 
