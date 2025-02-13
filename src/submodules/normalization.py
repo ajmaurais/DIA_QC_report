@@ -40,7 +40,7 @@ class NormalizationManagerBase(TransformationManagerBase):
 
     def _read_precursors(self):
         # get precursor table from db
-        LOGGER.info('Reading precursors from database...')
+        LOGGER.info('Reading precursors from database...', stacklevel=2)
         df = pd.read_sql('''
             SELECT
                 p.replicateId,
@@ -54,7 +54,7 @@ class NormalizationManagerBase(TransformationManagerBase):
             LEFT JOIN replicates r ON p.replicateId == r.id
             WHERE r.includeRep == TRUE; ''',
             self.conn)
-        LOGGER.info('Finished reading precursors.')
+        LOGGER.info('Finished reading precursors.', stacklevel=2)
 
         if len(df.index) == 0:
             LOGGER.error('All replicates in database have been excluded!')

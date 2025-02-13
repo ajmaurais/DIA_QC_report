@@ -70,7 +70,7 @@ class ImputationManagerBase(TransformationManagerBase):
 
     def _read_precursors(self):
         # get precursor table from db
-        LOGGER.info('Reading precursors from database...')
+        LOGGER.info('Reading precursors from database...', stacklevel=2)
         df = pd.read_sql(f'''
             SELECT
                 r.project,
@@ -84,7 +84,7 @@ class ImputationManagerBase(TransformationManagerBase):
             LEFT JOIN replicates r ON p.replicateId == r.id
             WHERE r.includeRep == TRUE; ''',
             self.conn)
-        LOGGER.info('Finished reading precursors.')
+        LOGGER.info('Finished reading precursors.', stacklevel=2)
 
         if len(df.index) == 0:
             LOGGER.error('All replicates in database have been excluded!')
@@ -97,7 +97,7 @@ class ImputationManagerBase(TransformationManagerBase):
 
 
     def _read_proteins(self):
-        LOGGER.info('Reading proteins from database...')
+        LOGGER.info('Reading proteins from database...', stacklevel=2)
         df = pd.read_sql(f'''
             SELECT
                 r.project,
@@ -109,7 +109,7 @@ class ImputationManagerBase(TransformationManagerBase):
             LEFT JOIN replicates r ON q.replicateId == r.id
             WHERE r.includeRep == TRUE; ''',
             self.conn)
-        LOGGER.info('Finished reading precursors.')
+        LOGGER.info('Finished reading precursors.', stacklevel=2)
 
         if len(df.index) == 0:
             LOGGER.error('All replicates in database have been excluded!')
