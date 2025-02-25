@@ -8,6 +8,7 @@ data/*
 plots/*
 .DS_Store
 tests/work/*
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

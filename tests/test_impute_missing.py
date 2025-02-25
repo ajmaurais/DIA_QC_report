@@ -418,7 +418,7 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         command = ['dia_qc', 'impute', '-m=dummy', self.db_path]
         error_result = setup_functions.run_command(command, self.work_dir)
         self.assertEqual(error_result.returncode, 2)
-        message = "invalid choice: 'dummy' (choose from '{}')".format("', '".join(imputation.IMPUTATION_METHODS))
+        message = "invalid choice: 'dummy' (choose from {})".format("', '".join(imputation.IMPUTATION_METHODS))
         self.assertIn(message, error_result.stderr)
 
 
