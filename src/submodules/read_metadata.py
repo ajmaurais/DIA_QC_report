@@ -145,7 +145,7 @@ class Metadata():
         # pivot longer
         df = pd.melt(df, id_vars=['Replicate'], var_name='annotationKey', value_name='annotationValue',
                      value_vars=[x for x in list(df.columns) if x != 'Replicate'])
-        df['annotationValue'] = df['annotationValue'].astype(str)
+        df['annotationValue'] = df['annotationValue'].apply(lambda x: str(x) if x is not None else None)
         return df
 
 
@@ -403,7 +403,8 @@ class Metadata():
         for _, row in data.iterrows():
             line = [f'Replicate:/{row.Replicate}']
             for header in annotation_headers:
-                line.append(row[header])
+                value = row[header]
+                line.append(value if value is not None else '')
             write_csv_row(line)
 
 
@@ -411,4 +412,3 @@ class Metadata():
         for name, dtype in self.types.items():
             out.write(f'--annotation-name="{name}" --annotation-targets=replicate')
             out.write(f' --annotation-type={dtype.to_sky_type()}\n')
-

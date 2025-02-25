@@ -37,9 +37,9 @@ class Dtype(Enum):
         if self is Dtype.NULL:
             return None
         if self is Dtype.BOOL:
-            if val.lower() in ('true', '1', 't'):
+            if val is not None and val.lower() in ('true', '1', 't'):
                 return True
-            if val.lower() in ('false', '0', 'f'):
+            if val is not None and val.lower() in ('false', '0', 'f'):
                 return False
             return None
         try:
