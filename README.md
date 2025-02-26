@@ -10,19 +10,22 @@ usage: dia_qc <command> [<args>]
 Available commands:
    parse                Generate QC and batch correction database from Skyline reports.
    metadata_convert     Convert metadata annotations to specified file format.
+   filter               Filter replicates in database.
+   impute               Impute missing precursor and/or protein values.
    normalize            Perform DirectLFQ or median normalization on batch database.
    qc_qmd               Generate QC qmd report.
    batch_rmd            Generate batch correction rmd report.
    export_gene_matrix   Export PDC gene tables from batch database.
-   db_export            Export selected table(s) from batch/qc database.
+   db_export            Export selected table(s) from precursor database.
 
 Tools to generate QC and batch reports from DIA proteomics data
 
 positional arguments:
-  command     Subcommand to run.
+  command        Subcommand to run.
 
 options:
-  -h, --help  show this help message and exit
+  -h, --help     Show this help message and exit.
+  -v, --version  Show program version and exit.
 ```
 
 ## Installation
@@ -63,13 +66,13 @@ The `parse` sub-command is used to combine .tsv reports exported from one or mor
 To create a new database:
 
 ```
-dia_qc parse --projectName <document_1> <document_1_replicate_quality.tsv> <document_1_precursor_quality.tsv> 
+dia_qc parse --projectName <document_1> <document_1_replicate_quality.tsv> <document_1_precursor_quality.tsv>
 ```
 
 To add reports from additional documents to an existing database add the `--overwriteMode=append` flag:
 
 ```
-dia_qc parse --projectName <document_2> --overwriteMode=append <document_2_replicate_quality.tsv> <document_2_precursor_quality.tsv> 
+dia_qc parse --projectName <document_2> --overwriteMode=append <document_2_replicate_quality.tsv> <document_2_precursor_quality.tsv>
 ```
 
 ## Normalzation
