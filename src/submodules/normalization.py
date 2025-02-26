@@ -184,47 +184,6 @@ class MedianNormalizer(NormalizationManagerBase):
         return True
 
 
-class MedianAbsoluteDeviationNormalizer(NormalizationManagerBase):
-    @staticmethod
-    def mad_normalize_df(df, key_cols, value_col):
-        '''
-        Median normalize peak areas in long formatted datafraeme.
-
-        Parameters
-        ----------
-        df: pd.DataFrame
-            Long formatted data frame
-        key_cols: list
-            The names of column(s) which uniquely identify each replicate.
-        value_col: str
-            The name of the column with peak areas.
-            This function will log2 transform this column so the areas should be in linear space.
-        '''
-
-        log2_value_col = cammel_case('log2', value_col)
-        norm_value_col = cammel_case('normalized', value_col)
-        log2_norm_value_col = cammel_case('log2', norm_value_col)
-
-        # log2 transform
-        df[log2_value_col] = np.log2(df[value_col] + 1)
-
-        df[log2_norm_value_col] = df.groupby([key_cols])[log2_value_col].transform(lambda x: np.median(np.abs(x - np.mean(x))))
-
-        # convert back to linear space
-        df[norm_value_col] = np.power(2, df[log2_norm_value_col]) - 1
-
-        return df
-
-
-    def normalize(self):
-        pass
-
-
-class ZscoreNormalization(NormalizationManagerBase):
-    def normalize(self):
-        pass
-
-
 class DirectlfqNormalizer(NormalizationManagerBase):
     def __init__(self, conn):
         NormalizationManagerBase.__init__(self, conn, keep_na=False)
