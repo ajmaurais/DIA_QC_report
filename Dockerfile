@@ -26,8 +26,9 @@ FROM alpine:${ALPINE_VERSION} as python_build
 
 # Install necessary dependencies
 RUN apk add --no-cache \
-    bash curl git libc6-compat \
-    gcc g++ python3 py3-pip python3-dev musl-dev linux-headers \
+    bash curl git libc6-compat libstdc++ libgcc \
+    gcc g++ python3 py3-pip python3-dev  musl-dev linux-headers \
+    py3-pyarrow py3-pandas py3-scikit-learn py3-matplotlib \
     llvm15 llvm15-dev make cmake apache-arrow apache-arrow-dev
 ENV LLVM_CONFIG=/usr/lib/llvm15/bin/llvm-config
 
