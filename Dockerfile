@@ -26,15 +26,12 @@ FROM alpine:${ALPINE_VERSION} as python_build
 
 # Install necessary dependencies
 RUN apk add --no-cache \
-    bash curl git nodejs npm libc6-compat fontconfig deno \
+    bash curl git libc6-compat \
     gcc g++ python3 py3-pip python3-dev musl-dev linux-headers \
     llvm15 llvm15-dev make cmake apache-arrow apache-arrow-dev
 ENV LLVM_CONFIG=/usr/lib/llvm15/bin/llvm-config
 
-RUN npm install -g sass@latest
-
 ARG QUARTO_VERSION
-
 ENV QUARTO_VERSION=${QUARTO_VERSION}
 
 # Install Quarto
@@ -47,16 +44,10 @@ RUN mkdir -p /code && cd /code && \
 RUN pip install --break-system-packages setuptools jupyter plotly
 COPY src /code/DIA_QC_report/src
 COPY pyproject.toml /code/DIA_QC_report
-# RUN cd /code/DIA_QC_report && \
-#     pip install --break-system-packages . && \
-#     pip cache purge && \
-#     cd /code && rm -rf /code/DIA_QC_report
-
-# clean things up
-
-#    echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > /usr/local/bin/entrypoint && \
-#    chmod +x /usr/local/bin/entrypoint
-
+RUN cd /code/DIA_QC_report && \
+    pip install --break-system-packages . && \
+    pip cache purge && \
+    cd /code && rm -rf /code/DIA_QC_report
 
 # ----------------------------------------------------------------------------
 # Stage 3: Runtime stage
@@ -72,31 +63,37 @@ ARG PYTHON_VERSION
 ENV QUARTO_VERSION=${QUARTO_VERSION}
 ENV PYTHON_VERSION=${PYTHON_VERSION}
 
+RUN installr -d knitr rmarkdown
+
 # Install minimal runtime dependencies
 RUN apk update && \
     apk add --no-cache npm \
     cairo pango libpng tiff \
-    fontconfig deno python3 \
-    pandoc freetype freetype-dev libxt libxrender libxft ttf-freefont ttf-dejavu ttf-liberation ttf-droid && \
-    fc-cache -fv
+    deno python3 pandoc libc6-compat
 
-RUN npm install -g sass@latest
+# RUN apk add fontconfig freetype freetype-dev libxt libxrender libxft \
+#     ttf-freefont ttf-dejavu ttf-liberation ttf-droid && \
+#     fc-cache -fv
 
-RUN installr -d knitr rmarkdown
 
 # Copy R runtime dependencies from the r_build stage
 COPY --from=r_build /usr/local/lib/R/library /usr/local/lib/R/library
 
 # Copy python runtime dependencies from the python_build stage
 COPY --from=python_build /code/quarto-${QUARTO_VERSION} /opt/quarto
-# COPY --from=python_build "/usr/lib/python${PYTHON_VERSION}/site-packages" "/usr/lib/python${PYTHON_VERSION}/site-packages"
+COPY --from=python_build "/usr/lib/python${PYTHON_VERSION}/site-packages" "/usr/lib/python${PYTHON_VERSION}/site-packages"
 
 # Create symlinks for quarto
-RUN ln -s /opt/pandoc/bin/pandoc /usr/local/bin/pandoc && \
-    ln -s /opt/quarto/bin/quarto /usr/local/bin/quarto && \
-    ln -sf /usr/bin/deno /opt/quarto/bin/tools/x86_64/deno
+RUN ln -s /opt/quarto/bin/quarto /usr/local/bin/quarto && \
+    ln -sf /usr/bin/deno /opt/quarto/bin/tools/x86_64/deno && \
+    ln -s /usr/local/bin/sass /opt/quarto/bin/tools/x86_64/sass
 
 RUN quarto install tinytex
+
+# clean things up
+
+#    echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > /usr/local/bin/entrypoint && \
+#    chmod +x /usr/local/bin/entrypoint
 
 # Git version information
 ARG GIT_BRANCH
