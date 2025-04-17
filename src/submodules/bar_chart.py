@@ -9,7 +9,7 @@ def bar_chart(dat, ylab, xlab='Acquisition number', legend_title=None, fname=Non
     '''
 
     data = {c: dat[c].to_numpy() for c in dat.columns}
-    labels = dat.index.to_numpy()
+    labels = np.argsort(dat.index.to_numpy())
 
     fig = plt.figure(figsize = (6, 3), dpi=dpi)
 
