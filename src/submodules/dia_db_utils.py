@@ -163,6 +163,14 @@ def any_imputed(conn):
     return True
 
 
+def project_exists(conn, test_project):
+    cur = conn.cursor()
+    cur.execute('SELECT project FROM replicates;')
+    projects = cur.fetchall()
+
+    return test_project in projects
+
+
 def check_schema_version(conn):
     '''
     Check the database schema version and the version of dia_qc used to build the database.

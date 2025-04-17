@@ -10,6 +10,7 @@ from .submodules.dtype import Dtype
 from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
+from .submodules.dia_db_utils import project_exists
 
 COMMAND_DESCRIPTION = 'Generate QC qmd report.'
 
@@ -23,7 +24,13 @@ PRECURSOR_METHOD_NAMES = dict(zip(METHOD_NAMES, ['totalAreaFragment', 'normalize
 PROTEIN_METHOD_NAMES = dict(zip(METHOD_NAMES, ['abundance', 'normalizedAbundance']))
 TABLE_TYPES = ('wide', 'long')
 
-PEPTIDE_QUERY = '''
+
+def get_project_query(project):
+    return '' if project is None else f'\n      AND r.project == {project}'
+
+
+def get_peptide_query(project=None):
+    return f'''
 query = \'\'\'SELECT
     r.acquiredRank,
     p.modifiedSequence,
@@ -31,13 +38,14 @@ query = \'\'\'SELECT
 FROM precursors p
 LEFT JOIN replicates r
     ON p.replicateId = r.id
-WHERE p.totalAreaFragment > 0 AND r.includeRep == TRUE;\'\'\'
+WHERE p.totalAreaFragment > 0 AND r.includeRep == TRUE{get_project_query(project)};\'\'\'
 
 df = pd.read_sql(query, conn)
 df = df.drop_duplicates()
 '''
 
-PRECURSOR_QUERY = '''
+def get_precursor_query(project=None):
+    return f'''
 query = \'\'\'SELECT
     p.replicateId,
     r.acquiredRank,
@@ -53,7 +61,7 @@ query = \'\'\'SELECT
 FROM precursors p
 LEFT JOIN replicates r
     ON p.replicateId = r.id
-WHERE r.includeRep == TRUE;\'\'\'
+WHERE r.includeRep == TRUE{get_project_query(project)};\'\'\'
 
 df = pd.read_sql(query, conn)
 df = df.drop_duplicates()
@@ -171,7 +179,7 @@ for std in [%s]:
     return text
 
 
-def missed_cleavages(do_query=True, dpi=DEFAULT_DPI):
+def missed_cleavages(project=None, do_query=True, dpi=DEFAULT_DPI):
     text = '''\n%s\n%s
 # precursor bar chart colored by missed cleavages
 trypsin_re = re.compile(r'([RK])(?=[^P])')
@@ -181,23 +189,23 @@ df['nMissed'] = df['peptide'].apply(lambda x: len(trypsin_re.findall(x)))
 agg = df.groupby(["acquiredRank", "nMissed"])["nMissed"].agg(["count"]).reset_index()
 agg = agg.pivot_table(index='acquiredRank', columns='nMissed', values='count')
 bar_chart(agg, 'Number of precursors', legend_title='Missed cleavages', dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PEPTIDE_QUERY if do_query else '\n', dpi)
+```\n\n''' % (python_block_header(stack()[0][3]), get_peptide_query(project) if do_query else '\n', dpi)
 
     return text
 
 
-def precursor_charges(do_query=True, dpi=DEFAULT_DPI):
+def precursor_charges(project=None, do_query=True, dpi=DEFAULT_DPI):
     text = '''\n%s\n%s
 # precursor bar chart colored by precursorCharge
 agg = df.groupby(["acquiredRank", "precursorCharge"])["precursorCharge"].agg(["count"]).reset_index()
 agg = agg.pivot_table(index='acquiredRank', columns='precursorCharge', values='count')
 bar_chart(agg, 'Number of precursors', legend_title='Precursor charge', dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PEPTIDE_QUERY if do_query else '\n', dpi)
+```\n\n''' % (python_block_header(stack()[0][3]), get_peptide_query(project) if do_query else '\n', dpi)
 
     return text
 
 
-def rep_rt_sd(do_query=True, dpi=DEFAULT_DPI):
+def rep_rt_sd(project=None, do_query=True, dpi=DEFAULT_DPI):
     text = '''\n%s\n%s
 # replicate RT cor histogram
 agg = df.groupby(['modifiedSequence', 'precursorCharge'])['rt'].agg('std')
@@ -207,7 +215,7 @@ if all(np.isnan(agg)):
 else:
     histogram(agg, 'Replicate RT SD (seconds)', dpi=%i,
               limits=(0, agg.quantile(0.95) * 3))
-```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
+```\n\n''' % (python_block_header(stack()[0][3]), get_precursor_query(project) if do_query else '\n', dpi)
 
     return text
 
@@ -238,13 +246,13 @@ def cammel_to_underscore(s):
     return ret
 
 
-def pivot_box_plot(values, do_query=True, **kwargs):
+def pivot_box_plot(values, project=None, do_query=True, **kwargs):
     text = '\n{}\n{}{}```\n\n'.format(python_block_header(cammel_to_underscore(values)),
-                                      PRECURSOR_QUERY if do_query else '',
+                                      get_precursor_query(project) if do_query else '',
                                       _pivot_box_plot(values, **kwargs))
     return text
 
-def ms1_ms2_ratio(do_query=True, dpi=DEFAULT_DPI):
+def ms1_ms2_ratio(project=None, do_query=True, dpi=DEFAULT_DPI):
     text = '''\n%s\n%s
 df['ms2_ms1_ratio'] = df['totalAreaFragment'] / df['totalAreaMs1']
 df['ms2_ms1_ratio'] = df['ms2_ms1_ratio'].apply(lambda x: x if np.isfinite(x) else 0)
@@ -252,7 +260,7 @@ data = df.pivot_table(index=['modifiedSequence', 'precursorCharge'],
                       columns="acquiredRank", values='ms2_ms1_ratio')
 box_plot(data, 'Transition / precursor ratio',
          limits = (0, df['ms2_ms1_ratio'].quantile(0.95) * 3), dpi=%i)
-```\n\n''' % (python_block_header(stack()[0][3]), PRECURSOR_QUERY if do_query else '\n', dpi)
+```\n\n''' % (python_block_header(stack()[0][3]), get_precursor_query(project) if do_query else '\n', dpi)
 
     return text
 
@@ -280,12 +288,12 @@ def get_meta_key_types(db_path, keys):
     return types
 
 
-def precursor_areas(quant_cols):
+def precursor_areas(quant_cols, project=None):
 
     quant_col_query = ',\n'.join([f'{key} as {value}' for key, value in quant_cols.items()])
+    project_query = get_project_query(project)
 
-    Stack = stack()
-    text = f"""\n{python_block_header(Stack[0][3])}
+    text = f"""\n{python_block_header(stack()[0][3])}
 
 query = '''SELECT
     p.replicateId,
@@ -295,7 +303,7 @@ query = '''SELECT
     {quant_col_query}
 FROM precursors p
 LEFT JOIN replicates r ON p.replicateId = r.id
-WHERE r.includeRep == TRUE;'''\n"""
+WHERE r.includeRep == TRUE{project_query};'''\n"""
 
     data_levels = {v: i for i, v in enumerate(quant_cols.values())}
     text += f'\ndata_levels = {str(data_levels)}\n\n'
@@ -318,7 +326,7 @@ multi_boxplot(dats, data_levels, dpi=250)\n\n```\n\n'''
     return text
 
 
-def pc_analysis(show_normalized=False, meta_keys=None):
+def pc_analysis(project=None, show_normalized=False, meta_keys=None):
 
     text = f'''\n{python_block_header(stack()[0][3])}\n'''
 
@@ -342,9 +350,9 @@ query = '''SELECT
     if show_normalized:
         text += ',\n\tp.normalizedArea as Normalized'
 
-    text += """\nFROM precursors p
+    text += f"""\nFROM precursors p
 LEFT JOIN replicates r ON p.replicateId = r.id
-WHERE r.includeRep == TRUE;'''"""
+WHERE r.includeRep == TRUE{get_project_query(project)};'''"""
 
     text += f'''\n\ndf_pc = pd.read_sql(query, conn)
 
@@ -505,7 +513,7 @@ def check_meta_keys_exist(conn, keys):
     for key in keys:
         if key not in metadata_keys:
             all_good = False
-            LOGGER.error(f'Missing annotationKey: "{key}"')
+            LOGGER.error('Missing annotationKey: "%s"', key)
 
     return all_good
 
@@ -523,7 +531,7 @@ def check_std_proteins_exist(conn, proteins):
     for protein in proteins:
         if protein not in db_proteins:
             all_good = False
-            LOGGER.error(f'Missing standard protein: "{protein}"')
+            LOGGER.error('Missing standard protein: "%s"', protein)
 
     return all_good
 
@@ -543,6 +551,8 @@ def parse_args(argv, prog=None):
                              'Either in separate tabs or stacked. Plots are always stacked in pdf report.')
     parser.add_argument('--title', default=DEFAULT_TITLE,
                         help=f'Report title. Default is "{DEFAULT_TITLE}"')
+    parser.add_argument('--project', default=None,
+                        help='Only produce QC report for a specific project.')
 
     parser.add_argument('db', help='Path to sqlite qc database.')
     return parser.parse_args(argv)
@@ -574,6 +584,11 @@ def _main(args):
         if not check_std_proteins_exist(conn, args.std_proteins):
             sys.exit(1)
 
+    if args.project:
+        if not project_exists(conn, args.project):
+            LOGGER.error("Project '%s' does not exist!", args.project)
+            sys.exit(1)
+
     # Check if metadata.is_normalized is set to True
     db_is_normalized = is_normalized(conn)
     conn.close()
@@ -596,30 +611,30 @@ def _main(args):
             outF.write(std_rt_dist(args.std_proteins, dpi=args.dpi))
 
         outF.write(add_header('Standard deviation of precursor RT across replicates', level=2))
-        outF.write(rep_rt_sd(dpi=args.dpi, do_query=True))
+        outF.write(rep_rt_sd(dpi=args.dpi, project=args.project, do_query=True))
 
         outF.write(add_header('Number of missed cleavages', level=2))
-        outF.write(missed_cleavages(do_query=False, dpi=args.dpi))
+        outF.write(missed_cleavages(project=args.project, do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Precursor charges', level=2))
-        outF.write(precursor_charges(do_query=False, dpi=args.dpi))
+        outF.write(precursor_charges(project=args.project, do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Mass error distribution', level=2))
         outF.write(pivot_box_plot('massError', title='Mass error (ppm)',
-                                  do_query=True, dpi=args.dpi))
+                                  project=args.project, do_query=True, dpi=args.dpi))
 
         outF.write(add_header('Peak width distribution', level=2))
         outF.write(pivot_box_plot('maxFwhm', title='Peak FWHM (seconds)',
-                                  do_query=False, dpi=args.dpi))
+                                  project=args.project, do_query=False, dpi=args.dpi))
 
         outF.write(add_header('Library dot product distribution', level=2))
-        outF.write(pivot_box_plot('libraryDotProduct', do_query=False, dpi=args.dpi))
+        outF.write(pivot_box_plot('libraryDotProduct', project=args.project, do_query=False, dpi=args.dpi))
 
         outF.write(add_header('MS1 isotopic window dot product distribution', level=2))
-        outF.write(pivot_box_plot('isotopeDotProduct', do_query=False, dpi=args.dpi))
+        outF.write(pivot_box_plot('isotopeDotProduct', project=args.project, do_query=False, dpi=args.dpi))
 
         outF.write(add_header('MS1 to MS2 ratio', level=2))
-        outF.write(ms1_ms2_ratio(do_query=False, dpi=args.dpi))
+        outF.write(ms1_ms2_ratio(project=args.project, do_query=False, dpi=args.dpi))
 
         # Precursor areas section
         quant_cols = {'totalAreaFragment': 'Unnormalized'}
@@ -627,13 +642,13 @@ def _main(args):
             quant_cols['normalizedArea'] = 'Normalized'
 
         outF.write(add_header('MS2 peak areas', level=2))
-        outF.write(precursor_areas(quant_cols))
+        outF.write(precursor_areas(quant_cols, project=args.project))
 
         # Batch effects section
         outF.write(add_header('Batch effects', level=2))
 
         meta_keys = get_meta_key_types(args.db, args.color_vars)
-        outF.write(pc_analysis(meta_keys=meta_keys, show_normalized=db_is_normalized))
+        outF.write(pc_analysis(meta_keys=meta_keys, show_normalized=db_is_normalized, project=args.project))
 
         outF.write(pc_plots(['acquisition_number'] + list(meta_keys.keys()), args.pca_format))
 
