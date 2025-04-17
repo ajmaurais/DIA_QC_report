@@ -8,6 +8,7 @@ from numpy import isnan
 import setup_functions
 
 from DIA_QC_report.submodules.dia_db_utils import read_wide_metadata
+from DIA_QC_report import generate_qc_qmd
 
 
 class TestMakeQCqmd(unittest.TestCase):
@@ -407,3 +408,56 @@ class TestAllPrecursorsMissing(unittest.TestCase):
                                                         prefix=f'render_{norm_qmd_name}')
             self.assertEqual(render_result.returncode, 0)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{norm_qmd_name}.html'))
+
+
+class TestProjectOption(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_qc_report_project_option'
+        setup_results = setup_functions.setup_multi_db(f'{setup_functions.TEST_DIR}/data',
+                                                       cls.work_dir, clear_dir=True, normalize=True)
+
+        if not all(r.returncode == 0 for r in setup_results):
+            raise RuntimeError('Setup of test db failed!')
+
+        cls.db_path = f'{cls.work_dir}/data.db3'
+
+
+    def test_missing_project_fails(self):
+        dummy_project = 'NOT_A_PROJECT'
+        command = ['dia_qc', 'qc_qmd', f'--project={dummy_project}', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(f"Project '{dummy_project}' does not exist!" in result.stderr,
+                        result.stderr)
+
+
+    def do_project_test(self, project):
+        command = ['dia_qc', 'qc_qmd', '-a=iRT', f'--project={project}', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir,
+                                             prefix=f'test_{project}')
+
+        self.assertEqual(result.returncode, 0)
+
+        qmd_name = f'{project}_{generate_qc_qmd.DEFAULT_OFNAME}'
+        qmd_path = f'{self.work_dir}/{qmd_name}'
+        self.assertTrue(os.path.isfile(qmd_path), f'{qmd_path} does not exist!')
+
+        if self.render_qmd:
+            render_command = ['quarto', 'render', qmd_path, '--to', 'html']
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{qmd_name}')
+            self.assertEqual(render_result.returncode, 0)
+            html_path = f'{self.work_dir}/{os.path.splitext(qmd_name)[0]}.html'
+            self.assertTrue(os.path.isfile(html_path), f'{html_path} Does not exist!')
+
+
+    def test_Sp3(self):
+        self.do_project_test('Sp3')
+
+
+    def test_Strap(self):
+        self.do_project_test('Strap')

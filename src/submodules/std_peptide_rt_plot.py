@@ -1,11 +1,10 @@
-
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Patch
 from matplotlib.ticker import MaxNLocator
 
 
-def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
+def peptide_rt_plot(protein_id, conn, project=None, fname=None, dpi=250):
     '''
     Make RT distribution plot for all the precursors in a protein_id.
 
@@ -15,7 +14,7 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
         The protein_id to plot.
     conn:
         Database connection
-    fname: str
+    fname: sttr
         (optional) filename to write plot to.
     '''
 
@@ -30,14 +29,19 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
     FROM precursors p
     LEFT JOIN replicates r
         ON p.replicateId = r.id
-	LEFT JOIN peptideToProtein ptp
-		ON p.peptideId == ptp.peptideId
-	LEFT JOIN proteins prot
-		ON prot.proteinId == ptp.proteinId
-    WHERE prot.name = "%s" AND r.includeRep == TRUE;
-    ''' % protein_id
+    LEFT JOIN peptideToProtein ptp
+        ON p.peptideId = ptp.peptideId
+    LEFT JOIN proteins prot
+        ON prot.proteinId = ptp.proteinId
+    WHERE prot.name = ? AND r.includeRep = TRUE
+    '''
 
-    df = pd.read_sql(query, conn)
+    params = [protein_id]
+    if project is not None:
+        query += ' AND r.project = ?'
+        params.append(project)
+
+    df = pd.read_sql(query, conn, params=params)
 
     # rank peptides by mean RT across replicates
     df['meanRT'] = df.groupby('modifiedSequence')['rt'].transform('mean')
@@ -48,7 +52,7 @@ def peptide_rt_plot(protein_id, conn, fname=None, dpi=250):
     cmap = plt.get_cmap('viridis')
     pallet = cmap([i/len(ranks) for i in range(len(ranks))])
     colors = {peptide: color for color, (peptide, rank) in zip(pallet, sorted(ranks.items(), key=lambda x: x[1]))}
-    
+
     fig = plt.figure(figsize = (8, 4), dpi=dpi)
     ax = fig.add_axes([0.1, 0.15, 0.58, 0.75])
 

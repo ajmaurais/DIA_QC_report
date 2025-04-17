@@ -26,7 +26,7 @@ TABLE_TYPES = ('wide', 'long')
 
 
 def get_project_query(project):
-    return '' if project is None else f'\n      AND r.project == {project}'
+    return '' if project is None else f'\n      AND r.project == "{project}"'
 
 
 def get_peptide_query(project=None):
@@ -160,21 +160,24 @@ def doc_finalize():
 
 # plots
 
-def replicate_tic_areas(dpi=DEFAULT_DPI):
+def replicate_tic_areas(project=None, dpi=DEFAULT_DPI):
     text='''\n%s\n
 # replicate tic bar chart
-tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates WHERE includeRep == TRUE', conn)
+tic = pd.read_sql('SELECT acquiredRank, ticArea FROM replicates WHERE includeRep == TRUE%s', conn)
 bar_chart(tic, 'TIC area', dpi=%s)
-```\n\n''' % (python_block_header(stack()[0][3]), dpi)
+```\n\n''' % (python_block_header(stack()[0][3]),
+              f' AND project == "{project}"' if project else '',
+              dpi)
     return text
 
 
-def std_rt_dist(std_proteins, dpi=DEFAULT_DPI):
+def std_rt_dist(std_proteins, project=None, dpi=DEFAULT_DPI):
     text = '''\n%s\n
 for std in [%s]:
-    peptide_rt_plot(std, conn, dpi=%i)
+    peptide_rt_plot(std, conn, %sdpi=%i)
 ```\n\n''' % (python_block_header(stack()[0][3]),
               "'{}'".format("', '".join(std_proteins)) if len(std_proteins) > 0 else '',
+              f"project='{project}', " if project else '',
               dpi)
     return text
 
@@ -540,7 +543,7 @@ def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument('--dpi', default=DEFAULT_DPI, type=int,
                         help=f'Figure DPI in report. {DEFAULT_DPI} is the default.')
-    parser.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
+    parser.add_argument('-o', '--ofname', default=None,
                         help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
     parser.add_argument('-a', '--addStdProtein', action='append', default=None, dest='std_proteins',
                         help='Add standard protein name for retention time plot.')
@@ -593,7 +596,9 @@ def _main(args):
     db_is_normalized = is_normalized(conn)
     conn.close()
 
-    with open(args.ofname, 'w') as outF:
+    ofname = args.ofname if args.ofname else f"{args.project + '_' if args.project else ''}{DEFAULT_OFNAME}"
+
+    with open(ofname, 'w') as outF:
         outF.write(doc_header(join_shell(sys.argv), title=args.title))
 
         outF.write(add_header('Peptide independent metrics', level=1))
@@ -602,13 +607,13 @@ def _main(args):
         outF.write(figure_style())
 
         outF.write(add_header('Replicate TIC areas', level=2))
-        outF.write(replicate_tic_areas(dpi=args.dpi))
+        outF.write(replicate_tic_areas(project=args.project, dpi=args.dpi))
 
         outF.write(add_header('Peptide dependent metrics\n', level=1))
 
         if args.std_proteins:
             outF.write(add_header('Standard retention times across replicates', level=2))
-            outF.write(std_rt_dist(args.std_proteins, dpi=args.dpi))
+            outF.write(std_rt_dist(args.std_proteins, project=args.project, dpi=args.dpi))
 
         outF.write(add_header('Standard deviation of precursor RT across replicates', level=2))
         outF.write(rep_rt_sd(dpi=args.dpi, project=args.project, do_query=True))

@@ -72,6 +72,12 @@ class TestDBHelperFunctions(unittest.TestCase, TestDBFunctionsBase):
             cls.conn.close()
 
 
+    def test_project_exists(self):
+        self.assertIsNotNone(self.conn)
+        self.assertTrue(db_utils.project_exists(self.conn, self.TEST_PROJECT))
+        self.assertFalse(db_utils.project_exists(self.conn, 'NOT_A_PROJECT'))
+
+
     def test_mark_reps_skipped_errors(self):
         self.assertTrue(self.conn is not None)
         with self.assertLogs(logger.LOGGER, level='ERROR') as cm:

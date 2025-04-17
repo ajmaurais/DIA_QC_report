@@ -166,7 +166,7 @@ def any_imputed(conn):
 def project_exists(conn, test_project):
     cur = conn.cursor()
     cur.execute('SELECT project FROM replicates;')
-    projects = cur.fetchall()
+    projects = set(x[0] for x in cur.fetchall())
 
     return test_project in projects
 
