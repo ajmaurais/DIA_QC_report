@@ -3,7 +3,7 @@ FROM amazonlinux:latest
 LABEL maintainer="Aaron Maurais -- MacCoss Lab"
 
 RUN dnf update && \
-    dnf -y install git wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
+    dnf -y install procps git wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
     dnf clean all && \
     echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > /usr/local/bin/entrypoint && \
     chmod +x /usr/local/bin/entrypoint
@@ -37,10 +37,10 @@ RUN mkdir -p /code/quarto && cd /code/quarto && \
     quarto install tinytex
 
 # install python dependencies
+RUN pip install --ignore-installed setuptools jupyter plotly
 COPY src /code/DIA_QC_report/src
 COPY pyproject.toml /code/DIA_QC_report
-RUN pip install setuptools jupyter plotly && \
-    cd /code/DIA_QC_report && \
+RUN cd /code/DIA_QC_report && \
     pip install . && \
     pip cache purge && \
     cd /code && rm -rf /code/DIA_QC_report
