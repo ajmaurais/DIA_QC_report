@@ -602,7 +602,7 @@ def parse_args(argv, prog=None):
                                     "Setting this option could cause an error when the rmd renders.")
     file_settings.add_argument('--savePlots', default=None, dest='plot_ext',
                                help='Save all plots to file with specified extension.')
-    file_settings.add_argument('--interactive', default='3',
+    file_settings.add_argument('--interactive', default='2',
                                help='One digit bit mask. 0 for all static plots, 1 for interactive '
                                     'peak areas plot, 2 for interactive PCA plots, '
                                     '3 for all interactive plots.')
