@@ -29,7 +29,7 @@ PROTEIN_QUERY = '''
 SELECT
     prot.accession,
 	r.replicate,
-    a.aliquot_id,
+    a.aliquot_run_metadata_id,
 	q.abundance,
 	q.normalizedAbundance
 FROM proteinQuants q
@@ -37,16 +37,16 @@ LEFT JOIN proteins prot ON prot.proteinId == q.proteinId
 LEFT JOIN replicates r ON r.id == q.replicateId
 LEFT JOIN (
     SELECT
-        replicateId, annotationValue as aliquot_id
+        replicateId, annotationValue as aliquot_run_metadata_id
     FROM sampleMetadata
-    WHERE annotationKey == 'aliquot_id'
+    WHERE annotationKey == 'aliquot_run_metadata_id'
 ) a ON a.replicateId == q.replicateId
 WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;'''
 
 PRECURSOR_QUERY = '''
 SELECT
 	r.replicate,
-    	a.aliquot_id,
+    a.aliquot_run_metadata_id,
 	prot.accession as accession,
 	p.modifiedSequence,
 	p.precursorCharge,
@@ -58,29 +58,29 @@ LEFT JOIN proteins prot ON prot.proteinId == ptp.proteinId
 LEFT JOIN replicates r ON r.id == p.replicateId
 LEFT JOIN (
     SELECT
-        replicateId, annotationValue as aliquot_id
+        replicateId, annotationValue as aliquot_run_metadata_id
     FROM sampleMetadata
-    WHERE annotationKey == 'aliquot_id'
+    WHERE annotationKey == 'aliquot_run_metadata_id'
 ) a ON a.replicateId == p.replicateId
 WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;
 '''
 
 
 def check_aliquot_id(df, df_name):
-    # check that aliquot_id column exists in df
-    if 'aliquot_id' not in df.columns:
-        LOGGER.error(f'In {df_name} df: aliquot_id column does not exist!')
+    # check that aliquot_run_metadata_id column exists in df
+    if 'aliquot_run_metadata_id' not in df.columns:
+        LOGGER.error(f'In {df_name} df: aliquot_run_metadata_id column does not exist!')
         return False
 
     # make sure that no aliquot_ids are NA
-    rep_ids = df[['replicate', 'aliquot_id']].drop_duplicates()
-    na_counts = Counter(pd.isna(rep_ids['aliquot_id']))
+    rep_ids = df[['replicate', 'aliquot_run_metadata_id']].drop_duplicates()
+    na_counts = Counter(pd.isna(rep_ids['aliquot_run_metadata_id']))
     if True in na_counts:
-        LOGGER.error(f'Missing aliquot_id for {na_counts[True]} replicates!')
+        LOGGER.error(f'Missing aliquot_run_metadata_id for {na_counts[True]} replicates!')
         return False
 
     # Make sure that all aliquot_ids are unique
-    id_diff = len(set(rep_ids['replicate'].to_list())) - len(set(rep_ids['aliquot_id'].to_list()))
+    id_diff = len(set(rep_ids['replicate'].to_list())) - len(set(rep_ids['aliquot_run_metadata_id'].to_list()))
     if id_diff != 0:
         LOGGER.error('Not all aliquot_ids are unique!')
         return False
@@ -159,7 +159,7 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
 
     gene_data_sets = {}
     gene_data_keys = ['Gene', 'NCBIGeneID', 'Authority', 'Description', 'Chromosome', 'Locus']
-    
+
     if gene_uuid:
         gene_data_keys.append('gene_uuid')
 
@@ -227,7 +227,7 @@ def parse_args(argv, prog=None):
 
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
     parser.add_argument('--useAliquotId', default=False, action='store_true',
-                        help='Use aliquot_id as column headers instead of replicate name.')
+                        help='Use aliquot_run_metadata_id as column headers instead of replicate name.')
     parser.add_argument('--addGeneUuid', default=False, action='store_true',
                         dest='add_gene_uuid', help='Add column for gene id hash.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
@@ -275,12 +275,12 @@ def _main(args):
 
     conn.close()
 
-    # check aliquot_id column if necissary
+    # check aliquot_run_metadata_id column if necissary
     rep_id_col = 'replicate'
     if args.useAliquotId:
         if not check_aliquot_id(dat_protein, 'protein') or not check_aliquot_id(dat_precursor, 'precursor'):
             sys.exit(1)
-        rep_id_col = 'aliquot_id'
+        rep_id_col = 'aliquot_run_metadata_id'
 
     gene_id_table_cols = GENE_ID_TABLE_COLS
     if args.add_gene_uuid:
@@ -366,4 +366,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
