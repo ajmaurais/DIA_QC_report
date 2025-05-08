@@ -31,10 +31,13 @@ def doc_header(command, title=DEFAULT_TITLE):
 <!-- %s -->\n
 ---
 title: "%s"
-input:
+output:
     html_document:
         toc: true
         toc_float: true
+    pdf_document:
+        toc: true
+        number_sections: true
 ---\n\n\n''' % (command, title)
     return header
 
