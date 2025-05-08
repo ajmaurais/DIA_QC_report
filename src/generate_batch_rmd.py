@@ -503,7 +503,7 @@ def wide_table(p, py_name, r_name, df_name):
         row_names.append('precursorCharge')
 
     text = f'''\nmessage('Writing {p}s {py_name} to: "{p}s_{py_name}_wide.tsv"')
-write.table(rDIAUtils::pivotLonger({df_name}, valuesFrom='{r_name}',
+write.table(rDIAUtils::pivotWider({df_name}, valuesFrom='{r_name}',
                                    rowsName=c('{"', '".join(row_names)}'),
                                    columnsName='replicate'),
             file='{p}s_{py_name}_wide.tsv', sep='\\t', row.names=F, quote=F)\n'''
