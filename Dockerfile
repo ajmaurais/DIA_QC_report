@@ -3,13 +3,15 @@ FROM amazonlinux:latest
 LABEL maintainer="Aaron Maurais -- MacCoss Lab"
 
 RUN dnf update && \
-    dnf -y install procps git wget tar unzip pip openssl-devel libcurl-devel R-core-devel && \
+    dnf -y install procps git wget tar unzip pip openssl-devel libcurl-devel \
+           freetype-devel libpng-devel libtiff-devel libjpeg-devel fribidi-devel \
+           cairo-devel R-core-devel && \
     dnf clean all && \
     echo -e '#!/usr/bin/env bash\nset -e\nexec "$@"' > /usr/local/bin/entrypoint && \
     chmod +x /usr/local/bin/entrypoint
 
 # install rDIAUtils dependencies
-RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'ggiraph', 'BiocManager', 'rmarkdown', 'svglite'), \
+RUN Rscript -e "withCallingHandlers(install.packages(c('Rcpp', 'dplyr', 'tidyr', 'patchwork', 'viridis', 'ggiraph', 'BiocManager', 'rmarkdown', 'svglite', 'ggrastr'), \
                                                      repo='https://ftp.osuosl.org/pub/cran/'), \
                                     warning=function(w) stop(w))" && \
     Rscript -e "withCallingHandlers(BiocManager::install(c('limma', 'sva'), ask=FALSE, force=TRUE), \
