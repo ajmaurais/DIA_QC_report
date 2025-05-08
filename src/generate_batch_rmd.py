@@ -27,9 +27,7 @@ PROTEIN_METHOD_NAMES = ('abundance', 'normalizedAbundance', 'normalizedAbundance
 NORMALIZATION_METHOD_NAMES = {'DirectLFQ': 'DirectLFQ', 'median': 'Median'}
 
 def doc_header(command, title=DEFAULT_TITLE):
-    header='''<!-- This document was automatically generated. Command used to generate document: -->
-<!-- %s -->\n
----
+    header='''---
 title: "%s"
 output:
     html_document:
@@ -38,7 +36,14 @@ output:
     pdf_document:
         toc: true
         number_sections: true
----\n\n\n''' % (command, title)
+params:
+    save_plots: TRUE
+    write_tables: TRUE
+---
+
+<!-- This document was automatically generated. Command used to generate document: -->
+<!-- %s -->\n\n\n''' % (title, command)
+
     return header
 
 
@@ -47,12 +52,15 @@ def add_header(text, level=1):
 
 
 def r_block_header(label, echo=False, warning=False, message=False,
-                   fig_width=None, fig_height=None):
+                   fig_width=None, fig_height=None, eval_var=None):
 
     def bool_to_str(boo):
         return 'TRUE' if boo else 'FALSE'
 
     text = '```{' + f'r {label}, echo={bool_to_str(echo)}, warning={bool_to_str(warning)}, message={bool_to_str(message)}'
+
+    if eval_var:
+        text += f', eval={eval_var}'
 
     if fig_width:
         text += f', fig.width={fig_width}'
@@ -387,8 +395,19 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if sk
 
     text += ')) +\n'
 
-    text += f'''\tfacet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top') +
-    {'ggiraph::geom_boxplot_interactive' if interactive else 'geom_boxplot'}(outlier.size = 0.5) +'''
+    text += f"\tfacet_wrap(~method, nrow = 1, scales = 'free_x', strip.position = 'top')"
+
+    if interactive:
+        text += '''\n\nif (knitr::is_html_output()) {
+    p.norm <- p.norm + ggiraph::geom_boxplot_interactive(outlier.size = 0.5)
+} else {
+    p.norm <- p.norm + ggrastr::rasterize(geom_boxplot(outlier.size = 0.5))
+}
+
+p.norm <- p.norm +
+'''
+    else:
+        text += ' +\n\tggrastr::rasterize(geom_boxplot(outlier.size = 0.5)) +'
 
     if not skip_bc:
         text += '''\n\tscale_color_discrete(name='Batch') +'''
@@ -400,11 +419,19 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if sk
     theme(panel.grid = element_blank(),
           legend.position = 'top')\n'''
 
-    if plot_file_path:
-        text += ggsave(plot_file_path, 'p.norm', (fig_height, fig_width))
+    if interactive:
+        text += '''
+if (knitr::is_html_output()) {
+    ggiraph::girafe(ggobj=p.norm)
+} else {
+    p.norm
+}\n'''
+    else:
+        text += '\np.norm\n'
+    text += '```\n\n\n'
 
-    text += f"\n{'ggiraph::girafe(ggobj=p.norm)' if interactive else 'p.norm'}\n```\n\n\n"
-    return text
+    save_plot_command = ggsave(plot_file_path, 'p.norm', (fig_height, fig_width))
+    return text, save_plot_command
 
 
 def cv_plot(control_values=None, plot_file_path=None, skip_bc=False):
@@ -455,12 +482,10 @@ p.cv <- ggplot(dat.cv, aes(x=cv, fill=method, color=method)) +
           legend.direction='horizontal',
           legend.position = 'top')\n'''
 
-    if plot_file_path:
-        text += ggsave(plot_file_path, 'p.cv', (fig_height, fig_width))
-
     text += '\np.cv\n```\n\n\n'
 
-    return text
+    save_plot_command = ggsave(plot_file_path, 'p.cv', (fig_height, fig_width))
+    return text, save_plot_command
 
 
 def pca_plot(p, color_vars=None, plot_file_path=None,
@@ -481,37 +506,58 @@ def pca_plot(p, color_vars=None, plot_file_path=None,
     pcs.{p}[[method]] <- rDIAUtils::pcAnalysis(dat.{p}.l[dat.{p}.l$method == method,],
                                                      'value', rowsName='{p}', columnsName='replicate')'''
     text += '\n}\n\n'
-    text += f'''names({p}.methods) <- c('Unnormalized', paste(norm.methods['{p}'], 'Normalized'){'' if skip_bc else ", 'Batch corrected'"})
-pca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
+    text += f'''names({p}.methods) <- c('Unnormalized', paste(norm.methods['{p}'], 'Normalized'){'' if skip_bc else ", 'Batch corrected'"})'''
+
+    if interactive:
+        text += '\nif (knitr::is_html_output()) {'
+        text += f'''\n\tpca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
+        color.cols=c('Acquisition\\nnumber'='acquiredRank'{batch_var_text}{color_vars_text}),
+        dat.metadata=dat.metadata,
+        interactive=T)\n'''
+        text += '\n\tggiraph::girafe(ggobj=pca.%s)\n\n} else {\n' % p
+        text += f'''\tpca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
+        color.cols=c('Acquisition\\nnumber'='acquiredRank'{batch_var_text}{color_vars_text}),
+        dat.metadata=dat.metadata,
+        interactive=F)\n'''
+        text += '\n\tpca.%s\n}' % p
+    else:
+        text += f'''\npca.{p} <- rDIAUtils::arrangePlots(pcs.{p}, row.cols={p}.methods,
     color.cols=c('Acquisition\\nnumber'='acquiredRank'{batch_var_text}{color_vars_text}),
     dat.metadata=dat.metadata,
-    interactive={'T' if interactive else 'F'})\n'''
+    interactive=F)\n\npca.{p}\n'''
 
-    if plot_file_path:
-        text += ggsave(plot_file_path, f'pca.{p}', (fig_height, fig_width))
+    text += f'\n```\n\n\n'
 
-    html_plot = f'ggiraph::girafe(ggobj=pca.{p})' if interactive else f'pca.{p}'
-    text += f'\n{html_plot}\n```\n\n\n'
-
-    return text
+    save_plot_command = ggsave(plot_file_path, f'pca.{p}', (fig_height, fig_width))
+    return text, save_plot_command
 
 
-def wide_table(p, py_name, r_name, df_name):
+def save_plots_section(*args):
+    text = r_block_header('save_plots', message=True, eval_var='params$save_plots') + '\n\n'
+
+    for plot in args:
+        text += plot
+
+    return text + '\n```\n\n\n'
+
+
+def wide_table(p, py_name, r_name, df_name, indent=0):
     row_names = ['protein']
     if p == 'precursor':
         row_names.append('modifiedSequence')
         row_names.append('precursorCharge')
 
-    text = f'''\nmessage('Writing {p}s {py_name} to: "{p}s_{py_name}_wide.tsv"')
-write.table(rDIAUtils::pivotWider({df_name}, valuesFrom='{r_name}',
-                                   rowsName=c('{"', '".join(row_names)}'),
-                                   columnsName='replicate'),
-            file='{p}s_{py_name}_wide.tsv', sep='\\t', row.names=F, quote=F)\n'''
+    indent = '\t' * indent
+    text = f'''\n{indent}message('Writing {p}s {py_name} to: "{p}s_{py_name}_wide.tsv"')
+{indent}write.table(rDIAUtils::pivotWider({df_name}, valuesFrom='{r_name}',
+                                   {indent}rowsName=c('{"', '".join(row_names)}'),
+                                   {indent}columnsName='replicate'),
+            {indent}file='{p}s_{py_name}_wide.tsv', sep='\\t', row.names=F, quote=F)\n'''
 
     return text
 
 
-def long_table(p, df_name, unnormalized=True, normalized=True, batch_corrected=True):
+def long_table(p, df_name, unnormalized=True, normalized=True, batch_corrected=True, indent=0):
     row_identifers = ['replicate', 'protein']
     quant_value_index = [i for i, value in zip((0, 1, 2), (unnormalized, normalized, batch_corrected)) if value]
     if p == 'precursor':
@@ -520,10 +566,11 @@ def long_table(p, df_name, unnormalized=True, normalized=True, batch_corrected=T
     else:
         quant_values = [PROTEIN_METHOD_NAMES[i] for i in quant_value_index]
 
-    text = f'''\nmessage('Writing {p}s long to: "{p}s_long.tsv"')
-write.table(dplyr::select({df_name}, {', '.join(row_identifers)},
-                          {', '.join(quant_values)}),
-            file='{p}s_long.tsv', sep='\\t', row.names=F, quote=F)\n'''
+    indent = '\t' * indent
+    text = f'''\n{indent}message('Writing {p}s long to: "{p}s_long.tsv"')
+{indent}write.table(dplyr::select({df_name}, {', '.join(row_identifers)},
+                          {indent}{', '.join(quant_values)}),
+            {indent}file='{p}s_long.tsv', sep='\\t', row.names=F, quote=F)\n'''
 
     return text
 
@@ -532,7 +579,7 @@ def write_tables_section(precursor_tables, protein_tables, metadata_tables):
 
     text = add_header('TSV files generated:', level=1)
 
-    text += '\n' + r_block_header('write_tables', message=True)
+    text += '\n' + r_block_header('write_tables', message=True, eval_var='params$write_tables')
     text += '\n\n'
 
     if any(t for d in precursor_tables.values() for t in d.values()):
@@ -778,34 +825,46 @@ def _main(args):
 
         # precursor normalization plot
         outF.write(add_header('Precursor normalization', level=1))
-        outF.write(precursor_norm_plot(plot_file_path='plots/precursor_normalization.tiff' if args.plot_ext else None,
-                                       skip_bc=skip_bc,
-                                       interactive=interactive_plots['plots']['area_dist']))
+        text, save_prec_norm_plot = precursor_norm_plot(
+            plot_file_path='plots/precursor_normalization.tiff',
+            skip_bc=skip_bc,
+            interactive=interactive_plots['plots']['area_dist']
+        )
+        outF.write(text)
 
         # CV distribution plot
         outF.write(add_header(f"{'Control ' if args.control_values else ''}CV distribution", level=1))
-        cv_plot_file_path = None
-        if args.plot_ext:
-            cv_plot_file_path = f'plots/{"control_" if args.control_values else ""}cv_dist.{args.plot_ext}'
-        outF.write(cv_plot(control_values=args.control_values,
-                           plot_file_path=cv_plot_file_path,
-                           skip_bc=skip_bc))
+        cv_plot_file_path = f'plots/{"control_" if args.control_values else ""}cv_dist.{args.plot_ext}'
+        text, save_cv_plot = cv_plot(control_values=args.control_values,
+                                     plot_file_path=cv_plot_file_path,
+                                     skip_bc=skip_bc)
+        outF.write(text)
 
         # precursor PCA plot
         outF.write(add_header('Precursor batch correction PCA', level=1))
-        outF.write(pca_plot('precursor',
-                            color_vars=args.color_vars,
-                            skip_bc=skip_bc,
-                            plot_file_path=f'plots/precursor_pca.{args.plot_ext}' if args.plot_ext else None,
-                            interactive=interactive_plots['plots']['pca']))
+        text, save_prec_pca_plot = pca_plot(
+            'precursor',
+            color_vars=args.color_vars,
+            skip_bc=skip_bc,
+            plot_file_path=f'plots/precursor_pca.{args.plot_ext}',
+            interactive=interactive_plots['plots']['pca']
+        )
+        outF.write(text)
 
         # protein PCA plot
         outF.write(add_header('Protein batch correction PCA', level=1))
-        outF.write(pca_plot('protein',
-                            color_vars=args.color_vars,
-                            skip_bc=skip_bc,
-                            plot_file_path=f'plots/protein_pca.{args.plot_ext}' if args.plot_ext else None,
-                            interactive=interactive_plots['plots']['pca']))
+        text, save_prot_pca_plot = pca_plot(
+            'protein',
+            color_vars=args.color_vars,
+            skip_bc=skip_bc,
+            plot_file_path=f'plots/protein_pca.{args.plot_ext}',
+            interactive=interactive_plots['plots']['pca']
+        )
+        outF.write(text)
+
+        if args.plot_ext:
+            outF.write(save_plots_section(save_prec_norm_plot, save_cv_plot,
+                                          save_prec_pca_plot, save_prot_pca_plot))
 
         # Optional output tables
         # Check if there is at least 1 table to be written.
