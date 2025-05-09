@@ -401,13 +401,13 @@ p.norm <- ggplot(dat.p, aes(x=acquiredRank, y=value, group=acquiredRank{'' if sk
         text += '''\n\nif (knitr::is_html_output()) {
     p.norm <- p.norm + ggiraph::geom_boxplot_interactive(outlier.size = 0.5)
 } else {
-    p.norm <- p.norm + ggrastr::rasterize(geom_boxplot(outlier.size = 0.5))
+    p.norm <- p.norm + ggrastr::fasterize(geom_boxplot(outlier.size = 0.5), dpi=500)
 }
 
 p.norm <- p.norm +
 '''
     else:
-        text += ' +\n\tggrastr::rasterize(geom_boxplot(outlier.size = 0.5)) +'
+        text += ' +\n\tggrastr::rasterize(geom_boxplot(outlier.size = 0.5), dpi=500) +'
 
     if not skip_bc:
         text += '''\n\tscale_color_discrete(name='Batch') +'''
