@@ -69,9 +69,7 @@ df = df.drop_duplicates()
 
 
 def doc_header(command, title=DEFAULT_TITLE):
-    header='''<!-- This document was automatically generated. Do not edit. -->
-<!-- %s -->\n
----
+    header='''---
 title: "%s"
 toc: true
 format:
@@ -87,7 +85,10 @@ format:
         extra_dependencies: ["float"]
         fig-format: 'png'
 jupyter: python3
----\n\n''' % (command, title)
+---
+
+<!-- This document was automatically generated. Command used to generate document: -->
+<!-- %s -->\n\n\n''' % (title, command)
     return header
 
 
@@ -667,4 +668,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

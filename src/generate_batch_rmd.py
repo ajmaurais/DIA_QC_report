@@ -35,7 +35,7 @@ output:
         toc_float: true
     pdf_document:
         toc: true
-        number_sections: true
+        number_sections: false
 params:
     save_plots: TRUE
     write_tables: TRUE
