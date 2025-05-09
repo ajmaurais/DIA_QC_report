@@ -251,6 +251,58 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
 
 
+class TestPDFReport(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.render_rmd = os.getenv('RENDER_RMD', 'False').lower() == 'true'
+
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_batch_rmd_pdf/'
+        cls.db_path = f'{cls.work_dir}/data.db3'
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+
+        cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
+                                                           cls.work_dir,
+                                                           clear_dir=True)
+
+        if not all(result.returncode == 0 for result in cls.parse_results):
+            raise RuntimeError('Setup of test db failed!')
+
+        normalize_command = ['dia_qc', 'normalize', cls.db_path]
+        cls.normalize_result = setup_functions.run_command(normalize_command,
+                                                           cls.work_dir,
+                                                           prefix='normalize_db')
+
+        if cls.normalize_result.returncode != 0:
+            raise RuntimeError('Setup of test db failed!')
+
+
+    def test_pdf_report(self):
+        self.assertTrue(self.normalize_result.returncode == 0)
+        self.assertTrue(os.path.isfile(self.db_path))
+
+        rmd_name = 'pdf_test'
+        command = ['dia_qc', 'batch_rmd', '--savePlots=pdf',
+                   '--proteinTables=77', '--precursorTables=77', '--metadataTables=11',
+                   '-o', f'{rmd_name}.rmd', self.db_path]
+        result = setup_functions.run_command(command, self.work_dir)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
+
+        if self.render_rmd:
+            render_command = ['Rscript', '-e',
+                              f"rmarkdown::render('{rmd_name}.rmd', output_format='pdf_document', params=list(save_plots=FALSE, write_tables=FALSE))"]
+            render_result = setup_functions.run_command(render_command, self.work_dir,
+                                                        prefix=f'render_{rmd_name}')
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
+            self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.pdf'))
+            self.assertFalse(os.path.isdir(f'{self.work_dir}/plots'))
+
+            # Check that no .tsv files are in the work_dir
+            for file in os.listdir(self.work_dir):
+                self.assertFalse(file.endswith('.tsv'), f'Found unexpected .tsv file: {file}')
+
+
 class TestInteractive(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -323,12 +375,12 @@ class TestInteractive(unittest.TestCase):
         with open(rmd_path, 'r') as inF:
             text = inF.read()
 
-        not_i = generate_batch_rmd.precursor_norm_plot(None, interactive=False)
+        not_i, _ = generate_batch_rmd.precursor_norm_plot(None, interactive=False)
         if not_i in text:
             self.assertFalse('ggiraph::girafe' in not_i)
             return False
 
-        i = generate_batch_rmd.precursor_norm_plot(None, interactive=True)
+        i, _ = generate_batch_rmd.precursor_norm_plot(None, interactive=True)
         if i in text:
             self.assertTrue('ggiraph::girafe' in i)
             return True
@@ -341,15 +393,15 @@ class TestInteractive(unittest.TestCase):
         with open(rmd_path, 'r') as inF:
             text = inF.read()
 
-        not_i_prec = generate_batch_rmd.pca_plot('precursor', interactive=False)
-        not_i_prot = generate_batch_rmd.pca_plot('protein', interactive=False)
+        not_i_prec, _ = generate_batch_rmd.pca_plot('precursor', interactive=False)
+        not_i_prot, _ = generate_batch_rmd.pca_plot('protein', interactive=False)
         if not_i_prec in text and not_i_prot in text:
             self.assertFalse('ggiraph::girafe' in not_i_prec)
             self.assertFalse('ggiraph::girafe' in not_i_prot)
             return False
 
-        i_prec = generate_batch_rmd.pca_plot('precursor', interactive=True)
-        i_prot = generate_batch_rmd.pca_plot('protein', interactive=True)
+        i_prec, _ = generate_batch_rmd.pca_plot('precursor', interactive=True)
+        i_prot, _ = generate_batch_rmd.pca_plot('protein', interactive=True)
         if i_prec in text and i_prot in text:
             self.assertTrue('ggiraph::girafe' in i_prec)
             self.assertTrue('ggiraph::girafe' in i_prot)
