@@ -18,7 +18,7 @@ dependencies = [
     'jsonschema>=3.2.0',
     'directlfq @ git+https://github.com/ajmaurais/directlfq.git'
 ]
-requires-python = '>=3.8'
+requires-python = '>=3.12'
 
 [tool.setuptools]
 packages = ['DIA_QC_report', 'DIA_QC_report.submodules']
