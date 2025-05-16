@@ -63,7 +63,7 @@ def main():
     package_version = src.__version__
     git_info = get_git_info(cwd=REPO_HEAD_DIR)
 
-    docker_command = ['docker', 'build', '-t', DOCKER_IMAGE_NAME]
+    docker_command = ['docker', 'build', '--platform', 'linux/amd64', '-t', DOCKER_IMAGE_NAME]
     docker_tag = args.tag if args.tag else package_version
     docker_command[-1] += f':{docker_tag}'
 
