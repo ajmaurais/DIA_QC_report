@@ -29,4 +29,4 @@ jobs:
             -v ${{ github.workspace }}:/data \
             -w /data \
             quay.io/mauraisa/dia_qc_report:${{ steps.get_version.outputs.version }} \
-            RENDER_RMD=TRUE RENDER_QMD=TRUE python -m unittest discover -s tests -p 'test_*.py' -v
+            python3 run_parallel_tests.py --render --verbose tests/test_*.py
