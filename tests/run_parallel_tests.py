@@ -68,11 +68,11 @@ if __name__ == "__main__":
         help='Pass RENDER_RMD and RENDER_QMD arguments to the test files'
     )
     parser.add_argument(
-        '--jobs', type=int,
+        '--jobs', '-j', type=int,
         help='Number of parallel processes (default: # of CPU cores)'
     )
     parser.add_argument(
-        '--verbose', action='store_true', default=False,
+        '--verbose', '-v', action='store_true', default=False,
         help='Print combined output for any failing tests'
     )
     parser.add_argument(
