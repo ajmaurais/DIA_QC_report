@@ -77,8 +77,11 @@ class ReportColumn():
         '''
 
         if alias_language == 'invariant':
-            return self.name
-        return self.skyline_aliases[alias_language]
+            return self.skyline_name
+        alias = self.skyline_aliases.get(alias_language)
+        if alias is None:
+            raise KeyError(f'Unknown language: {alias_language} for column: {self.name}')
+        return alias
 
 
 class SkylineReport(ABC):
@@ -158,14 +161,16 @@ class SkylineReport(ABC):
         if not self.quiet:
             LOGGER.info(message)
 
-
-    def _detect_language(self, file, delim=None):
+    @staticmethod
+    def _read_headers(file, delim=None):
         # read the first line from the file
         if delim is None:
             delim = detect_delim(file)
         headers = next(file).strip().split(delim)
         file.seek(0)
+        return headers
 
+    def _detect_language(self, headers):
         # first check invariant
         df_languages = {col: set() for col in headers}
         invariant_cols = {col.skyline_name for col in self.columns()}
@@ -229,12 +234,17 @@ class ReplicateReport(SkylineReport):
 
 
     def read_report(self, fname):
-        with open(fname, 'r') as inF:
-            delim = detect_delim(inF)
-            report_language = self._detect_language(inF, delim)
-            self._info(f'Found {report_language} {self.report_name} report...')
+        if fname.endswith('.parquet'):
+            df = pd.read_parquet(fname)
+            report_language = self._detect_language(df.columns)
 
-            df = pd.read_csv(inF, sep=delim)
+        else:
+            with open(fname, 'r') as inF:
+                delim = detect_delim(inF)
+                report_language = self._detect_language(self._read_headers(inF, delim=delim))
+                df = pd.read_csv(inF, sep=delim)
+
+        self._info(f'Found {report_language} {self.report_name} report...')
 
         # Translate report into invariant format
         if report_language != 'invariant':
@@ -306,22 +316,33 @@ class PrecursorReport(SkylineReport):
 
     def read_report(self, fname, by_gene=False):
         # read report df
-        with open(fname, 'r') as inF:
-            # detect report delim
-            delim = detect_delim(inF)
-
-            # detect report language
-            report_language = self._detect_language(inF, delim)
+        if fname.endswith('.parquet'):
+            df = pd.read_parquet(fname)
+            report_language = self._detect_language(df.columns)
             self._info(f'Found {report_language} {self.report_name} report...')
 
-            # create dtypes dict for detected language
-            col_types = dict()
-            for col in self.columns():
-                col_types[col.get_alias(report_language)] = float64 if col.is_numeric else str
-            col_types[self._columns['precursorCharge'].get_alias(report_language)] = int8
-            col_types[self._columns['userSetTotal'].get_alias(report_language)] = bool
+            taf_col = self._columns['totalAreaFragment'].get_alias(report_language)
+            df[taf_col] = df[taf_col].astype(float64)
+            tams1_col = self._columns['totalAreaMs1'].get_alias(report_language)
+            df[tams1_col] = df[tams1_col].astype(float64)
 
-            df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
+        else:
+            with open(fname, 'r') as inF:
+                # detect report delim
+                delim = detect_delim(inF)
+
+                # detect report language
+                report_language = self._detect_language(self._read_headers(inF, delim=delim))
+                self._info(f'Found {report_language} {self.report_name} report...')
+
+                # create dtypes dict for detected language
+                col_types = dict()
+                for col in self.columns():
+                    col_types[col.get_alias(report_language)] = float64 if col.is_numeric else str
+                col_types[self._columns['precursorCharge'].get_alias(report_language)] = int8
+                col_types[self._columns['userSetTotal'].get_alias(report_language)] = bool
+
+                df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
 
         # Translate report into invariant format
         if report_language != 'invariant':

@@ -40,25 +40,29 @@ class TestDetectDelim(unittest.TestCase, AbstractTestsBase):
 class TestDetectLanguage(unittest.TestCase):
     def test_invariant_replicates(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', 'r') as inF:
-            lang = skyline_reports.ReplicateReport()._detect_language(inF)
+            headers = skyline_reports.ReplicateReport._read_headers(inF)
+            lang = skyline_reports.ReplicateReport()._detect_language(headers)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_replicates(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality_english.tsv', 'r') as inF:
-            lang = skyline_reports.ReplicateReport()._detect_language(inF)
+            headers = skyline_reports.ReplicateReport._read_headers(inF)
+            lang = skyline_reports.ReplicateReport()._detect_language(headers)
         self.assertEqual(lang, 'English')
 
 
     def test_invariant_precursors(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality.tsv', 'r') as inF:
-            lang = skyline_reports.PrecursorReport()._detect_language(inF)
+            headers = skyline_reports.ReplicateReport._read_headers(inF)
+            lang = skyline_reports.PrecursorReport()._detect_language(headers)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_precursors(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality_english.tsv', 'r') as inF:
-            lang = skyline_reports.PrecursorReport()._detect_language(inF)
+            headers = skyline_reports.ReplicateReport._read_headers(inF)
+            lang = skyline_reports.PrecursorReport()._detect_language(headers)
         self.assertEqual(lang, 'English')
 
 
@@ -167,10 +171,20 @@ class TestReadReplicateReport(unittest.TestCase, TestReadReportsBase):
         self.do_test('English', 'csv', places=6)
 
 
+    def test_read_invariant_parquet(self):
+        self.do_test('invariant', 'parquet', places=6)
+
+
+    def test_read_english_parquet(self):
+        self.do_test('English', 'parquet', places=6)
+
+
     def test_read_quiet(self):
         self.do_quiet_test('invariant', 'tsv', places=6)
         self.do_quiet_test('invariant', 'csv', places=6)
+        self.do_quiet_test('invariant', 'parquet', places=6)
         self.do_quiet_test('English', 'csv', places=6)
+        self.do_quiet_test('English', 'parquet', places=6)
         self.do_quiet_test('English', 'tsv', places=6)
 
 
@@ -223,8 +237,18 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
         self.do_test('English', 'csv', col_deltas=self.COL_DIFFS)
 
 
+    def test_read_invariant_parquet(self):
+        self.do_test('invariant', 'parquet', places=6)
+
+
+    def test_read_english_parquet(self):
+        self.do_test('English', 'parquet', col_deltas=self.COL_DIFFS)
+
+
     def test_read_quiet(self):
         self.do_quiet_test('invariant', 'tsv', places=6)
         self.do_quiet_test('invariant', 'csv', places=6)
+        self.do_quiet_test('invariant', 'parquet', places=6)
         self.do_quiet_test('English', 'csv', col_deltas=self.COL_DIFFS)
+        self.do_quiet_test('English', 'parquet', col_deltas=self.COL_DIFFS)
         self.do_quiet_test('English', 'tsv', col_deltas=self.COL_DIFFS)
