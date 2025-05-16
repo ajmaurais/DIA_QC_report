@@ -41,13 +41,13 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
     failed = 0
     with ProcessPoolExecutor(max_workers=n_cores) as executor:
         futures = {executor.submit(run_test_file, f, **kwargs): f for f in test_files}
-        for future in as_completed(futures):
+        for i, future in enumerate(as_completed(futures)):
             name, code, output = future.result()
             if code == 0:
-                print(f'\t✅ {name}')
+                print(f'\t✅ ({i}/{total})\t{name}')
                 passed += 1
             else:
-                print(f'\t❌ {name}')
+                print(f'\t❌ ({i}/{total})\t{name}')
                 if verbose:
                     print(output)
                 failed += 1
