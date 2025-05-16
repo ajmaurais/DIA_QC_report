@@ -1,0 +1,32 @@
+name: Run Python Unittests in dia_qc_report docker image
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  docker-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Extract version from src/__init__.py
+        id: get_version
+        run: |
+          version=$(python -c "import pathlib, re; f = pathlib.Path('src/__init__.py'); print(re.search(r\"__version__\\s*=\\s*['\\\"]([^'\\\"]+)['\\\"]\", f.read_text()).group(1))")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Pull Docker image
+        run: |
+          docker pull quay.io/mauraisa/dia_qc_report:${{ steps.get_version.outputs.version }}
+
+      - name: Run unittests inside Docker
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/data \
+            -w /data \
+            quay.io/mauraisa/dia_qc_report:${{ steps.get_version.outputs.version }} \
+            RENDER_RMD=TRUE RENDER_QMD=TRUE python -m unittest discover -s tests -p 'test_*.py' -v
