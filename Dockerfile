@@ -22,7 +22,13 @@ COPY rDIAUtils /code/rDIAUtils
 RUN cd /code/rDIAUtils && \
     Rscript -e "withCallingHandlers(install.packages('.', type='source', repo=NULL), \
                                     warning=function(w) stop(w))"
- 
+
+# Install Python 3.12 and make it the default python3
+RUN dnf install -y python3.12 python3.12-pip python3.12-devel && \
+    alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    alternatives --set python3 /usr/bin/python3.12 && \
+    ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
+
 # install pandoc
 RUN mkdir -p /code/pandoc && cd /code/pandoc && \
     wget 'https://github.com/jgm/pandoc/releases/download/3.1.11.1/pandoc-3.1.11.1-linux-amd64.tar.gz' && \
