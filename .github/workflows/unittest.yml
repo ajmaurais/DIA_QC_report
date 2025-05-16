@@ -24,4 +24,4 @@ jobs:
           pip install .
 
       - name: Run unittests
-        run: python run_parallel_tests.py --render --verbose tests/test_*.py
+        run: cd tests && python run_parallel_tests.py --verbose

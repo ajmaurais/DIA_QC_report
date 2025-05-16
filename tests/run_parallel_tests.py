@@ -6,9 +6,9 @@ from multiprocessing import cpu_count
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def run_test_file(path, render=False):
-    """Run a single test file using unittest"""
+    '''Run a single test file using unittest'''
 
-    command = [sys.executable, "-m", "unittest", str(path)]
+    command = [sys.executable, '-m', 'unittest', '-v', str(path)]
     if render:
         command = ['RENDER_RMD=TRUE', 'RENDER_QMD=TRUE'] + command
 
@@ -19,23 +19,23 @@ def run_test_file(path, render=False):
         )
         return (path.name, result.returncode, result.stdout)
     except Exception as e:
-        return (path.name, 1, f"ERROR: {e}")
+        return (path.name, 1, f'ERROR: {e}')
 
 
 def main(test_paths, max_workers=None, verbose=False, **kwargs):
     # Determine which test files to run
     if not test_paths:
-        test_files = list(Path.cwd().glob("test_*.py"))
+        test_files = list(Path.cwd().glob('test_*.py'))
     else:
         test_files = [Path(p) for p in test_paths]
 
     if not test_files:
-        print(f"No test files found to run.")
+        print(f'No test files found to run.')
         sys.exit(1)
 
     n_cores = cpu_count() if max_workers is None else max_workers
     total = len(test_files)
-    print(f"Running {total} test file(s) on {n_cores} cores...")
+    print(f'Running {total} test file(s) on {n_cores} cores...')
 
     passed = 0
     failed = 0
@@ -44,10 +44,10 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
         for future in as_completed(futures):
             name, code, output = future.result()
             if code == 0:
-                print(f"\t✅ {name}")
+                print(f'\t✅ {name}')
                 passed += 1
             else:
-                print(f"\t❌ {name}")
+                print(f'\t❌ {name}')
                 if verbose:
                     print(output)
                 failed += 1
@@ -55,14 +55,14 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
     # Summary
     if failed > 0:
         print(f'❌ {failed} tests failed.')
-    print(f"Summary: {passed} of {total} tests passed.")
+    print(f'Summary: {passed} of {total} tests passed.')
 
     sys.exit(1 if failed else 0)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description="Run unittest files in parallel.")
+    parser = argparse.ArgumentParser(description='Run unittest files in parallel.')
     parser.add_argument(
         '--render', action='store_true', default=False,
         help='Pass RENDER_RMD and RENDER_QMD arguments to the test files'
