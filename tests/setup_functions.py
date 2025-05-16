@@ -159,6 +159,28 @@ class AbstractTestsBase(ABC):
                         raise AssertionError("Values differ in column '{var}'. {lhs[rep][var]} != {rhs[rep][var]}")
 
 
+def remove_test_dir(test_dir, recursive=False):
+    """Remove test directory if it exists. If recursive=True, delete all nested files/dirs."""
+    if not os.path.isdir(test_dir):
+        return
+
+    if recursive:
+        # walk bottom‐up so files and subdirs are removed before their parents
+        for root, dirs, files in os.walk(test_dir, topdown=False):
+            for fname in files:
+                os.remove(os.path.join(root, fname))
+            for dname in dirs:
+                os.rmdir(os.path.join(root, dname))
+        os.rmdir(test_dir)
+    else:
+        # only delete files in the top‐level directory
+        for entry in os.listdir(test_dir):
+            path = os.path.join(test_dir, entry)
+            if os.path.isfile(path):
+                os.remove(path)
+        os.rmdir(test_dir)
+
+
 def make_work_dir(work_dir, clear_dir=False):
     '''
     Setup work directory for test.
