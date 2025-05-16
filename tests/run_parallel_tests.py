@@ -22,7 +22,7 @@ def run_test_file(path, render=False):
         return (path.name, 1, f"ERROR: {e}")
 
 
-def main(test_paths, max_workers=None, **kwargs):
+def main(test_paths, max_workers=None, verbose=False, **kwargs):
     # Determine which test files to run
     if not test_paths:
         test_files = list(Path.cwd().glob("test_*.py"))
@@ -42,12 +42,14 @@ def main(test_paths, max_workers=None, **kwargs):
     with ProcessPoolExecutor(max_workers=n_cores) as executor:
         futures = {executor.submit(run_test_file, f, **kwargs): f for f in test_files}
         for future in as_completed(futures):
-            name, code, _ = future.result()
+            name, code, output = future.result()
             if code == 0:
                 print(f"\t✅ {name}")
                 passed += 1
             else:
                 print(f"\t❌ {name}")
+                if verbose:
+                    print(output)
                 failed += 1
 
     # Summary
@@ -70,8 +72,17 @@ if __name__ == "__main__":
         help='Number of parallel processes (default: # of CPU cores)'
     )
     parser.add_argument(
+        '--verbose', action='store_true', default=False,
+        help='Print combined output for any failing tests'
+    )
+    parser.add_argument(
         'tests', nargs='*',
         help='List of test files to run (default: all test_*.py in cwd)'
     )
     args = parser.parse_args()
-    main(test_paths=args.tests, max_workers=args.jobs, render=args.render)
+    main(
+        test_paths=args.tests,
+        max_workers=args.jobs,
+        render=args.render,
+        verbose=args.verbose
+    )
