@@ -25,8 +25,6 @@ RUN cd /code/rDIAUtils && \
 
 # Install Python 3.12 and make it the default python3
 RUN dnf install -y python3.12 python3.12-pip python3.12-devel && \
-    alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
-    alternatives --set python3 /usr/bin/python3.12 && \
     ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
 
 # install pandoc
