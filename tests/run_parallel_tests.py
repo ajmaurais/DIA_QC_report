@@ -1,5 +1,6 @@
 
 import sys
+import os
 import subprocess
 from pathlib import Path
 from multiprocessing import cpu_count
@@ -9,12 +10,14 @@ def run_test_file(path, render=False):
     '''Run a single test file using unittest'''
 
     command = [sys.executable, '-m', 'unittest', '-v', str(path)]
+    env = os.environ.copy()
     if render:
-        command = ['RENDER_RMD=TRUE', 'RENDER_QMD=TRUE'] + command
+        env['RENDER_RMD'] = 'TRUE'
+        env['RENDER_QMD'] = 'TRUE'
 
     try:
         result = subprocess.run(
-            command, text=True,
+            command, text=True, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         )
         return (path.name, result.returncode, result.stdout)
@@ -33,7 +36,8 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
         print(f'No test files found to run.')
         sys.exit(1)
 
-    n_cores = cpu_count() if max_workers is None else max_workers
+    n_cores = min(cpu_count() if max_workers is None else max_workers,
+                  len(test_files))
     total = len(test_files)
     print(f'Running {total} test file(s) on {n_cores} cores...')
 
@@ -44,12 +48,13 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
         for i, future in enumerate(as_completed(futures)):
             name, code, output = future.result()
             if code == 0:
-                print(f'\t✅ ({i}/{total})\t{name}')
-                passed += 1
-            else:
-                print(f'\t❌ ({i}/{total})\t{name}')
+                print(f'\t✅ ({i + 1}/{total})\t{name}')
                 if verbose:
                     print(output)
+                passed += 1
+            else:
+                print(f'\t❌ ({i + 1}/{total})\t{name}')
+                print(output)
                 failed += 1
 
     # Summary
