@@ -23,9 +23,11 @@ RUN cd /code/rDIAUtils && \
     Rscript -e "withCallingHandlers(install.packages('.', type='source', repo=NULL), \
                                     warning=function(w) stop(w))"
 
-# Install Python 3.12 and make it the default python3
+# Install Python 3.12
 RUN dnf install -y python3.12 python3.12-pip python3.12-devel && \
-    ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
+    ln -sf /usr/bin/pip3.12 /usr/local/bin/pip && \
+    ln -sf /usr/bin/python3.12 /usr/local/bin/python && \
+    ln -sf /usr/bin/python3.12 /usr/local/bin/python3
 
 # install pandoc
 RUN mkdir -p /code/pandoc && cd /code/pandoc && \

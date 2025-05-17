@@ -41,14 +41,14 @@ class TestMakeQCqmd(unittest.TestCase):
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.{report_format}'))
 
 
@@ -167,14 +167,14 @@ class TestMissingMetadata(unittest.TestCase):
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', report_format]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.{report_format}'))
 
 
@@ -230,14 +230,14 @@ class TestBadMetadataHeaders(unittest.TestCase):
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir, prefix=qmd_name)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix='render_bad_header_qmd')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
 
@@ -279,14 +279,14 @@ class TestSingleReplicate(unittest.TestCase):
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='generate_qc_qmd')
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
 
@@ -327,13 +327,13 @@ class TestSingleReplicate(unittest.TestCase):
                    '-o', f'{qmd_name}.qmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
         if self.render_qmd:
             render_command = ['quarto', 'render', f'{qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir)
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{qmd_name}.html'))
 
 
@@ -385,7 +385,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             render_command = ['quarto', 'render', f'{unorm_qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{unorm_qmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{unorm_qmd_name}.html'))
 
         # Normalize database
@@ -406,7 +406,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             render_command = ['quarto', 'render', f'{norm_qmd_name}.qmd', '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{norm_qmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{norm_qmd_name}.html'))
 
 
@@ -440,7 +440,7 @@ class TestProjectOption(unittest.TestCase):
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix=f'test_{project}')
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         qmd_name = f'{project}_{generate_qc_qmd.DEFAULT_OFNAME}'
         qmd_path = f'{self.work_dir}/{qmd_name}'
@@ -450,7 +450,7 @@ class TestProjectOption(unittest.TestCase):
             render_command = ['quarto', 'render', qmd_path, '--to', 'html']
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{qmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
             html_path = f'{self.work_dir}/{os.path.splitext(qmd_name)[0]}.html'
             self.assertTrue(os.path.isfile(html_path), f'{html_path} Does not exist!')
 

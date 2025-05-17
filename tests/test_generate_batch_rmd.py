@@ -105,7 +105,7 @@ class TestMakeBatchRmd(unittest.TestCase):
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
@@ -199,7 +199,7 @@ class TestMakeBatchRmd(unittest.TestCase):
                        '-o', f'{rmd_name}.rmd', self.db_path]
             result = setup_functions.run_command(command, self.work_dir)
 
-            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
             self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
 
@@ -207,7 +207,7 @@ class TestMakeBatchRmd(unittest.TestCase):
                 command = ['dia_qc', 'batch_rmd', f'--{flag}=44', self.db_path]
                 result = setup_functions.run_command(command, self.work_dir,
                                                      prefix='invalid_table_options')
-                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.returncode, 0, result.stderr)
 
                 name = re.sub('^p', 'P', flag.replace('Tables', ''))
                 for d in ('long', 'wide'):
@@ -236,7 +236,7 @@ class TestMakeBatchRmd(unittest.TestCase):
         command.insert(2, '--skipTests')
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='test_controlKey_check_skipTests')
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
     def test_addControlValue_check(self):
@@ -251,7 +251,7 @@ class TestMakeBatchRmd(unittest.TestCase):
         command.insert(2, '--skipTests')
         result = setup_functions.run_command(command, self.work_dir,
                                              prefix='test_addControlValue_check_skipTests')
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class TestPDFReport(unittest.TestCase):
@@ -355,14 +355,14 @@ class TestInteractive(unittest.TestCase):
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             self.assertTrue(os.path.isdir(f'{self.work_dir}/plots'))
             for file in [f'{rmd_name}.html',
@@ -423,7 +423,7 @@ class TestInteractive(unittest.TestCase):
                        '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
                        '-o', rmd_name, self.db_path]
             result = setup_functions.run_command(command, self.work_dir)
-            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
             plots = db_utils.parse_bitmask_options(option, ('plots',), ('area_dist', 'pca'))
 
@@ -488,7 +488,7 @@ class TestMissingMetadata(unittest.TestCase):
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
         self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
 
@@ -496,7 +496,7 @@ class TestMissingMetadata(unittest.TestCase):
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             for file in [f'{rmd_name}.html', 'metadata_wide.tsv']:
                 self.assertTrue(os.path.isfile(f'{self.work_dir}/{file}'))
@@ -555,14 +555,14 @@ class TestBadMetadataHeaders(unittest.TestCase):
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             for file in [f'{rmd_name}.html',
                          'proteins_batch_corrected_wide.tsv',
@@ -583,14 +583,14 @@ class TestBadMetadataHeaders(unittest.TestCase):
                    '-o', f'{rmd_name}.rmd', self.db_path]
         result = setup_functions.run_command(command, self.work_dir)
 
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
             render_result = setup_functions.run_command(render_command, self.work_dir,
                                                         prefix=f'render_{rmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             for file in [f'{rmd_name}.html',
                          'proteins_batch_corrected_wide.tsv',
