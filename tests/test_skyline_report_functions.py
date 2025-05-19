@@ -40,29 +40,29 @@ class TestDetectDelim(unittest.TestCase, AbstractTestsBase):
 class TestDetectLanguage(unittest.TestCase):
     def test_invariant_replicates(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality.tsv', 'r') as inF:
-            headers = skyline_reports.ReplicateReport._read_headers(inF)
-            lang = skyline_reports.ReplicateReport()._detect_language(headers)
+            headers = skyline_reports.ReplicateReport.read_headers(inF)
+            lang = skyline_reports.ReplicateReport().detect_language(headers)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_replicates(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_replicate_quality_english.tsv', 'r') as inF:
-            headers = skyline_reports.ReplicateReport._read_headers(inF)
-            lang = skyline_reports.ReplicateReport()._detect_language(headers)
+            headers = skyline_reports.ReplicateReport.read_headers(inF)
+            lang = skyline_reports.ReplicateReport().detect_language(headers)
         self.assertEqual(lang, 'English')
 
 
     def test_invariant_precursors(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality.tsv', 'r') as inF:
-            headers = skyline_reports.ReplicateReport._read_headers(inF)
-            lang = skyline_reports.PrecursorReport()._detect_language(headers)
+            headers = skyline_reports.ReplicateReport.read_headers(inF)
+            lang = skyline_reports.PrecursorReport().detect_language(headers)
         self.assertEqual(lang, 'invariant')
 
 
     def test_english_precursors(self):
         with open(f'{TEST_DIR}/data/skyline_reports/Strap_by_protein_precursor_quality_english.tsv', 'r') as inF:
-            headers = skyline_reports.ReplicateReport._read_headers(inF)
-            lang = skyline_reports.PrecursorReport()._detect_language(headers)
+            headers = skyline_reports.ReplicateReport.read_headers(inF)
+            lang = skyline_reports.PrecursorReport().detect_language(headers)
         self.assertEqual(lang, 'English')
 
 
@@ -77,7 +77,7 @@ class TestDetectLanguage(unittest.TestCase):
                 test_string += line
 
         test_ss = StringIO(test_string)
-        lang = skyline_reports.ReplicateReport()._detect_language(test_ss)
+        lang = skyline_reports.ReplicateReport().detect_language(test_ss)
 
         self.assertIsNone(lang)
 

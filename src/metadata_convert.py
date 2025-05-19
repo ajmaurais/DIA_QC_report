@@ -2,9 +2,7 @@
 import sys
 import argparse
 from os.path import basename, splitext
-from csv import DictReader
 
-from .submodules.dtype import Dtype
 from .submodules.read_metadata import Metadata
 from .submodules.logger import LOGGER
 

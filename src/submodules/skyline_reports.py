@@ -139,13 +139,16 @@ class SkylineReport(ABC):
         yield from self._columns.values()
 
 
-    def check_df_columns(self, df):
+    def check_df_columns(self, headers, language=None, quiet=False):
         ''' Check that df has all of required_cols. '''
         all_good = True
-        df_cols = set(df.columns.to_list())
+        df_cols = set(headers)
         for col in self.required_columns():
-            if col.name not in df_cols:
-                self._error(f'Missing required column: "{col}"' + f' in {self.report_name}' if self.report_name else '')
+            col_name = col.get_alias(language) if language else col.name
+            if col_name not in df_cols:
+                if quiet:
+                    return False
+                self._error(f'Missing required column: "{col_name}"' + f' in {self.report_name}' if self.report_name else '')
                 all_good = False
         return all_good
 
@@ -161,8 +164,9 @@ class SkylineReport(ABC):
         if not self.quiet:
             LOGGER.info(message)
 
+
     @staticmethod
-    def _read_headers(file, delim=None):
+    def read_headers(file, delim=None):
         # read the first line from the file
         if delim is None:
             delim = detect_delim(file)
@@ -170,7 +174,8 @@ class SkylineReport(ABC):
         file.seek(0)
         return headers
 
-    def _detect_language(self, headers):
+
+    def detect_language(self, headers):
         # first check invariant
         df_languages = {col: set() for col in headers}
         invariant_cols = {col.skyline_name for col in self.columns()}
@@ -233,15 +238,15 @@ class ReplicateReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname):
+    def read_report(self, fname, return_invariant=False):
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
-            report_language = self._detect_language(df.columns)
+            report_language = self.detect_language(df.columns)
 
         else:
             with open(fname, 'r') as inF:
                 delim = detect_delim(inF)
-                report_language = self._detect_language(self._read_headers(inF, delim=delim))
+                report_language = self.detect_language(self.read_headers(inF, delim=delim))
                 df = pd.read_csv(inF, sep=delim)
 
         self._info(f'Found {report_language} {self.report_name} report...')
@@ -258,8 +263,11 @@ class ReplicateReport(SkylineReport):
                 df['AcquiredTime'] = df['AcquiredTime'].apply(lambda x: datetime.strptime(x, '%m/%d/%Y %I:%M:%S %p'))
                 df['AcquiredTime'] = df['AcquiredTime'].apply(lambda x: x.strftime(METADATA_TIME_FORMAT))
 
+        if return_invariant:
+            return df
+
         df = df.rename(columns={col.skyline_name: col.name for col in self.columns()})
-        if not self.check_df_columns(df):
+        if not self.check_df_columns(df.columns):
             return None
         self._info('Done reading replicates table...')
 
@@ -314,11 +322,11 @@ class PrecursorReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname, by_gene=False):
+    def read_report(self, fname, by_gene=False, return_invariant=False):
         # read report df
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
-            report_language = self._detect_language(df.columns)
+            report_language = self.detect_language(df.columns)
             self._info(f'Found {report_language} {self.report_name} report...')
 
             taf_col = self._columns['totalAreaFragment'].get_alias(report_language)
@@ -332,7 +340,7 @@ class PrecursorReport(SkylineReport):
                 delim = detect_delim(inF)
 
                 # detect report language
-                report_language = self._detect_language(self._read_headers(inF, delim=delim))
+                report_language = self.detect_language(self.read_headers(inF, delim=delim))
                 self._info(f'Found {report_language} {self.report_name} report...')
 
                 # create dtypes dict for detected language
@@ -351,6 +359,9 @@ class PrecursorReport(SkylineReport):
                 col_dict[col.skyline_aliases[report_language]] = col.skyline_name
             df = df.rename(columns=col_dict)
 
+        if return_invariant:
+            return df
+
         # rename columns
         df = df.rename(columns={col.skyline_name: col.name for col in self.columns()})
 
@@ -359,7 +370,7 @@ class PrecursorReport(SkylineReport):
                 return row.proteinName if pd.isna(row.proteinGene) else row.proteinGene
             df['proteinName'] = df.apply(protein_uid, axis=1)
 
-        if not self.check_df_columns(df):
+        if not self.check_df_columns(df.columns):
             return None
 
         self._info('Done reading precursors table...')
