@@ -269,7 +269,7 @@ def _run_interactive(test_files, file_test_counts, n_cores, **kwargs):
         sum(file_test_counts.values()), n_tests_passed, n_tests_failed,
         start_time
     )
-    sys.exit(1 if n_files_failed else 0)
+    return 1 if n_files_failed else 0
 
 
 def main(test_paths, max_workers=None, verbose=False, **kwargs):
@@ -293,9 +293,9 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
 
     # Fallback to original behavior if verbose or non-interactive
     if verbose or not sys.stdout.isatty():
-        return _run_non_interactive(test_files, file_test_counts, n_cores, verbose=verbose, **kwargs)
+        sys.exit(_run_non_interactive(test_files, file_test_counts, n_cores, verbose=verbose, **kwargs))
 
-    return _run_interactive(test_files, file_test_counts, n_cores, **kwargs)
+    sys.exit(_run_interactive(test_files, file_test_counts, n_cores, **kwargs))
 
 
 if __name__ == '__main__':
