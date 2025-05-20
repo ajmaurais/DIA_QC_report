@@ -238,7 +238,7 @@ class ReplicateReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname, return_invariant=False):
+    def read_report(self, fname, return_invariant=False, remove_unknown_cols=False):
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
             report_language = self.detect_language(df.columns)
@@ -262,6 +262,10 @@ class ReplicateReport(SkylineReport):
             if report_language == 'English':
                 df['AcquiredTime'] = df['AcquiredTime'].apply(lambda x: datetime.strptime(x, '%m/%d/%Y %I:%M:%S %p'))
                 df['AcquiredTime'] = df['AcquiredTime'].apply(lambda x: x.strftime(METADATA_TIME_FORMAT))
+
+        if remove_unknown_cols:
+            known_invariant_cols = {col.skyline_name for col in self.columns()}
+            df = df[[col for col in df.columns if col in known_invariant_cols]]
 
         if return_invariant:
             return df
@@ -322,7 +326,7 @@ class PrecursorReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname, by_gene=False, return_invariant=False):
+    def read_report(self, fname, by_gene=False, remove_unknown_cols=False, return_invariant=False):
         # read report df
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
@@ -358,6 +362,10 @@ class PrecursorReport(SkylineReport):
             for col in self.columns():
                 col_dict[col.skyline_aliases[report_language]] = col.skyline_name
             df = df.rename(columns=col_dict)
+
+        if remove_unknown_cols:
+            known_invariant_cols = {col.skyline_name for col in self.columns()}
+            df = df[[col for col in df.columns if col in known_invariant_cols]]
 
         if return_invariant:
             return df

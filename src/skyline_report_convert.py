@@ -13,6 +13,8 @@ COMMAND_DESCRIPTION = 'Convert Skyline report(s) to parquet format.'
 
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
+    parser.add_argument('-r', '--remove-unknown-cols', default=False, action='store_true',
+                        help='Remove unknown columns from the report before writing to parquet.')
     parser.add_argument('reports', nargs='+', help='Path(s) to Skylime report(s) to convert.')
 
     return parser.parse_args(argv)
@@ -33,7 +35,8 @@ def _main(args):
             if (language := parser.detect_language(headers)):
                 if parser.check_df_columns(headers, language=language, quiet=True):
                     LOGGER.info('Found %s report: %s', parser.report_name, report_path)
-                    df = parser.read_report(report_path, return_invariant=True)
+                    df = parser.read_report(report_path, return_invariant=True,
+                                            remove_unknown_cols=args.remove_unknown_cols)
                     parquet_path = f'{splitext(basename(report_path))[0]}.parquet'
                     LOGGER.info('Writing %s report to %s', parser.report_name, parquet_path)
                     df.to_parquet(parquet_path, index=False)

@@ -49,7 +49,8 @@ class TestConvertToParquet(unittest.TestCase):
 
 
     def test_precursor_report(self):
-        report_base = 'Sp3_by_protein_precursor_quality'
+        # report_base = 'Sp3_by_protein_precursor_quality'
+        report_base = 'Sp3_DiaNN_precursor_quality'
         report_ext = 'tsv'
 
         command = ['dia_qc', 'report_convert',
