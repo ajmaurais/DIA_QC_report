@@ -48,9 +48,41 @@ class TestConvertToParquet(unittest.TestCase):
         self.assertIn('Found invariant replicate report', log.output[0])
 
 
-    def test_precursor_report(self):
-        # report_base = 'Sp3_by_protein_precursor_quality'
+    def test_precursor_report_unknown_cols(self):
         report_base = 'Sp3_DiaNN_precursor_quality'
+        report_ext = 'tsv'
+
+        command = ['dia_qc', 'report_convert', '--remove-unknown-cols',
+                   f'{self.skyline_report_dir}/{report_base}.{report_ext}']
+        result = setup_functions.run_command(command, self.work_dir)
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        target_path = f'{self.work_dir}/{report_base}.parquet'
+        self.assertIsParquet(target_path)
+        precursorReport = skyline_reports.PrecursorReport()
+        with self.assertLogs(skyline_reports.LOGGER, level='INFO') as log:
+            self.assertIsNotNone(precursorReport.read_report(target_path))
+        self.assertIn('Found invariant precursor report', log.output[0])
+
+        precursorReport.quiet = True
+        df_in = precursorReport.read_report(f'{self.skyline_report_dir}/{report_base}.{report_ext}')
+        all_headers = set(df_in.columns)
+
+        df_out = precursorReport.read_report(target_path)
+        df_headers = set(df_out.columns)
+
+        # check that there were columns removed from orriginal tsv
+        diff_cols = all_headers - df_headers
+        self.assertGreater(len(diff_cols), 0)
+
+        # check that only unknown columns were removed
+        known_cols = {col.name for col in precursorReport.columns()}
+        for col in diff_cols:
+            self.assertNotIn(col, known_cols)
+
+
+    def test_precursor_report(self):
+        report_base = 'Sp3_by_protein_precursor_quality'
         report_ext = 'tsv'
 
         command = ['dia_qc', 'report_convert',

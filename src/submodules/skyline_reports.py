@@ -238,7 +238,7 @@ class ReplicateReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname, return_invariant=False, remove_unknown_cols=False):
+    def read_report(self, fname, return_invariant=False, remove_unknown_cols=False, quiet=False):
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
             report_language = self.detect_language(df.columns)
@@ -326,7 +326,9 @@ class PrecursorReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname, by_gene=False, remove_unknown_cols=False, return_invariant=False):
+    def read_report(self, fname, by_gene=False,
+                    remove_unknown_cols=False, return_invariant=False,
+                    quiet=False):
         # read report df
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
@@ -354,7 +356,7 @@ class PrecursorReport(SkylineReport):
                 col_types[self._columns['precursorCharge'].get_alias(report_language)] = int8
                 col_types[self._columns['userSetTotal'].get_alias(report_language)] = bool
 
-                df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types)
+                df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types, low_memory=False)
 
         # Translate report into invariant format
         if report_language != 'invariant':
