@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 import subprocess
 import queue
 import re
@@ -12,16 +13,16 @@ from multiprocessing import cpu_count
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 OK_RE   = re.compile(r'(ok|expected failure)$')
-FAIL_RE = re.compile(r'FAIL$')
+FAIL_RE = re.compile(r'(FAIL|ERROR)$')
 
 # ANSI color codes
 GREEN = '\033[32m'
-BLUE = "\033[34m"
-RED = "\033[31m"
+BLUE = '\033[34m'
+RED = '\033[31m'
 RESET = '\033[0m'
 
 def supports_color():
-    """Returns True if the running terminal supports colors."""
+    '''Returns True if the running terminal supports colors.'''
     return sys.stdout.isatty() and os.getenv('TERM', '') != 'dumb'
 
 
@@ -52,7 +53,7 @@ def get_plural(n, singular, plural):
 def print_final_summary(n_files, n_files_passed, n_files_failed,
                         n_tests, n_tests_passed, n_tests_failed,
                         start_time):
-    """Print the final summary of test results."""
+    '''Print the final summary of test results.'''
     end_time = time.time()
     elapsed_time = end_time - start_time
     if elapsed_time < 60:
@@ -74,14 +75,14 @@ def print_final_summary(n_files, n_files_passed, n_files_failed,
 
 
 def update_line(display_row, text):
-    """Move the cursor to `display_row`, clear the line, write text, then restore."""
+    '''Move the cursor to `display_row`, clear the line, write text, then restore.'''
     # ANSI: save cursor, move absolute, clear line, write, restore cursor
-    sys.stdout.write(f"\0337\033[{display_row};0H\033[2K{text}\0338")
+    sys.stdout.write(f'\0337\033[{display_row};0H\033[2K{text}\0338')
     sys.stdout.flush()
 
 
 def run_test_file_stream(path, q, display_row, render=False):
-    """Run one test file, stream its output and post progress to a queue."""
+    '''Run one test file, stream its output and post progress to a queue.'''
     cmd = [sys.executable, '-m', 'unittest', '-v', str(path)]
     env = os.environ.copy()
     if render:
@@ -134,19 +135,19 @@ def _run_non_interactive(test_files, file_test_counts, n_cores, verbose=False, *
             for f in test_files
         }
         for i, future in enumerate(as_completed(futures)):
-            name, n_passed, n_failed, code, output = future.result()
-            _print_test_file_summary(i + 1, n_files, name, n_passed, n_failed,
+            name, n_pass, n_fail, code, output = future.result()
+            _print_test_file_summary(i + 1, n_files, name, n_pass, n_fail,
                                      file_test_counts[name], verbose=verbose)
             if code == 0:
                 if verbose:
                     print(output)
                 n_files_passed += 1
-                n_tests_passed += n_passed
+                n_tests_passed += n_pass
             else:
                 print(output)
                 n_files_failed += 1
-                n_tests_passed += n_passed
-                n_tests_failed += n_failed
+                n_tests_passed += n_pass
+                n_tests_failed += n_fail
 
     print_final_summary(
         n_files, n_files_passed, n_files_failed,
@@ -158,7 +159,7 @@ def _run_non_interactive(test_files, file_test_counts, n_cores, verbose=False, *
 
 
 def _get_cursor_position():
-    """Ask the terminal where the cursor currently is (row, col)."""
+    '''Ask the terminal where the cursor currently is (row, col).'''
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
@@ -218,15 +219,15 @@ def _run_interactive(test_files, file_test_counts, n_cores, **kwargs):
     # 3) print the header
     header_row = cur_row - (lines_to_reserve - 1)
     longest_name_len = max(20, max(len(f.name) for f in test_files))
-    sys.stdout.write(f"\033[{header_row};0H")   # move to header row
+    sys.stdout.write(f'\033[{header_row};0H')   # move to header row
     print(f'Running {get_plural(n_test_files, 'file', 'files')} on {get_plural(n_cores, 'core', 'cores')}...')
 
     # 4) print initial per-file lines and remember their absolute rows
     rows = {}
-    for idx, f in enumerate(test_files, start=1):
-        display_row = header_row + idx
+    for i, f in enumerate(test_files, start=1):
+        display_row = header_row + i
         rows[f.name] = display_row
-        sys.stdout.write(f"\033[{display_row};0H")   # move to the file’s row
+        sys.stdout.write(f'\033[{display_row};0H')   # move to the file’s row
         print(get_row_text(os.path.splitext(f.name)[0], longest_name_len, file_test_counts[f.name], started=False))
     sys.stdout.flush()
 
@@ -245,25 +246,27 @@ def _run_interactive(test_files, file_test_counts, n_cores, **kwargs):
 
         # 6) process the queue until all are done
         while finished < n_test_files:
-            name, row, p_cnt, f_cnt, done, *rest = q.get()
-            update_line(row, get_row_text(
-                os.path.splitext(name)[0], longest_name_len, file_test_counts[name],
-                n_passed=p_cnt, n_failed=f_cnt, finished=done
-            ))
+            name, row, n_pass, n_fail, done, *rest = q.get()
+            update_line(row,
+                get_row_text(
+                    os.path.splitext(name)[0], longest_name_len, file_test_counts[name],
+                    n_passed=n_pass, n_failed=n_fail, finished=done
+                )
+            )
             if done:
                 code = rest[0]
                 if code == 0:
                     n_files_passed += 1
-                    n_tests_passed += p_cnt
+                    n_tests_passed += n_pass
                 else:
                     n_files_failed += 1
-                    n_tests_passed += p_cnt
-                    n_tests_failed += f_cnt
+                    n_tests_passed += n_pass
+                    n_tests_failed += n_fail
                 finished += 1
 
     # 7) final summary below everything
     end_row = header_row + n_test_files
-    sys.stdout.write(f"\033[{end_row};0H")
+    sys.stdout.write(f'\033[{end_row};0H')
     print('\n')
     print_final_summary(
         n_test_files, n_files_passed, n_files_failed,
@@ -292,7 +295,6 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
         suite = loader.discover(start_dir=str(f.parent), pattern=f.name)
         file_test_counts[f.name] = suite.countTestCases()
 
-    # Fallback to original behavior if verbose or non-interactive
     if verbose or not sys.stdout.isatty():
         sys.exit(_run_non_interactive(test_files, file_test_counts, n_cores, verbose=verbose, **kwargs))
 
@@ -300,7 +302,6 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
 
 
 if __name__ == '__main__':
-    import argparse
     parser = argparse.ArgumentParser(description='Run unittest files in parallel.')
     parser.add_argument(
         '--render', '-r', action='store_true', default=False,
