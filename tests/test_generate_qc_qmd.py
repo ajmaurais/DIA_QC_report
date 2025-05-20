@@ -22,6 +22,7 @@ class TestMakeQCqmd(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
+        setup_functions.remove_test_dir(f'{cls.work_dir}/pdf_tab_basic_test_files', recursive=True)
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
                                                            cls.TEST_PROJECT,
@@ -201,6 +202,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
+        setup_functions.remove_test_dir(f'{cls.work_dir}/bad_header_test_files', recursive=True)
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
                                                            cls.TEST_PROJECT,
@@ -352,6 +354,7 @@ class TestAllPrecursorsMissing(unittest.TestCase):
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
+        setup_functions.remove_test_dir(f'{cls.work_dir}/unnormalized_test_files', recursive=True)
         setup_functions.make_work_dir(cls.work_dir, True)
         cls.parse_result = setup_functions.run_command(command, cls.work_dir,
                                                        prefix='parse_missing_precursors')
