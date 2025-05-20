@@ -94,6 +94,7 @@ def run_test_file_stream(path, q, display_row, render=False):
     )
 
     passed = failed = 0
+    q.put((path.name, display_row, passed, failed, False))
     for line in p.stdout:
         if OK_RE.search(line):
             passed += 1
