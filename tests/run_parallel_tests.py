@@ -1,3 +1,4 @@
+
 import sys
 import os
 import argparse
@@ -54,20 +55,12 @@ def print_final_summary(n_files, n_files_passed, n_files_failed,
                         n_tests, n_tests_passed, n_tests_failed,
                         start_time):
     '''Print the final summary of test results.'''
+    color = supports_color()
     end_time = time.time()
     elapsed_time = end_time - start_time
-    if elapsed_time < 60:
-        time_str = f'{elapsed_time:.2f} seconds'
-    else:
-        mins = int(elapsed_time // 60)
-        secs = int(elapsed_time % 60)
-        msecs = int((elapsed_time - mins * 60 - secs) * 1000)
-        time_str = f'{mins}:{secs:02d}.{msecs:02d}'
-
-    color = supports_color()
 
     print(f'\nSummary\n{"-" * 80}')
-    print(f'Ran {n_tests} tests in {time_str}')
+    print(f'Ran {n_tests} tests in {elapsed_time:.2f}')
     if n_files_failed > 0:
         print(f"{RED if color else ''}{get_plural(n_tests_failed, 'test', 'tests')} failed in {get_plural(n_files_failed, 'file', 'files')}.{RESET if color else ''}")
     print(f"{GREEN if color else ''}{n_files_passed} of {get_plural(n_files, 'test file', 'test files')} passed.{RESET if color else ''}")
@@ -95,17 +88,17 @@ def run_test_file_stream(path, q, display_row, render=False):
     )
 
     passed = failed = 0
-    q.put((path.name, display_row, passed, failed, False))
+    q.put((path.name, display_row, passed, failed, None))
     for line in p.stdout:
         if OK_RE.search(line):
             passed += 1
         elif FAIL_RE.search(line):
             failed += 1
-        q.put((path.name, display_row, passed, failed, False))
+        q.put((path.name, display_row, passed, failed, None))
 
     # final “done” message
     code = p.wait()
-    q.put((path.name, display_row, passed, failed, True, code))
+    q.put((path.name, display_row, passed, failed, code))
 
 
 def _print_test_file_summary(file_i, n_files, name, passed, failed, n_tests, verbose=False):
@@ -114,7 +107,7 @@ def _print_test_file_summary(file_i, n_files, name, passed, failed, n_tests, ver
     icon = '✅' if failed == 0 else '❌'
     len_n_files = len(str(n_files))
     test_str = f'({passed}/{n_tests})'
-    print(f'{icon} File {str(file_i).ljust(len_n_files)} of {n_files} {test_str.ljust(9)} {name}')
+    print(f'{icon} File {str(file_i).rjust(len_n_files)} of {n_files} {test_str.ljust(9)} {name}')
     if verbose:
         print('-' * 80)
     sys.stdout.flush()
@@ -187,8 +180,8 @@ def get_row_text(test_name, rjust, n_tests, started=True, n_passed=0, n_failed=0
     if started:
         ret += ' ['
         if color_support:
-            ret += GREEN if finished and n_failed == 0 else RED if finished else BLUE
-        ret += f'{str(round(n_passed/n_tests * 100)).rjust(3)}%'
+            ret += GREEN if finished and n_failed == 0 else RED if n_failed > 0 else BLUE
+        ret += f'{str(round((n_passed + n_failed)/n_tests * 100)).rjust(3)}%'
         ret += RESET if color_support else ''
         ret += f'] {n_passed} of {n_tests}'
     else:
@@ -246,15 +239,14 @@ def _run_interactive(test_files, file_test_counts, n_cores, **kwargs):
 
         # 6) process the queue until all are done
         while finished < n_test_files:
-            name, row, n_pass, n_fail, done, *rest = q.get()
+            name, row, n_pass, n_fail, code = q.get()
             update_line(row,
                 get_row_text(
                     os.path.splitext(name)[0], longest_name_len, file_test_counts[name],
-                    n_passed=n_pass, n_failed=n_fail, finished=done
+                    n_passed=n_pass, n_failed=n_fail, finished=code is not None,
                 )
             )
-            if done:
-                code = rest[0]
+            if code is not None:
                 if code == 0:
                     n_files_passed += 1
                     n_tests_passed += n_pass
