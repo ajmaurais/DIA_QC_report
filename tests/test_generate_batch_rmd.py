@@ -70,7 +70,8 @@ class TestMakeBatchRmd(unittest.TestCase):
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         # remove html artifact subdirectory in work_dir if necissary
-        setup_functions.remove_test_dir(f'{cls.work_dir}/basic_test_files', recursive=True)
+        for d in ('basic_test_files', 'single_batch_files'):
+            setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
                                                            cls.work_dir,
@@ -263,6 +264,7 @@ class TestPDFReport(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
+        setup_functions.remove_test_dir(f'{cls.work_dir}/pdf_test_files', recursive=True)
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
                                                            cls.work_dir,
                                                            clear_dir=True)
@@ -316,10 +318,8 @@ class TestInteractive(unittest.TestCase):
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
         # remove plots subdirectory in work_dir if necissary
-        if os.path.isdir(f'{cls.work_dir}/plots'):
-            for file in os.listdir(f'{cls.work_dir}/plots'):
-                os.remove(f'{cls.work_dir}/plots/{file}')
-            os.rmdir(f'{cls.work_dir}/plots')
+        for d in ('plots', 'savePlots_files'):
+            setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
                                                            cls.work_dir,
@@ -444,11 +444,9 @@ class TestMissingMetadata(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        # remove tables subdirectory in work_dir if necissary
-        if os.path.isdir(f'{cls.work_dir}/tables'):
-            for file in os.listdir(f'{cls.work_dir}/tables'):
-                os.remove(f'{cls.work_dir}/tables/{file}')
-            os.rmdir(f'{cls.work_dir}/tables')
+        # remove subdirectoies in work_dir if necissary
+        for d in ('tables', 'basic_test_files'):
+            setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
@@ -518,6 +516,7 @@ class TestBadMetadataHeaders(unittest.TestCase):
         for d in ('space_header_test_files', 'symbol_header_test_files'):
             setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
+        setup_functions.remove_test_dir(cls.work_dir, recursive=True)
         cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
                                                            cls.work_dir,
                                                            clear_dir=True,
