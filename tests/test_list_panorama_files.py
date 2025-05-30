@@ -55,11 +55,14 @@ class TestListPanoramaFiles(unittest.TestCase):
 
 
     def test_list_panorama_files_full_url(self):
+        test_data_url = 'https://panoramaweb.org/_webdav/Panorama Public/2024/Thermo Fisher Research and Development - 2024_Stellar_Instrument_Platform/Label Free - E. coli/@files/RawFiles/ReplicatesSmall/'
+        target_files = {f'{test_data_url}{file_name}' for file_name in self.target_files}
+
         with unittest.mock.patch('DIA_QC_report.submodules.panorama.requests.request',
                                  return_value=self._make_mock_response(self.flat_response)):
             files = panorama.list_panorama_files(
-                url='https://panoramaweb.org/_webdav/dummy/path'
+                url='https://panoramaweb.org/_webdav/dummy/path',
                 full_url=True
             )
             self.assertIsInstance(files, list)
-            self.assertEqual(set(files), self.target_files)
+            self.assertEqual(set(files), target_files)

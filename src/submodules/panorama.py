@@ -10,51 +10,47 @@ PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c5
 
 def list_panorama_files(
     url: str,
-    *,
     api_key: str | None = None,
     verify_ssl: bool = True,
-    depth: int = 1
+    depth: int = 1,
+    full_url: bool = False,
 ) -> list[str]:
     r'''
-    List file names in a Panorama/LabKey WebDAV directory.
-
-    The helper automatically disables ``requests`` environment helpers
-    (``~/.netrc``, proxy variables, custom CA bundles) whenever an
-    ``api_key`` is supplied, ensuring that the explicit credentials you
-    pass are the only ones used for authentication.
+    List file names (or full URLs) located **directly** in a LabKey WebDAV
+    directory.
 
     Parameters
     ----------
     url : str
-        WebDAV directory URL. A trailing ``'/'`` is appended if missing.
+        WebDAV directory URL. A trailing '/' is appended if missing.
     api_key : str, optional
-        Personal or public Panorama API-key.  If *None*, the function
-        falls back to whatever credentials ``requests`` finds in
-        ``~/.netrc`` or proceeds anonymously.
-    verify_ssl : bool, default ``True``
-        Set to ``False`` to ignore TLS-certificate validation errors
-        (e.g., with self-signed certs on dev servers).
-    depth : int, default ``1``
-        WebDAV *Depth* header.  ``0`` = directory itself, ``1`` =
-        immediate children, etc.
+        LabKey API key.
+    verify_ssl : bool, default True
+        Set to False to skip TLS-certificate validation.
+    depth : int, default 1
+        WebDAV *Depth* header.
+    full_url : bool, default False
+        If True, return the complete WebDAV URL for each file rather
+        than just the basename.
 
     Returns
     -------
     list[str]
-        File names contained *directly* in the specified directory
-        (sub-directories are excluded).
+        Either basenames or full URLs of the files immediately contained
+        in *url*.  Sub-directories are excluded.
 
     Raises
     ------
     requests.HTTPError
-        Propagated after printing the server's response body if the HTTP
-        status is 400 or higher.
+        Propagated after printing the server's response body when an
+        HTTP error is encountered.
     '''
-    # Build request
+    # Prepare request
     if not url.endswith('/'):
         url += '/'
 
-    headers: dict[str, str] = {
+    parsed = urlparse(url)
+    headers = {
         'Depth': str(depth),
         'Content-Type': 'text/xml; charset=utf-8',
     }
@@ -67,8 +63,8 @@ def list_panorama_files(
         headers['Authorization'] = f'Basic {token}'
 
     body = (
-        '<?xml version=\'1.0\' encoding=\'utf-8\'?>'
-        '<d:propfind xmlns:d=\"DAV:\">'
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<d:propfind xmlns:d="DAV:">'
         '<d:prop><d:displayname/><d:resourcetype/></d:prop>'
         '</d:propfind>'
     )
@@ -91,29 +87,35 @@ def list_panorama_files(
         verify=verify_ssl,
         auth=dummy_auth,
     )
-
     if not resp.ok:
-        print(f'HTTP {resp.status_code} error')
-        print('----- response body -----')
-        print(resp.text)
-        print('-------------------------')
-        resp.raise_for_status()
+        error_message = (
+            f'HTTP {resp.status_code} error\n'
+            '----- response body -----\n'
+            f'{resp.text}\n'
+            '-------------------------'
+        )
+        raise requests.HTTPError(error_message, response=resp)
 
     # Parse XML response
     ns = {'d': 'DAV:'}
     root = ET.fromstring(resp.text)
-    base_path = urlparse(url).path.rstrip('/') + '/'
+    base_path = parsed.path.rstrip('/') + '/'
 
-    files: list[str] = []
+    results = list()
     for node in root.findall('d:response', ns):
         href = node.find('d:href', ns).text
         full_path = unquote(urlparse(href).path)
 
         if full_path == base_path:
-            continue   # skip the directory node itself
+            continue
 
         is_dir = node.find('.//d:collection', ns) is not None
-        if not is_dir:
-            files.append(full_path.rsplit('/', 1)[-1])
+        if is_dir:
+            continue
 
-    return files
+        name = full_path.rsplit('/', 1)[-1]
+        results.append(
+            f'{parsed.scheme}://{parsed.netloc}{full_path}' if full_url else name
+        )
+
+    return results
