@@ -43,6 +43,10 @@ class TestGToPy(unittest.TestCase):
             nextflow_pipeline_config._g_to_py("['k 1': 1, 'k2':false]"),
             {"k 1": 1, "k2": False},
         )
+        self.assertEqual(
+            nextflow_pipeline_config._g_to_py("['k1': 'https://aurl.com', 'k2':'/local/path']"),
+            {"k1": "https://aurl.com", "k2": "/local/path"}
+        )
 
 
     def test_booleans(self):
@@ -127,10 +131,14 @@ class TestContainsLeaf(unittest.TestCase):
 class TestParseParams(unittest.TestCase):
     def test_parse_params(self):
         config = '''
+            // The params section
             params {
                 input = "data.txt"
                 output = "results.txt"
                 threshold = 0.05
+                a_boolean = true
+                a_null_value = null
+                n_files = 10
             }
         '''
         with unittest.mock.patch('pathlib.Path.read_text', return_value=config):
@@ -138,17 +146,42 @@ class TestParseParams(unittest.TestCase):
             self.assertEqual(params['input'], 'data.txt')
             self.assertEqual(params['output'], 'results.txt')
             self.assertEqual(params['threshold'], 0.05)
+            self.assertEqual(params['a_boolean'], True)
+            self.assertIsNone(params['a_null_value'])
+            self.assertEqual(params['n_files'], 10)
 
 
-    def test_parse_list_quant_files(self):
+    def test_parse_complex_types(self):
+        url_str = 'https://panoramaweb.org/_webdav/path/to/dir'
         config = '''
+            /* The params
+               section */
             params {
-                quant_spectra_dir = ["/local/dir", "https://panoramaweb.org/_webdav/path/to/dir"]
-            }
-        '''
+                string_param = "%s"
+                list = ["/local/dir", "%s"]
+                map = [key1: "/local/dir", key2: "%s"]
+            } ''' % (url_str, url_str, url_str)
+
+        with unittest.mock.patch('pathlib.Path.read_text', return_value=config):
+            params = nextflow_pipeline_config.parse_params('pipeline.config')
+            self.assertEqual(params['string_param'], url_str)
+            self.assertEqual(params['list'], ["/local/dir", url_str])
+            self.assertEqual(params['map'], {'key1': '/local/dir', 'key2': url_str})
+
+
+    def test_multi_line_string(self):
+        url_str = 'https://panoramaweb.org/_webdav/path/to/dir'
+        config = """
+            params {
+                multi_line = '''
+                    /dir/one
+                    %s
+                    '''
+            } """ % url_str
+
         with unittest.mock.patch('pathlib.Path.read_text', return_value=config):
             params = nextflow_pipeline_config.parse_params('pipeline.config')
             self.assertEqual(
-                params['quant_spectra_dir'],
-                ["/local/dir", "https://panoramaweb.org/_webdav/path/to/dir"]
+                nextflow_pipeline_config.param_to_list(params['multi_line']),
+                ['/dir/one', url_str]
             )

@@ -3,6 +3,11 @@ from groovy_parser.parser import parse_and_digest_groovy_content
 import ast, pathlib, re
 from typing import Any, Dict, List
 
+_GROOVY_BOOL_NULL = {
+    re.compile(r'\btrue\b'):  'True',
+    re.compile(r'\bfalse\b'): 'False',
+    re.compile(r'\bnull\b'):  'None',
+}
 
 #  Low-level tree helpers
 def _flatten_identifiers(node) -> str:
@@ -17,6 +22,7 @@ def _flatten_identifiers(node) -> str:
             stack.extend(reversed(n.get('children', [])))
     return '.'.join(parts)
 
+
 def _src(node) -> str:
     '''Re-assemble source code for any subtree.'''
     if isinstance(node, dict):
@@ -25,40 +31,122 @@ def _src(node) -> str:
         return ''.join(_src(c) for c in node.get('children', []))
     return ''
 
-_GROOVY_BOOL_NULL = {
-    re.compile(r'\btrue\b'):  'True',
-    re.compile(r'\bfalse\b'): 'False',
-    re.compile(r'\bnull\b'):  'None',
-}
-_KEY_UNQUOTED = re.compile(r'([a-zA-Z_]\w*)\s*:(?!//)')
+
+def _split_top(expr: str, delimiter: str):
+    '''
+    Split *expr* on *delimiter* only when the delimiter is at the top level
+    (outside any quotes or nested brackets).
+    '''
+    parts, buf = [], []
+    depth = 0
+    in_single = in_double = False
+    for ch in expr:
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double:
+            if ch in '([{':
+                depth += 1
+            elif ch in ')]}':
+                depth -= 1
+            elif ch == delimiter and depth == 0:
+                parts.append(''.join(buf))
+                buf = []
+                continue
+        buf.append(ch)
+    parts.append(''.join(buf))
+    return parts
+
+
+def _has_top_level_colon(text: str) -> bool:
+    '''True if *text* contains a colon that is outside quotes/brackets.'''
+    depth = 0
+    in_single = in_double = False
+    for ch in text:
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double:
+            if ch in '([{':
+                depth += 1
+            elif ch in ')]}':
+                depth -= 1
+            elif ch == ':' and depth == 0:
+                return True
+    return False
+
+
+def _split_key_value(item: str):
+    '''
+    Split a *single* map entry at the first top-level colon
+    and return (key_part, value_part).
+    '''
+    depth = 0
+    in_single = in_double = False
+    buf_key, buf_val = [], []
+    target = buf_key
+    for ch in item:
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double:
+            if ch in '([{':
+                depth += 1
+            elif ch in ')]}':
+                depth -= 1
+            elif ch == ':' and depth == 0:
+                target = buf_val
+                continue
+        target.append(ch)
+    return ''.join(buf_key).strip(), ''.join(buf_val).strip()
+
+
+def _parse_map(body: str):
+    '''Parse a Groovy map body into a Python dict.'''
+    mapping = {}
+    for item in _split_top(body, ','):
+        item = item.strip()
+        if not item:
+            continue
+        key_part, val_part = _split_key_value(item)
+
+        # key: quoted -> eval, else verbatim
+        key = ast.literal_eval(key_part) if key_part and key_part[0] in '\'"' else key_part
+        mapping[key] = _g_to_py(val_part)   # recurse for value
+    return mapping
 
 
 def _g_to_py(src: str):
     '''
-    Convert a Groovy literal to the matching Python object.
-    Falls back to the raw string if it cannot be evaluated.
+    Convert a Groovy literal to its Python equivalent.
+    Falls back to the raw text when not valid Python after conversion.
     '''
     src = src.strip()
 
-    # 0. Groovy 'set' / brace-list:  {a,b,c}  ->  ['a', 'b', 'c']
-    if src.startswith('{') and src.endswith('}') and ':' not in src:
-        inner = src[1:-1]
-        items = [part.strip() for part in inner.split(',') if part.strip()]
-        return items
+    # 0. Braced literal: decide between map and brace-list
+    if (src.startswith('{') and src.endswith('}')) or \
+       (src.startswith('[') and src.endswith(']')):
 
-    # 1. Groovy map  [foo:'bar'] -> {'foo': 'bar'}
-    if src.startswith('[') and ':' in src:
-        src = _KEY_UNQUOTED.sub(r"'\1':", src)
-        src = '{' + src[1:-1] + '}'
+        body = src[1:-1]
 
-    # 2. Booleans / null
+        if _has_top_level_colon(body):          # ← new robust test
+            return _parse_map(body)             # treat as MAP
+
+        # otherwise treat as brace-list {a,b,c}
+        items = [s.strip() for s in _split_top(body, ',') if s.strip()]
+        return [_g_to_py(item) for item in items]
+
+    # 1. Replace Groovy booleans / null
     for pat, repl in _GROOVY_BOOL_NULL.items():
         src = re.sub(pat, repl, src)
 
-    # 3. Evaluate if valid Python, else return as-is
+    # 2. Evaluate if now valid Python, else return raw string
     try:
         return ast.literal_eval(src)
-    except (ValueError, SyntaxError):
+    except Exception:
         return src
 
 
@@ -147,6 +235,31 @@ def parse_params(path='pipeline.config') -> Dict[str, Any]:
     _collect(params_block, out)
     return out
 
-# cfg = parse_params('pipeline.config')
-# for k, v in cfg.items():
-#     print(f'{k:30s} → {v!r}')
+
+def param_to_list(param_variable):
+    """
+    Convert *param_variable* to a list.
+
+    If it is already a list, return it unchanged.
+    If it is a string, split on new-lines, strip whitespace, and drop blank lines.
+    Otherwise, wrap it in a one-element list.
+
+    This is the python translation of the function the pipeline uses to process list parameters.
+
+    Parameters
+    ----------
+    param_variable : Any
+        A single value, a multi-line string, or a list.
+
+    Returns
+    -------
+    list
+        The parameter represented as a list.
+    """
+    if isinstance(param_variable, list):
+        return param_variable
+
+    if isinstance(param_variable, str):
+        return [line.strip() for line in param_variable.split('\n') if line.strip()]
+
+    return [param_variable]
