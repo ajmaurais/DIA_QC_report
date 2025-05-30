@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<multistatus xmlns="DAV:"><response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/</href>
+<propstat><prop><displayname>ReplicatesSmall</displayname>
+<resourcetype><collection>1</collection>
+</resourcetype>
+</prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep1.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep1.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep2.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep2.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep3.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep3.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep4.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep4.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep5.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep5.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep6.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep6.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep7.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep7.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep8.raw</href>
+<propstat><prop><displayname>240419_P1_Neo_60SPD_EColiHeLa_Small_Assay_Rep8.raw</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+<response><href>/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/injection_times_ecoli_replicates.zip</href>
+<propstat><prop><displayname>injection_times_ecoli_replicates.zip</displayname>
+<resourcetype/></prop>
+<status>HTTP/1.1 200 OK</status>
+</propstat>
+</response>
+</multistatus>
