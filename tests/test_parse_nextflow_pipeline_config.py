@@ -1,5 +1,6 @@
 
 import unittest
+from unittest import mock
 
 from DIA_QC_report.submodules import nextflow_pipeline_config
 
@@ -141,7 +142,7 @@ class TestParseParams(unittest.TestCase):
                 n_files = 10
             }
         '''
-        with unittest.mock.patch('pathlib.Path.read_text', return_value=config):
+        with mock.patch('pathlib.Path.read_text', return_value=config):
             params = nextflow_pipeline_config.parse_params('pipeline.config')
             self.assertEqual(params['input'], 'data.txt')
             self.assertEqual(params['output'], 'results.txt')
@@ -162,7 +163,7 @@ class TestParseParams(unittest.TestCase):
                 map = [key1: "/local/dir", key2: "%s"]
             } ''' % (url_str, url_str, url_str)
 
-        with unittest.mock.patch('pathlib.Path.read_text', return_value=config):
+        with mock.patch('pathlib.Path.read_text', return_value=config):
             params = nextflow_pipeline_config.parse_params('pipeline.config')
             self.assertEqual(params['string_param'], url_str)
             self.assertEqual(params['list'], ["/local/dir", url_str])
@@ -179,7 +180,7 @@ class TestParseParams(unittest.TestCase):
                     '''
             } """ % url_str
 
-        with unittest.mock.patch('pathlib.Path.read_text', return_value=config):
+        with mock.patch('pathlib.Path.read_text', return_value=config):
             params = nextflow_pipeline_config.parse_params('pipeline.config')
             self.assertEqual(
                 nextflow_pipeline_config.param_to_list(params['multi_line']),

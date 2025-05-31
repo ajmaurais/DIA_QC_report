@@ -1,8 +1,10 @@
 
-import requests
+import os
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse, unquote
 from base64 import b64encode
+
+import requests
 
 
 PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c510d10'
@@ -11,6 +13,7 @@ PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c5
 def list_panorama_files(
     url: str,
     api_key: str | None = None,
+    panorama_pubilc: bool = False,
     verify_ssl: bool = True,
     depth: int = 1,
     full_url: bool = False,
@@ -25,6 +28,8 @@ def list_panorama_files(
         WebDAV directory URL. A trailing '/' is appended if missing.
     api_key : str, optional
         LabKey API key.
+    panorama_pubilc : bool, default False
+        If True, use the Panorama Public API key.
     verify_ssl : bool, default True
         Set to False to skip TLS-certificate validation.
     depth : int, default 1
@@ -58,7 +63,7 @@ def list_panorama_files(
     if api_key:
         token = b64encode(f'apikey:{api_key}'.encode()).decode()
         headers['Authorization'] = f'Basic {token}'
-    else:
+    elif panorama_pubilc:
         token = b64encode(f'apikey:{PANORA_PUBLIC_KEY}'.encode()).decode()
         headers['Authorization'] = f'Basic {token}'
 
@@ -119,3 +124,73 @@ def list_panorama_files(
         )
 
     return results
+
+
+def download_webdav_file(
+    url: str,
+    dest_path: str | None = None,
+    api_key: str | None = None,
+    verify_ssl: bool = True,
+    chunk_size: int = 8192,
+) -> str:
+    r'''
+    Download a single file from a LabKey WebDAV URL.
+
+    Parameters
+    ----------
+    url : str
+        Direct WebDAV URL of the file to fetch.
+    dest_path : str, optional
+        Local path to write the file.  If None, the basename of url
+        is used in the current working directory.
+    api_key : str, optional
+        LabKey API key.
+    verify_ssl : bool, default True
+        False disables TLS-certificate validation.
+    chunk_size : int, default 8192
+        Number of bytes written per iteration.
+
+    Returns
+    -------
+    str
+        Absolute path of the downloaded file.
+
+    Raises
+    ------
+    requests.HTTPError
+        Propagated after printing the server's response body if the HTTP
+        status code indicates an error.
+    '''
+    if dest_path is None:
+        dest_path = unquote(urlparse(url).path.rsplit('/', 1)[-1])
+    dest_path = os.path.abspath(dest_path)
+
+    headers: dict[str, str] = {}
+    if api_key:
+        token = b64encode(f'apikey:{api_key}'.encode()).decode()
+        headers['Authorization'] = f'Basic {token}'
+
+    if api_key:
+        session = requests.Session()
+        session.trust_env = False
+        get_fn = session.get
+    else:
+        get_fn = requests.get
+
+    resp = get_fn(url, headers=headers, stream=True, verify=verify_ssl)
+    if not resp.ok:
+        error_message = (
+            f'HTTP {resp.status_code} error while downloading {url}\n'
+            '----- response body -----\n'
+            f'{resp.text}\n'
+            '-------------------------'
+        )
+        raise requests.HTTPError(error_message, response=resp)
+
+    os.makedirs(os.path.dirname(dest_path) or '.', exist_ok=True)
+    with open(dest_path, 'wb') as fh:
+        for chunk in resp.iter_content(chunk_size=chunk_size):
+            if chunk:                      # skip keep-alive chunks
+                fh.write(chunk)
+
+    return dest_path
