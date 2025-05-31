@@ -3,9 +3,9 @@ import os
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse, unquote
 from base64 import b64encode
+from io import BytesIO
 
 import requests
-
 
 PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c510d10'
 
@@ -13,7 +13,6 @@ PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c5
 def list_panorama_files(
     url: str,
     api_key: str | None = None,
-    panorama_pubilc: bool = False,
     verify_ssl: bool = True,
     depth: int = 1,
     full_url: bool = False,
@@ -28,8 +27,6 @@ def list_panorama_files(
         WebDAV directory URL. A trailing '/' is appended if missing.
     api_key : str, optional
         LabKey API key.
-    panorama_pubilc : bool, default False
-        If True, use the Panorama Public API key.
     verify_ssl : bool, default True
         Set to False to skip TLS-certificate validation.
     depth : int, default 1
@@ -62,9 +59,6 @@ def list_panorama_files(
 
     if api_key:
         token = b64encode(f'apikey:{api_key}'.encode()).decode()
-        headers['Authorization'] = f'Basic {token}'
-    elif panorama_pubilc:
-        token = b64encode(f'apikey:{PANORA_PUBLIC_KEY}'.encode()).decode()
         headers['Authorization'] = f'Basic {token}'
 
     body = (
@@ -132,6 +126,7 @@ def download_webdav_file(
     api_key: str | None = None,
     verify_ssl: bool = True,
     chunk_size: int = 8192,
+    return_text: bool = False
 ) -> str:
     r'''
     Download a single file from a LabKey WebDAV URL.
@@ -149,6 +144,9 @@ def download_webdav_file(
         False disables TLS-certificate validation.
     chunk_size : int, default 8192
         Number of bytes written per iteration.
+    return_text : bool, default False
+        When True, the function streams the payload into memory and
+        returns it decoded string.
 
     Returns
     -------
@@ -161,9 +159,16 @@ def download_webdav_file(
         Propagated after printing the server's response body if the HTTP
         status code indicates an error.
     '''
-    if dest_path is None:
-        dest_path = unquote(urlparse(url).path.rsplit('/', 1)[-1])
-    dest_path = os.path.abspath(dest_path)
+    if return_text:
+        dest_fh = BytesIO()
+        close_after = False
+    else:
+        if dest_path is None:
+            dest_path = unquote(urlparse(url).path.rsplit('/', 1)[-1])
+        dest_path = os.path.abspath(dest_path)
+        os.makedirs(os.path.dirname(dest_path) or '.', exist_ok=True)
+        dest_fh = open(dest_path, 'wb')
+        close_after = True
 
     headers: dict[str, str] = {}
     if api_key:
@@ -187,10 +192,82 @@ def download_webdav_file(
         )
         raise requests.HTTPError(error_message, response=resp)
 
-    os.makedirs(os.path.dirname(dest_path) or '.', exist_ok=True)
-    with open(dest_path, 'wb') as fh:
-        for chunk in resp.iter_content(chunk_size=chunk_size):
-            if chunk:                      # skip keep-alive chunks
-                fh.write(chunk)
+    for chunk in resp.iter_content(chunk_size=chunk_size):
+        if chunk:                      # skip keep-alive chunks
+            dest_fh.write(chunk)
+
+    if return_text:
+        dest_fh.seek(0)
+        text = dest_fh.read().decode('utf-8')
+        return text
+
+    if close_after:
+        dest_fh.close()
 
     return dest_path
+
+
+def webdav_file_exists(
+    url: str,
+    *,
+    api_key: str | None = None,
+    verify_ssl: bool = True,
+    timeout: int | float = 10,
+) -> bool:
+    r'''
+    Check whether a single WebDAV resource exists on a Panorama/LabKey server.
+
+    Parameters
+    ----------
+    url : str
+        Full WebDAV URL pointing directly to the file (not a directory).
+    api_key : str, optional
+        LabKey API key.
+    verify_ssl : bool, default True
+        Set to False to ignore TLS certificate validation.
+    timeout : int or float, default 10
+        Seconds to wait before the request is aborted.
+
+    Returns
+    -------
+    bool
+        True if the server returns HTTP 200, 204, or 207 (success
+        for WebDAV resources); False if it returns HTTP 404.
+
+    Raises
+    ------
+    requests.HTTPError
+        Re-raised for any status code that is not 200, 204, 207, or 404
+        (e.g. 401 Unauthorized, 403 Forbidden, 500 Server Error)
+    '''
+    # Build headers
+    headers = dict()
+    if api_key:
+        token = b64encode(f'apikey:{api_key}'.encode()).decode()
+        headers['Authorization'] = f'Basic {token}'
+
+    # Choose transport
+    if api_key:
+        session = requests.Session()
+        session.trust_env = False        # ignore ~/.netrc, proxies, etc.
+        head_fn = session.head
+    else:
+        head_fn = requests.head
+
+    # Send HEAD request
+    resp = head_fn(url, headers=headers, allow_redirects=True,
+                   verify=verify_ssl, timeout=timeout)
+
+    if resp.status_code in (200, 204, 207):           # success codes
+        return True
+    if resp.status_code == 404:                       # not found
+        return False
+
+    # For any other code, show the server's message then raise.
+    error_message = (
+        f'HTTP {resp.status_code} while checking {url}\n'
+        '----- response body -----\n'
+        f'{resp.text}\n'
+        '-------------------------'
+    )
+    raise requests.HTTPError(error_message, response=resp)

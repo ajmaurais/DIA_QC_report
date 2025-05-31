@@ -139,3 +139,27 @@ class TestDownloadWebDAVFile(unittest.TestCase):
                 stream=True,
                 verify=True
             )
+
+
+    def test_download_file_to_string(self):
+        test_file = 'Sp3_metadata.tsv'
+        with open(f'{self.data_dir}/metadata/{test_file}', 'rb') as inF:
+            payload = inF.read()
+
+        with mock.patch('DIA_QC_report.submodules.panorama.requests.get',
+                   return_value=self._fake_response(data=payload)) as mock_get:
+            file_text = panorama.download_webdav_file(
+                f'https://server/_webdav/lab/%40files/{test_file}',
+                return_text=True
+            )
+
+            target_text = payload.decode('utf-8')
+            self.assertEqual(file_text, target_text)
+
+            # verify the URL passed to get()
+            mock_get.assert_called_once_with(
+                f'https://server/_webdav/lab/%40files/{test_file}',
+                headers={},
+                stream=True,
+                verify=True
+            )
