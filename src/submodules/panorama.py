@@ -4,6 +4,8 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlparse, unquote
 from base64 import b64encode
 from io import BytesIO
+import socket
+from contextlib import closing
 
 import requests
 
@@ -271,3 +273,29 @@ def webdav_file_exists(
         '-------------------------'
     )
     raise requests.HTTPError(error_message, response=resp)
+
+
+def have_internet(target = ("8.8.8.8", 53), timeout=3.0):
+    ''' Return True if a TCP handshake to target succeeds within timeout.'''
+    try:
+        with closing(socket.create_connection(target, timeout=timeout)):
+            return True
+    except OSError:
+        return False
+
+
+def url_exists(url: str, timeout: float = 5.0) -> bool:
+    '''
+    Return True if an HTTP HEAD request to *url* succeeds (status-code 200).
+
+    Works with GitHub raw-file URLs and any well-behaved HTTP server.
+    Falls back to a zero-byte GET if HEAD is not allowed.
+    '''
+    try:
+        r = requests.head(url, allow_redirects=True, timeout=timeout)
+        if r.status_code == 405: # HEAD not supported
+            r = requests.get(url, headers={"Range": "bytes=0-0"},
+                             stream=True, timeout=timeout)
+        return r.status_code == 200
+    except requests.RequestException:
+        return False

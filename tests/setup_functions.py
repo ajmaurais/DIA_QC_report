@@ -4,8 +4,8 @@ import subprocess
 from shlex import join as join_shell
 import inspect
 from abc import ABC, abstractmethod
-from pandas import testing as pd_testing
 
+from pandas import testing as pd_testing
 from numpy import isnan
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -289,4 +289,3 @@ def setup_multi_db(data_dir, output_dir,
         results.append(run_command(normalize_command, output_dir, prefix='normalize_db'))
 
     return results
-
