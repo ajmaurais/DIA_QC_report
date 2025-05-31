@@ -5,6 +5,7 @@ import argparse
 from . import parse_data
 from . import skyline_report_convert
 from . import metadata_convert
+from . import validate_pipeline_params
 from . import filter_replicates
 from . import impute_missing
 from . import normalize_db
@@ -16,7 +17,7 @@ from . import export_tables
 from . import __version__ as PACKAGE_VERSION
 
 SUBCOMMANDS = {'parse', 'report_convert', 'metadata_convert',
-               'filter', 'impute', 'normalize',
+               'filter', 'impute', 'normalize', 'validate',
                'qc_qmd', 'batch_rmd', 'export_gene_matrix', 'db_export'}
 
 
@@ -58,6 +59,7 @@ Available commands:
    parse                {parse_data.COMMAND_DESCRIPTION}
    report_convert       {skyline_report_convert.COMMAND_DESCRIPTION}
    metadata_convert     {metadata_convert.COMMAND_DESCRIPTION}
+   validate             {validate_pipeline_params.COMMAND_DESCRIPTION}
    filter               {filter_replicates.COMMAND_DESCRIPTION}
    impute               {impute_missing.COMMAND_DESCRIPTION}
    normalize            {normalize_db.COMMAND_DESCRIPTION}
@@ -95,6 +97,11 @@ Available commands:
     def metadata_convert(self, argv):
         args = metadata_convert.parse_args(argv, prog='dia_qc metadata_convert')
         metadata_convert._main(args)
+
+
+    def validate(self, argv):
+        args = validate_pipeline_params.parse_args(argv, prog='dia_qc validate')
+        validate_pipeline_params._main(args)
 
 
     def filter(self, argv):
