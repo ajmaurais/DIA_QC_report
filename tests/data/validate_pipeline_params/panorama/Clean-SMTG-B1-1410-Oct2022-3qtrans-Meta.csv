@@ -1,0 +1,17 @@
+Replicate,Condition,Age,Sex,Mutation Status,PMI (hrs),APOE Alleles,Cognitive Status,Study Name,Braak Score,CERAD Score
+HADT01,Brain Reference,NA,NA,NA,NA,NA,NA,NA,NA,NA
+TRPR01,SMTG Reference,NA,NA,NA,NA,NA,NA,NA,NA,NA
+TZR01,Autosomal Dominant ADD,52,Female,PSEN1,NA,3_4,Dementia,UW ADRC,3,3
+TZR02,Sporadic ADD,90,Female,NA,3.85,3_3,Dementia,ACT,3,3
+TZR03,Sporadic ADD,61,Male,NA,3,4_4,Dementia,UW ADRC,3,3
+TZR04,Sporadic ADD,63,Male,NA,3.33,3_3,Dementia,UW ADRC,3,3
+TZR05,Sporadic ADD,77,Male,NA,5.92,3_3,Dementia,ACT,3,3
+TZR06,HCF/High ADNC,93,Male,NA,6.83,3_3,No dementia,ACT,3,2
+TZR07,Autosomal Dominant ADD,39,Female,PSEN1,25,NA,Dementia,DIAN,3,3
+TZR08,HCF/High ADNC,89,Female,NA,2.5,3_4,No dementia,ACT,3,3
+TZR09,Sporadic ADD,88,Male,NA,4.38,3_3,Dementia,UW ADRC,3,3
+TZR10,Autosomal Dominant ADD,44,Female,PSEN1,17.5,3_3,Dementia,UW ADRC,3,3
+TZR11,HCF/Low ADNC,91,Male,NA,5,3_3,No dementia,ACT,2,0
+TZR12,Autosomal Dominant ADD,78,Female,PSEN2,7,2_3,Dementia,UW ADRC,3,3
+TZR13,HCF/High ADNC,92,Male,NA,5.57,3_4,No dementia,ACT,3,3
+TZR14,HCF/Low ADNC,88,Female,NA,3.5,3_3,No dementia,ACT,2,0

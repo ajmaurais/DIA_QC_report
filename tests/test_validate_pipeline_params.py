@@ -88,7 +88,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
 class TestParseInputFiles(unittest.TestCase):
     def setUp(self):
         self.data_dir = f'{setup_functions.TEST_DIR}/data/'
-        self.local_file_dir = f'{self.data_dir}/validate_pipeline_params/fake_local_ms_files/'
+        self.local_file_dir = f'{self.data_dir}/validate_pipeline_params/mock_local_ms_files/'
 
         self.projects = ['Strap', 'Sp3', 'ReplicatesSmall']
         self.project_replicates = {}
