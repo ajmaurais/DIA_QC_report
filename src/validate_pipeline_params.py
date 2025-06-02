@@ -2,12 +2,14 @@
 import sys
 import os
 import argparse
-from fnmatch import fnmatch
+import re
+import copy
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
 
 from .submodules import nextflow_pipeline_config
+from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, download_webdav_file
 from .submodules.read_metadata import Metadata
 from .submodules.logger import LOGGER
@@ -17,19 +19,48 @@ COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-
 DEFAULT_PIPELINE = 'mriffle/nf-skyline-dia-ms'
 DEFAULT_PIPELINE_REVISION = 'main'
 
-def _process_directorty(directory, file_glob='*.raw', api_key=None):
+
+def glob_to_regex(file_glob: str) -> str:
+    '''
+    Convert a Nextflow-style glob (only * is a wildcard) into an anchored-regex string
+
+    Parameters
+    ----------
+    file_glob : str
+        Pattern such as "*.txt" or "Replicate_*_R1.mzML"
+
+    Returns
+    -------
+    str
+        Regex string beginning with ^ and ending with $.
+    '''
+
+    # Any metacharacter except * should be taken literally.
+    def escape_regex(s: str) -> str:
+        return re.sub(
+            r'([.\^$+?{}\[\]\\|()])',     # chars to escape 1-for-1
+            lambda m: r'\{}'.format(m.group(1)),
+            s,
+        )
+
+    # build the final pattern exactly as in the workflow
+    regex_body = escape_regex(file_glob).replace('*', '.*')
+    return f'^{regex_body}$'
+
+
+def _process_directorty(directory, file_regex, api_key=None):
     if directory.startswith('https://panoramaweb.org'):
-        files = list_panorama_files(directory, api_key=api_key, panorama_pubilc=True)
+        files = list_panorama_files(directory, api_key=api_key)
     else:
         files = os.listdir(directory)
 
-    files = fnmatch.filter(files, file_glob)
+    files = [file for file in files if re.search(file_regex, file)]
     if len(files) == 0:
-        LOGGER.error(f'No files found in {directory} matching {file_glob}.')
+        LOGGER.error(f'No files found in {directory} matching {file_regex}')
     return files
 
 
-def parse_input_files(input_files, file_glob='*.raw', api_key=None):
+def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None):
     '''
     Parse quant_spectra_dir or chromatogram_library_spectra_dir parameters
     and return a list or dict of files.
@@ -50,19 +81,33 @@ def parse_input_files(input_files, file_glob='*.raw', api_key=None):
     files : list or dict
         List of files or in multi-batch mode, a dict mapping batch names to files.
     '''
+    if file_regex is not None and file_glob is not None:
+        raise ValueError('Only one of file_regex or file_glob should be provided.')
+
+    _file_regex = file_regex or glob_to_regex(file_glob)
+
     if isinstance(input_files, str):
-        multi_batch_mode = False
-        files = _process_directorty(input_files, file_glob, api_key)
-    elif isinstance(input_files, list):
+        input_files = [line.strip() for line in input_files.split('\n') if line.strip()]
+
+    if isinstance(input_files, list):
         multi_batch_mode = False
         files = []
         for item in input_files:
-            files.extend(_process_directorty(item, file_glob, api_key))
+            files.extend(_process_directorty(item, _file_regex, api_key))
     elif isinstance(input_files, dict):
         multi_batch_mode = True
         files = {}
         for batch_name, batch_dir in input_files.items():
-            files[batch_name] = _process_directorty(batch_dir, file_glob, api_key)
+            if isinstance(batch_dir, str):
+                batch_dirs = [line.strip() for line in batch_dir.split('\n') if line.strip()]
+            elif isinstance(batch_dir, list):
+                batch_dirs = batch_dir
+            else:
+                raise TypeError('Batch directories must be a str or list.')
+
+            files[batch_name] = []
+            for dir in batch_dirs:
+                files[batch_name] += _process_directorty(dir, _file_regex, api_key)
     else:
         LOGGER.error(f'Unsupported input_files type: {type(input_files)}')
         raise TypeError('Parameter must be a str, list, or dict.')
