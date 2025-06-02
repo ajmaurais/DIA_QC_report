@@ -16,6 +16,40 @@ STRAP_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%
 SP3_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/SP3/'
 PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/'
 
+class TestAddParams(unittest.TestCase):
+    def test_add_params(self):
+        lhs = {
+            "fasta": None,
+            "search_engine": "encyclopedia",
+            "skyline": {"skip": False, "doc_name": "final"},
+        }
+        rhs = {
+            "dir":       {"b1": "/path/b1", "b2": "/path/b2"},
+            "qc_report": {"color_vars": ["a", "b", "c"]},
+            "fasta": "db.fasta",
+            "search_engine": "diann",
+        }
+        target = {
+            'dir': {'b1': '/path/b1', 'b2': '/path/b2'},
+            'qc_report': {'color_vars': ['a', 'b', 'c']},
+            'fasta': 'db.fasta',
+            'search_engine': 'diann',
+            'skyline': {'skip': False, 'doc_name': 'final'}
+        }
+        result = validate_pipeline_params.add_params(lhs, rhs)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(set(result.keys()), set(target.keys()))
+        for key in target:
+            if isinstance(target[key], dict):
+                self.assertIsInstance(result[key], dict)
+                self.assertEqual(set(result[key].keys()), set(target[key].keys()))
+                for subkey in target[key]:
+                    self.assertEqual(result[key][subkey], target[key][subkey])
+            else:
+                self.assertEqual(result[key], target[key])
+
+
 class TestGenerateSchemaUrl(unittest.TestCase):
     def test_branch(self):
         if not have_internet():

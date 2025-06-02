@@ -20,6 +20,29 @@ DEFAULT_PIPELINE = 'mriffle/nf-skyline-dia-ms'
 DEFAULT_PIPELINE_REVISION = 'main'
 
 
+def add_params(lhs, rhs):
+    ''' Recursively “add” two params dicts together.  '''
+    if not isinstance(lhs, dict) or not isinstance(rhs, dict):
+        raise TypeError("both arguments must be dict-like at the top level")
+
+    def _merge(a, b):
+        # If both are dicts → merge; otherwise rhs wins.
+        if isinstance(a, dict) and isinstance(b, dict):
+            merged = {}
+            for key in a.keys() | b.keys(): # union of keys
+                if key in a and key in b:
+                    merged[key] = _merge(a[key], b[key])
+                elif key in a:
+                    merged[key] = copy.deepcopy(a[key])
+                else:
+                    merged[key] = copy.deepcopy(b[key])
+            return merged
+        else:
+            return copy.deepcopy(b)
+
+    return _merge(lhs, rhs)
+
+
 def glob_to_regex(file_glob: str) -> str:
     '''
     Convert a Nextflow-style glob (only * is a wildcard) into an anchored-regex string
