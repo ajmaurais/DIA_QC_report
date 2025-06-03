@@ -411,11 +411,16 @@ def parse_args(argv, prog=None):
         '-m', '--metadata', help='Replicate metadata file.'
     )
     input_args.add_argument(
-        '--chrom-lib-dir', dest='chrom_lib_spectra_dir',
-        help='JSON file with chromatogram_library_spectra_dir parameter.'
+        '--chrom-lib-dir', dest='chrom_lib_spectra_dir', action='append', default=None,
+        help='Add chromatogram library spectra directory.'
     )
-    input_args.add_argument(
-        '-q', '--quant-file-dir', dest='quant_spectra_dir', required=True,
+    quant_dir_args = input_args.add_mutually_exclusive_group(required=True)
+    quant_dir_args.add_argument(
+        '-q', '--quant-file-dir', dest='quant_spectra_dir', action='append', default=None,
+        help='Add quantative spectra directory.'
+    )
+    quant_dir_args.add_argument(
+        '--quant-file-param', dest='quant_spectra_param',
         help='JSON file with quant_spectra_dir parameter'
     )
     quant_spectra_patterns = input_args.add_mutually_exclusive_group(required=True)
@@ -749,23 +754,20 @@ def _main(args):
             LOGGER.error(f'Quant spectra directory {args.quant_spectra_dir} does not exist.')
             sys.exit(1)
 
-        quant_spectra_param = json.load(args.quant_spectra_dir)
-        try:
-            validate(quant_spectra_param, QUANT_SPECTRA_SCHEMA)
-        except ValidationError as e:
-            LOGGER.error(f'Quant spectra parameter validation failed: {e.message}')
-            sys.exit(1)
-        if args.chrom_lib_spectra_dir is not None:
-            if not os.path.exists(args.chrom_lib_spectra_dir):
-                LOGGER.error(f'Chromatogram library spectra directory {args.chrom_lib_spectra_dir} does not exist.')
-                sys.exit(1)
-
-            chromatogram_library_spectra_param = json.load(args.chrom_lib_spectra_dir)
+        if args.quant_spectra_dir is not None:
+            quant_spectra_param = args.quant_spectra_dir
+        elif args.quant_spectra_param is not None:
+            quant_spectra_param = json.load(args.quant_spectra_dir)
             try:
-                validate(chromatogram_library_spectra_param, CHROM_SPECTRA_SCHEMA)
+                validate(quant_spectra_param, QUANT_SPECTRA_SCHEMA)
             except ValidationError as e:
-                LOGGER.error(f'Chromatogram library spectra parameter validation failed: {e.message}')
+                LOGGER.error(f'Quant spectra parameter validation failed: {e.message}')
                 sys.exit(1)
+        else:
+            raise RuntimeError('quant_spectra_dir or quant_spectra_param must be provided.')
+
+        if args.chrom_lib_spectra_dir is not None:
+            chromatogram_library_spectra_param = args.chrom_lib_spectra_dir
 
     else:
         raise RuntimeError(f'Unknown subcommand: {args.subcommand}')
