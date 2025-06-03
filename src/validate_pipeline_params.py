@@ -670,6 +670,17 @@ def parse_args(argv, prog=None):
     return args
 
 
+def _get_config_path(data, vars, default=None):
+    if len(vars) == 1:
+        return data.get(vars[0], default)
+
+    if vars[0] not in data:
+        return default
+
+    _node = data[vars[0]]
+    return _get_config_path(_node, vars[1:], default=default)
+
+
 def _main(args):
     '''
     Actual main method. `args` Should be initialized argparse namespace.
@@ -723,11 +734,11 @@ def _main(args):
             sys.exit(1)
         LOGGER.info('Pipeline config validation succeeded.')
 
-        color_vars = config_data.get('qc_report.color_vars', None)
-        batch1 = config_data.get('batch_report.batch1', None)
-        batch2 = config_data.get('batch_report.batch2', None)
-        control_key = config_data.get('qc_report.control_key', None)
-        control_values = config_data.get('qc_report.control_values', None)
+        color_vars = _get_config_path(config_data, ['qc_report', 'color_vars'])
+        batch1 = _get_config_path(config_data, ['batch_report', 'batch1'])
+        batch2 = _get_config_path(config_data, ['batch_report', 'batch2'])
+        control_key = _get_config_path(config_data, ['qc_report', 'control_key'])
+        control_values = _get_config_path(config_data, ['qc_report', 'control_values'])
 
         quant_spectra_param = config_data.get('quant_spectra_dir', None)
         chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir', None)

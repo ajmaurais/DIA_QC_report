@@ -51,6 +51,41 @@ class TestAddParams(unittest.TestCase):
                 self.assertEqual(result[key], target[key])
 
 
+class TestGetConfigPath(unittest.TestCase):
+    def setUp(self):
+        self.rhs = {
+            "dir":       {"b1": "/path/b1", "b2": "/path/b2"},
+            "qc_report": {"color_vars": ["a", "b", "c"]},
+            "fasta": "db.fasta",
+            "search_engine": "diann",
+        }
+
+    def test_single(self):
+        target = 'diann'
+        result = validate_pipeline_params._get_config_path(self.rhs, ['search_engine'])
+        self.assertEqual(result, target)
+
+
+    def test_double(self):
+        target = '/path/b1'
+        result = validate_pipeline_params._get_config_path(
+            self.rhs, ['dir', 'b1']
+        )
+        self.assertEqual(result, target)
+
+
+    def test_double_missing(self):
+        target = None
+        result = validate_pipeline_params._get_config_path(
+            self.rhs, ['dir', 'b3']
+        )
+        self.assertEqual(result, target)
+        result = validate_pipeline_params._get_config_path(
+            self.rhs, ['not_a_key', 'b1']
+        )
+        self.assertEqual(result, target)
+
+
 class TestGenerateSchemaUrl(unittest.TestCase):
     def test_branch(self):
         if not have_internet():
