@@ -9,6 +9,7 @@ import pandas as pd
 from DIA_QC_report import validate_pipeline_params
 from DIA_QC_report.submodules.panorama import url_exists, have_internet
 from DIA_QC_report.submodules.panorama import PANORA_PUBLIC_KEY
+from DIA_QC_report.submodules.read_metadata import Metadata
 
 import setup_functions
 
@@ -36,7 +37,7 @@ class TestAddParams(unittest.TestCase):
             'search_engine': 'diann',
             'skyline': {'skip': False, 'doc_name': 'final'}
         }
-        result = validate_pipeline_params.add_params(lhs, rhs)
+        result = validate_pipeline_params.merge_params(lhs, rhs)
 
         self.assertIsInstance(result, dict)
         self.assertEqual(set(result.keys()), set(target.keys()))
@@ -55,7 +56,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        url = validate_pipeline_params.generate_schema_url(
+        url = validate_pipeline_params.generate_git_url(
             repo='ajmaurais/nf-skyline-dia-ms',
             revision='main', filename = 'main.nf'
         )
@@ -66,7 +67,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        url = validate_pipeline_params.generate_schema_url(
+        url = validate_pipeline_params.generate_git_url(
             repo='mriffle/nf-skyline-dia-ms',
             revision='v2.6.1', filename = 'main.nf'
         )
@@ -77,7 +78,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        url = validate_pipeline_params.generate_schema_url(
+        url = validate_pipeline_params.generate_git_url(
             repo='ajmaurais/nf-skyline-dia-ms',
             revision='45c69b6bdb8111fb14c140a1275a1a11df47a69d',
             filename = 'main.nf'
@@ -249,8 +250,167 @@ class TestParseInputFiles(unittest.TestCase):
             'mixed': self._target_files('Sp3', ext) + self._target_files('Strap', ext) + self._target_files('ReplicatesSmall', ext)
         }
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
-                        side_effect=partial(self._target_files_from_url, ext=ext)) as mock_list_panorama:
+                        side_effect=partial(self._target_files_from_url, ext=ext)):
             self.do_test(
                 input_files, target_files,
                 file_regex=r'.+?(-8mz-ovlp-400to1000-|Small_Assay).+?\.%s$' % ext,
             )
+
+
+    def test_multi_batch_invalid_directory(self):
+        ext = 'raw'
+        input_files = {
+            'all_remote': [PUBLIC_URL, STRAP_URL],
+            'all_local': [f'{self.local_file_dir}/Sp3', f'{self.local_file_dir}/Strap'],
+            'mixed': [f'{self.local_file_dir}/Strap', PUBLIC_URL, SP3_URL]
+        }
+        target_files = {
+            'all_remote': self._target_files('Strap', ext),
+            'all_local': self._target_files('Strap', ext) + self._target_files('Sp3', ext),
+            'mixed': self._target_files('Sp3', ext) + self._target_files('Strap', ext)
+        }
+        with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
+                        side_effect=partial(self._target_files_from_url, ext=ext)):
+            with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+                use_multi_batch_mode, files = validate_pipeline_params.parse_input_files(
+                    input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=False
+                )
+
+        n_files = sum(len(files) for files in target_files.values())
+        self.assertTrue(any(
+            f"No MS files could be found in 2 directories. Continuing with {n_files} available files." in m
+            for m in cm.output
+        ), cm.output)
+
+        self.assertTrue(use_multi_batch_mode)
+        for project in target_files:
+            self.assertIn(project, files)
+            self.assertEqual(set(target_files[project]), set(files[project]),
+                             f"Files for project '{project}' do not match expected files.")
+
+
+    def test_multi_batch_invalic_directory_strict(self):
+        ext = 'raw'
+        input_files = {
+            'all_remote': [PUBLIC_URL, STRAP_URL],
+            'all_local': [f'{self.local_file_dir}/Sp3', f'{self.local_file_dir}/Strap'],
+            'mixed': [f'{self.local_file_dir}/Strap', PUBLIC_URL, SP3_URL]
+        }
+
+        with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
+                        side_effect=partial(self._target_files_from_url, ext=ext)):
+            with self.assertRaises(SystemExit):
+                with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+                    validate_pipeline_params.parse_input_files(
+                        input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=True,
+                    )
+
+
+    def test_list_invalid_directory(self):
+        ext = 'raw'
+        input_files = [PUBLIC_URL, STRAP_URL]
+        target_files = self._target_files('Strap', ext)
+
+        with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
+                        side_effect=partial(self._target_files_from_url, ext=ext)):
+            with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+                use_batch_mode, files = validate_pipeline_params.parse_input_files(
+                    input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=False
+                )
+
+        self.assertTrue(any(
+            f"No MS files could be found in 1 directory. Continuing with {len(target_files)} available files." in m
+            for m in cm.output
+        ), cm.output)
+
+        self.assertFalse(use_batch_mode)
+        self.assertEqual(set(target_files), set(files))
+        self.assertEqual(len(files), len(target_files))
+
+
+    def test_multi_batch_invalic_directory_strict(self):
+        ext = 'raw'
+        input_files = [PUBLIC_URL, STRAP_URL]
+
+        with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
+                        side_effect=partial(self._target_files_from_url, ext=ext)):
+            with self.assertRaises(SystemExit):
+                with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+                    validate_pipeline_params.parse_input_files(
+                        input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=True
+                    )
+
+
+class TestValidateMetadataParams(unittest.TestCase):
+    def setUp(self):
+        self.data_dir = f'{setup_functions.TEST_DIR}/data'
+
+        self.projects = ('Strap', 'Sp3')
+        self.project_replicates = {}
+        for project in self.projects:
+            df = pd.read_csv(f'{self.data_dir}/skyline_reports/{project}_replicate_quality.tsv', sep='\t')
+            self.project_replicates[project] = df['FileName'].tolist()
+
+        self.project_metadata = {}
+        for project in self.projects:
+            metadata_reader = Metadata()
+            metadata_reader.read(f'{self.data_dir}/metadata/{project}_metadata.tsv')
+            self.project_metadata[project] = metadata_reader.df
+
+        metadata_reader = Metadata()
+        metadata_reader.read(f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv')
+        self.combined_metadata = metadata_reader.df
+
+
+    def assertInLog(self, message, cm):
+        self.assertTrue(any(message in m for m in cm.output),
+                        f"Expected log message '{message}' not found in {cm.output}")
+
+
+    def test_missing_color_var(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, color_vars=['missing_color_var']
+            )
+
+        self.assertFalse(success)
+        self.assertInLog("Metadata variable 'missing_color_var' from 'color_vars' parameter not found in metadata.", cm)
+
+
+    def test_missing_batch_var(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, batch1='notABatch'
+            )
+
+        self.assertFalse(success)
+        self.assertInLog("Metadata variable 'notABatch' from 'batch1' parameter not found in metadata.", cm)
+
+
+    def test_only_control_key(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, control_key='cellLine'
+            )
+        self.assertFalse(success)
+        self.assertInLog("Both 'control_key' and 'color_vars' must be specified or both omitted.", cm)
+
+
+    def test_missing_control_key(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata,
+                control_key='notAVar', control_values=['T47D', 'HeLa']
+            )
+        self.assertFalse(success)
+        self.assertInLog("Metadata variable 'notAVar' from 'control_key' parameter not found in metadata.", cm)
+
+
+    def test_missing_control_values(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata,
+                control_key='cellLine', control_values=['notACellLine']
+            )
+        self.assertFalse(success)
+        self.assertInLog("Control value 'notACellLine' for key 'cellLine' not found in metadata.", cm)

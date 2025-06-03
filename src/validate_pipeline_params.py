@@ -6,11 +6,18 @@ import re
 import copy
 from pathlib import PurePosixPath
 from urllib.parse import quote
+import json
+from shutil import which
+import subprocess
+from io import StringIO
 
+from jsonschema import validate, ValidationError
+from requests import HTTPError
 
 from .submodules import nextflow_pipeline_config
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, download_webdav_file
+from .submodules.panorama import download_text_file
 from .submodules.read_metadata import Metadata
 from .submodules.logger import LOGGER
 
@@ -19,8 +26,40 @@ COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-
 DEFAULT_PIPELINE = 'mriffle/nf-skyline-dia-ms'
 DEFAULT_PIPELINE_REVISION = 'main'
 
+QUANT_SPECTRA_SCHEMA = {
+    "oneOf": [
+        { "type": "string" },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        {
+            "type": "object",
+            "additionalProperties": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                ]
+            },
+        },
+    ],
+}
 
-def add_params(lhs, rhs):
+CHROM_SPECTRA_SCHEMA = {
+    "oneOf": [
+        { "type": "string" },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+        }
+    ]
+}
+
+
+def merge_params(lhs, rhs):
     ''' Recursively “add” two params dicts together.  '''
     if not isinstance(lhs, dict) or not isinstance(rhs, dict):
         raise TypeError("both arguments must be dict-like at the top level")
@@ -71,6 +110,71 @@ def glob_to_regex(file_glob: str) -> str:
     return f'^{regex_body}$'
 
 
+def get_api_key_from_nextflow_secrets():
+    '''
+    Get Panorama API key from Nextflow secrets manager.
+
+    Returns
+    -------
+    str or None
+        Panorama API key if available, None otherwise.
+    '''
+    nextflow_exe = which('nextflow')
+    if nextflow_exe is None:
+        LOGGER.error('Nextflow executable not found in PATH.')
+        return None
+
+    result = subprocess.run(
+        [nextflow_exe, 'secrets', 'get', 'PANORAMA_API_KEY'],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        LOGGER.error(f"Nextflow secret retrieval failed: {result.stderr.strip()}")
+        return None
+
+    api_key = result.stdout.strip()
+    if api_key is None or api_key == 'null':
+        LOGGER.error("No Panorama API key found in Nextflow secrets.")
+        return None
+
+    return api_key
+
+
+def get_input_file_text(path, api_key=None):
+    '''
+    Return the text content of a local file or from Panorama.
+
+    Parameters
+    ----------
+    path : str
+        Path to the file or Panorama URL.
+    api_key : str
+        API key for accessing files on Panorama.
+
+    Returns
+    -------
+    str or None
+        Text content of the file if it exists, None otherwise.
+    '''
+    if path.startswith('https://panoramaweb.org'):
+        try:
+            text = download_webdav_file(
+                path, api_key=api_key, return_text=True
+            )
+        except HTTPError as e:
+            LOGGER.error(f'Error downloading file from Panorama: {e}')
+            return None
+    else:
+        if not os.path.exists(path):
+            LOGGER.error(f'File {path} does not exist.')
+            return None
+        with open(path, 'r') as inF:
+            text = inF.read()
+
+    return text
+
+
 def _process_directorty(directory, file_regex, api_key=None):
     if directory.startswith('https://panoramaweb.org'):
         files = list_panorama_files(directory, api_key=api_key)
@@ -79,11 +183,11 @@ def _process_directorty(directory, file_regex, api_key=None):
 
     files = [file for file in files if re.search(file_regex, file)]
     if len(files) == 0:
-        LOGGER.error(f'No files found in {directory} matching {file_regex}')
+        raise RuntimeError(f'No files found in {directory} matching {file_regex}')
     return files
 
 
-def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None):
+def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None, strict=True):
     '''
     Parse quant_spectra_dir or chromatogram_library_spectra_dir parameters
     and return a list or dict of files.
@@ -96,6 +200,8 @@ def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None
         Glob pattern to match files in directories (default: '*.raw').
     api_key : str, optional
         API key for accessing files on Panorama.
+    strict : bool, optional
+        If True, exit with error if any listing any directory fails.
 
     Returns
     -------
@@ -103,6 +209,11 @@ def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None
         True if directories have multiple batches, False otherwise.
     files : list or dict
         List of files or in multi-batch mode, a dict mapping batch names to files.
+
+    Raises
+    ------
+    SystemExit
+        If strict is True and any directory listing fails, the program exits with code 1.
     '''
     if file_regex is not None and file_glob is not None:
         raise ValueError('Only one of file_regex or file_glob should be provided.')
@@ -112,11 +223,19 @@ def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None
     if isinstance(input_files, str):
         input_files = [line.strip() for line in input_files.split('\n') if line.strip()]
 
+    missing_dirs = 0
     if isinstance(input_files, list):
         multi_batch_mode = False
         files = []
         for item in input_files:
-            files.extend(_process_directorty(item, _file_regex, api_key))
+            try:
+                files.extend(_process_directorty(item, _file_regex, api_key))
+            except RuntimeError as e:
+                LOGGER.error(str(e))
+                missing_dirs += 1
+
+        n_files = len(files)
+
     elif isinstance(input_files, dict):
         multi_batch_mode = True
         files = {}
@@ -130,15 +249,29 @@ def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None
 
             files[batch_name] = []
             for dir in batch_dirs:
-                files[batch_name] += _process_directorty(dir, _file_regex, api_key)
+                try:
+                    files[batch_name] += _process_directorty(dir, _file_regex, api_key)
+                except RuntimeError as e:
+                    LOGGER.error(str(e))
+                    missing_dirs += 1
+
+        n_files = sum(len(batch_files) for batch_files in files.values())
+
     else:
-        LOGGER.error(f'Unsupported input_files type: {type(input_files)}')
-        raise TypeError('Parameter must be a str, list, or dict.')
+        raise TypeError(f'Parameter must be a str, list, or dict. Got: {type(input_files)}')
+
+    if missing_dirs > 0:
+        if strict:
+            sys.exit(1)
+        else:
+            dir_str = 'directory' if missing_dirs == 1 else 'directories'
+            LOGGER.warning('No MS files could be found in %d %s. Continuing with %d available files.',
+                           missing_dirs, dir_str, n_files)
 
     return multi_batch_mode, files
 
 
-def generate_schema_url(repo: str, revision: str, filename='nextflow_schema.json') -> str:
+def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') -> str:
     '''
     Build the permanent raw-file download URL for filename hosted on GitHub.
 
@@ -161,13 +294,348 @@ def generate_schema_url(repo: str, revision: str, filename='nextflow_schema.json
     encoded_parts = (quote(part, safe="") for part in clean_path.split("/"))
     encoded_path = "/".join(encoded_parts)
 
-    return f"https://raw.githubusercontent.com/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
+    base_url = 'https://raw.githubusercontent.com'
+    return f"{base_url}/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
 
 
 def parse_args(argv, prog=None):
-    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
-    return parser.parse_args(argv)
+    ###### Common subcommand arguments ######
+    common_subcommand_args = argparse.ArgumentParser(add_help=False)
+    panorama_args = common_subcommand_args.add_mutually_exclusive_group()
+    panorama_args.add_argument(
+        '-k', '--api-key', dest='api_key', default=None,
+        help='API key to use for authentication.'
+    )
+    panorama_args.add_argument(
+        '-n', '--nextflow-key', dest='nextflow_key', action='store_true', default=False,
+        help="Get Panorama API key from Nextflow secrets manager. "
+             "A Nextflow secret with the name 'PANORAMA_API_KEY' must be set up to use this option."
+    )
+    panorama_args.add_argument(
+        '--panorama-public', dest='panorama_public', action='store_true',
+        help='Use Panorama Public API key instead of user API key.'
+    )
+
+    ####### Top level parser #######
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
+    subparsers = parser.add_subparsers(required=True, dest='subcommand', description='Validation modes')
+
+    ####### Config subcommand #######
+    config_description = 'Validate nf-skyline-dia-ms pipeline parameters.'
+    config_command_args = subparsers.add_parser(
+        'config',
+        parents=[common_subcommand_args],
+        help=config_description,
+        description=config_description
+    )
+    config_command_args.add_argument(
+        'pipeline_config', nargs='+',
+        help='Path to pipeline config file(s). If multiple config files are provided, '
+             'they will be merged from left to right.'
+    )
+
+    schema_args = config_command_args.add_argument_group(
+        'Options for specifing pipeline schema.'
+        'By default, the pipeline config scheaa is downloaded from the latest '
+        f'revision of "{DEFAULT_PIPELINE}"'
+    )
+    schema_args.add_argument(
+        '--pipeline', default=argparse.SUPPRESS,
+        help=f'Remote pipeline repository to use for validation. Default is "{DEFAULT_PIPELINE}".'
+    )
+    schema_args.add_argument(
+        '-r', '--revision', default=argparse.SUPPRESS,
+        help="Remote pipeline branch or tag to use for validation. "
+             f"Default is '{DEFAULT_PIPELINE_REVISION}'"
+    )
+    schema_args.add_argument(
+        '-s', '--schema', default=None, help='Path to local pipeline config schema file.'
+    )
+
+    ###### Params subcommand #######
+    params_description = 'Validate parameters passed as arguments.'
+    params_command_args = subparsers.add_parser(
+        'params',
+        parents=[common_subcommand_args],
+        help=params_description,
+        description=params_description,
+    )
+
+    metadata_args = params_command_args.add_argument_group(
+        'Metadata options', 'Options to manually specify metadata parameters.'
+    )
+    metadata_args.add_argument(
+        '--bcMethod', choices=('limma', 'combat'), default='combat',
+        help='Batch correction method. Default is "combat".'
+    )
+    metadata_args.add_argument(
+        '--batch1', default=None, help='sampleMetadata variable to use for batch 1.'
+    )
+    metadata_args.add_argument(
+        '--batch2', default=None, help='sampleMetadata variable to use for batch 2.'
+    )
+    metadata_args.add_argument(
+        '--addCovariate', action='append', dest='covariate_vars',
+        help='Add a sampleMetadata annotationKey to use as a covariate for batch correction.'
+    )
+    metadata_args.add_argument(
+        '--addColor', action='append', dest='color_vars',
+        help='Add a sampleMetadata annotationKey to use to color PCA plots.'
+    )
+    metadata_args.add_argument(
+        '--controlKey', default=None, dest='control_key',
+        help='sampleMetadata annotationKey that has variable indication whether a replicate is a control.'
+    )
+    metadata_args.add_argument(
+        '--addControlValue', action='append', dest='control_values',
+        help='Add sampleMetadata annotationValue(s) which indicate whether a replicate is a control.'
+    )
+
+    input_args = params_command_args.add_argument_group('Input files options')
+    input_args.add_argument(
+        '-m', '--metadata', help='Replicate metadata file.'
+    )
+    input_args.add_argument(
+        '--chrom-lib-dir', dest='chrom_lib_spectra_dir',
+        help='JSON file with chromatogram_library_spectra_dir parameter.'
+    )
+    input_args.add_argument(
+        '-q', '--quant-file-dir', dest='quant_spectra_dir', required=True,
+        help='JSON file with quant_spectra_dir parameter'
+    )
+    quant_spectra_patterns = input_args.add_mutually_exclusive_group(required=True)
+    quant_spectra_patterns.add_argument(
+        '--quant-spectra-glob', dest='quant_spectra_glob',
+        help='Glob pattern to match quant_spectra_dir files.'
+    )
+    quant_spectra_patterns.add_argument(
+        '--quant-spectra-regex', dest='quant_spectra_regex',
+        help='Regex pattern to match quant_spectra_dir files.'
+    )
+    chrom_spectra_patterns = input_args.add_mutually_exclusive_group(required=False)
+    chrom_spectra_patterns.add_argument(
+        '--chromatogram-library-spectra-glob', dest='chrom_lib_spectra_glob',
+        help='Glob pattern to match chromatogram_library_spectra_dir files.'
+    )
+    chrom_spectra_patterns.add_argument(
+        '--chromatogram-library-spectra-regex', dest='chrom_lib_spectra_regex',
+        help='Regex pattern to match chromatogram_library_spectra_dir files.'
+    )
+
+    ###### Argument validation ######
+    args = parser.parse_args(argv)
+    if args.subcommand == 'config':
+        if (hasattr(args, 'pipeline') and not hasattr(args, 'schema')) or \
+           (hasattr(args, 'schema') and not hasattr(args, 'pipeline')):
+            sys.stderr.write('--pipeline and --schema options conflict.\n')
+            sys.exit(2)
+
+        if not hasattr(args, 'pipeline'):
+            args.pipeline = DEFAULT_PIPELINE
+
+        revision = DEFAULT_PIPELINE_REVISION if not hasattr(args, 'revision') else args.revision
+        args.schema = generate_git_url(
+            args.pipeline, revision, filename='nextflow_schema.json'
+        ) if not hasattr(args, 'schema') else args.schema
+
+    if args.subcommand == 'params':
+        have_pattern = args.chrom_lib_spectra_glob is not None or args.chrom_lib_spectra_regex is not None
+        if args.chrom_lib_spectra_dir is not None and not have_pattern:
+            sys.stderr.write('Chromatogram library spectra glob or regex pattern must be provided.\n')
+            sys.exit(2)
+
+    return args
+
+
+def validate_config_files(config_paths, schema_path):
+    '''
+    Read, merge, and validate Nextflow pipeline config files against the schema.
+
+    Parameters
+    ----------
+    config_files : list of str
+        List of local file paths to Nextflow pipeline config files.
+    schema_path : str
+        URL or local path of the JSON schema to validate the config files against.
+
+    Returns
+    -------
+    bool
+        True pipeline config is valid, False otherwise.
+    dict
+        Merged config parmeters from all config files.
+    '''
+    config_data = {}
+    all_good = True
+    for config_path in config_paths:
+        if config_path.startswith('http://') or config_path.startswith('https://'):
+            try:
+                config_text = download_text_file(config_path)
+                this_config = nextflow_pipeline_config.parse_params(text=config_text)
+            except HTTPError as e:
+                LOGGER.error(f'Error downloading pipeline config file {config_path}: {e}')
+                all_good = False
+                continue
+        else:
+            if not os.path.exists(config_path):
+                LOGGER.error(f'Pipeline config file {config_path} does not exist.')
+                all_good = False
+            this_config = nextflow_pipeline_config.parse_params(file=config_path)
+
+        config_data = merge_params(config_data, this_config)
+
+    if not all_good:
+        return False, {}
+
+    if schema_path.startswith('http://') or schema_path.startswith('https://'):
+        try:
+            schema = download_text_file(schema_path)
+        except HTTPError as e:
+            LOGGER.error(f'Error downloading pipeline config schema {schema_path}: {e}')
+            return False, config_data
+    else:
+        schema_path = os.path.abspath(schema_path)
+        if not os.path.exists(schema_path):
+            LOGGER.error(f'Pipeline config schema file {schema_path} does not exist.')
+            return False, config_data
+        with open(schema_path, 'r') as schema_file:
+            schema = json.load(schema_file)
+
+    try:
+        validate(config_data, schema)
+    except ValidationError as e:
+        LOGGER.error(f'Pipeline config validation failed: {e.message}')
+        return False, config_data
+
+    return True, config_data
+
+
+def _validate_metadata_params(
+    metadata_df,
+    color_vars=None, batch1=None, batch2=None,
+    control_key=None, control_values=None
+):
+    if (control_key is None) != (control_values is None):
+        LOGGER.error("Both 'control_key' and 'color_vars' must be specified or both omitted.")
+        return False
+
+    # Check that metadata parameters match in replicate metadata
+    meta_params = {}
+    if color_vars is not None:
+        meta_params = {var: 'color_vars' for var in color_vars}
+    other_vars = {batch1: 'batch1', batch2: 'batch2', control_key: 'control_key'}
+    for var, name in other_vars.items():
+        if var is not None:
+            meta_params[var] = name
+
+    if metadata_df is None:
+        if len(meta_params) > 0:
+            LOGGER.warning('Replicate metadata is None, but metadata parameters are specified.')
+        for var, name in meta_params.items():
+            if var is not None:
+                LOGGER.error(f"Paremeter {name} = '{var}' will be ignored.")
+    else:
+        all_meta_vard_good = True
+        df_meta_vars = set(metadata_df['annotationKey'].to_list())
+        for var, name in meta_params.items():
+            if var is not None and var not in df_meta_vars:
+                LOGGER.error(f"Metadata variable '{var}' from '{name}' parameter not found in metadata.")
+                all_meta_vard_good = False
+
+        if control_values:
+            df_control_values = set(metadata_df[metadata_df['annotationKey'] == control_key]['annotationValue'].to_list())
+            for param_value in control_values:
+                if param_value not in df_control_values:
+                    LOGGER.error(f"Control value '{param_value}' for key '{control_key}' not found in metadata.")
+                    all_meta_vard_good = False
+
+        if not all_meta_vard_good:
+            return False
+        LOGGER.info('All metadata parameters are present in replicate metadata.')
+        return True
+
+
+class Replicate:
+    '''
+    Class representing a single replicate in the metadata.
+    '''
+
+    def __init__(self, name, batch=None):
+        self.name = name
+        self.batch = batch
+        self.metadata = {}
+
+    def __repr__(self):
+        return f'Replicate(name={self.name}, metadata={self.metadata})'
+
+
+def _log_warn_error(message, *args, warning=True):
+    if warning:
+        LOGGER.warning(message, *args)
+    else:
+        LOGGER.error(message, *args)
+
+
+def validate_metadata(
+    ms_files, metadata_df,
+    color_vars=None, batch1=None, batch2=None,
+    control_key=None, control_values=None,
+    strict=True
+):
+    '''
+    Validate metadata against the provided parameters.
+
+    Parameters
+    ----------
+    ms_files : dict
+        Dictionary mapping batch names to lists of MS file names.
+    metadata_df : pandas.DataFrame
+        DataFrame containing metadata for the MS files.
+    color_vars : list of str, optional
+        List of metadata variables to use for coloring PCA plots.
+    batch1 : str, optional
+        Metadata variable to use for batch 1.
+    batch2 : str, optional
+        Metadata variable to use for batch 2.
+    control_key : str, optional
+        Metadata key indicating control samples.
+    control_values : list of str, optional
+        List of metadata values indicating control samples.
+
+    Returns
+    -------
+    bool
+        True if metadata is valid, False otherwise.
+    '''
+
+    if not _validate_metadata_params(
+        metadata_df, color_vars=color_vars, batch1=batch1, batch2=batch2,
+        control_key=control_key, control_values=control_values
+    ):
+        return False
+
+    replicates = {}
+    for batch_name, files in ms_files.items():
+        for file_name in files:
+            replicates[file_name] = Replicate(file_name, batch=batch_name)
+
+    metadata_reps = set(metadata_df['replicateName'].to_list())
+    ms_file_reps = set(replicates.keys())
+
+    if len(metadata_reps - ms_file_reps) > 0:
+        LOGGER.warning('There are %d replicates in the metadata that are not in quant_spectra_dir',
+                       len(metadata_reps - ms_file_reps))
+
+    bad_reps = ms_file_reps - metadata_reps
+    for bad_rep in ms_file_reps - metadata_reps:
+        _log_warn_error(
+            "Replicate '%s' in quant_spectra_dir is not present in the metadata.",
+            bad_rep, warning=not strict
+        )
+
+    if len(bad_reps) > 0 and strict:
+        return False
 
 
 def _main(args):
@@ -175,13 +643,142 @@ def _main(args):
     Actual main method. `args` Should be initialized argparse namespace.
     '''
 
-    metadata_reader = Metadata()
-    if not metadata_reader.read(args.metadata_file, args.input_format):
+    # Input files
+    quant_spectra_dir = None
+    quant_spectra_param = None
+    quant_spectra_glob = None
+    quant_spectra_regex = None
+    chromatogram_library_spectra_param = None
+    chromatogram_library_spectra_dir = None
+    chromatogram_library_spectra_glob = None
+    chromatogram_library_spectra_regex = None
+
+    # Metadata setings
+    color_vars = None
+    batch1 = None
+    batch2 = None
+    control_key = None
+    control_values = None
+    metadata_path = None
+    replicate_metadata = None
+
+    if args.nextflow_key:
+        api_key = get_api_key_from_nextflow_secrets()
+        if api_key is None:
+            sys.exit(1)
+    elif args.api_key:
+        api_key = args.api_key
+    elif args.panorama_public:
+        api_key = PANORA_PUBLIC_KEY
+
+    if args.subcommand == 'config':
+        if not os.path.exists(args.pipeline_config):
+            LOGGER.error(f'Pipeline config file {args.pipeline_config} does not exist.')
+            sys.exit(1)
+
+        # Download base config if using remote pipeline dir
+        config_paths = []
+        if hasattr(args, 'pipeline') and args.pipeline.startswith('http'):
+            config_paths.append(generate_git_url(
+                args.pipeline, args.revision, filename='nextflow_config.nf'
+            ))
+        config_paths.extend(args.pipeline_config)
+
+        LOGGER.info('Reading pipeline config files...')
+        success, config_data = validate_config_files(config_paths, args.schema)
+        if not success:
+            LOGGER.error('Pipeline config validation failed.')
+            sys.exit(1)
+        LOGGER.info('Pipeline config validation succeeded.')
+
+        color_vars = config_data.get('qc_report.color_vars', None)
+        batch1 = config_data.get('batch_report.batch1', None)
+        batch2 = config_data.get('batch_report.batch2', None)
+        control_key = config_data.get('qc_report.control_key', None)
+        control_values = config_data.get('qc_report.control_values', None)
+
+        quant_spectra_param = config_data.get('quant_spectra_dir', None)
+        chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir', None)
+        metadata_path = config_data.get('metadata_file', None)
+
+        quant_spectra_regex = config_data.get('quant_spectra_regex', None)
+        quant_spectra_glob = config_data.get('quant_spectra_glob', None)
+        chromatogram_library_spectra_regex = config_data.get('chromatogram_library_spectra_regex', None)
+        chromatogram_library_spectra_glob = config_data.get('chromatogram_library_spectra_glob', None)
+
+    elif args.subcommand == 'params':
+        color_vars = args.color_vars
+        batch1 = args.batch1
+        batch2 = args.batch2
+        control_key = args.control_key
+        control_values = args.control_values
+
+        quant_spectra_glob = args.quant_spectra_glob
+        quant_spectra_regex = args.quant_spectra_regex
+        chromatogram_library_spectra_regex = args.chrom_lib_spectra_regex
+        chromatogram_library_spectra_glob = args.chrom_lib_spectra_glob
+        metadata_path = args.metadata
+
+        if not os.path.exists(args.quant_spectra_dir):
+            LOGGER.error(f'Quant spectra directory {args.quant_spectra_dir} does not exist.')
+            sys.exit(1)
+
+        quant_spectra_param = json.load(args.quant_spectra_dir)
+        try:
+            validate(quant_spectra_param, QUANT_SPECTRA_SCHEMA)
+        except ValidationError as e:
+            LOGGER.error(f'Quant spectra parameter validation failed: {e.message}')
+            sys.exit(1)
+        if args.chrom_lib_spectra_dir is not None:
+            if not os.path.exists(args.chrom_lib_spectra_dir):
+                LOGGER.error(f'Chromatogram library spectra directory {args.chrom_lib_spectra_dir} does not exist.')
+                sys.exit(1)
+
+            chromatogram_library_spectra_param = json.load(args.chrom_lib_spectra_dir)
+            try:
+                validate(chromatogram_library_spectra_param, CHROM_SPECTRA_SCHEMA)
+            except ValidationError as e:
+                LOGGER.error(f'Chromatogram library spectra parameter validation failed: {e.message}')
+                sys.exit(1)
+
+    else:
+        raise RuntimeError(f'Unknown subcommand: {args.subcommand}')
+
+    quant_spectra_dir = parse_input_files(
+        quant_spectra_param, api_key=api_key,
+        file_glob=quant_spectra_glob, file_regex=quant_spectra_regex,
+    )
+    if chromatogram_library_spectra_param is not None:
+        chromatogram_library_spectra_dir = parse_input_files(
+            chromatogram_library_spectra_param, api_key=api_key,
+            file_glob=chromatogram_library_spectra_glob,
+            file_regex=chromatogram_library_spectra_regex,
+        )
+
+    # read metadata
+    if metadata_path:
+        metadata_text = get_input_file_text(metadata_path, api_key=api_key)
+        sstream = StringIO(metadata_text)
+        sstream.seek(0)
+        metadata_reader = Metadata()
+        if not metadata_reader.read(sstream):
+            sys.exit(1)
+        replicate_metadata = metadata_reader.df
+
+    LOGGER.info('Validating metadata...')
+    success = validate_metadata(
+        quant_spectra_dir, replicate_metadata,
+        color_vars=color_vars, batch1=batch1, batch2=batch2,
+        control_key=control_key, control_values=control_values
+    )
+    if not success:
+        LOGGER.error('Metadata validation failed.')
         sys.exit(1)
+    LOGGER.info('Metadata validation succeeded.')
 
 
 def main():
-    LOGGER.warning('Calling this script directly is deprecated. Use "dia_qc metadata_convert" instead.')
+    LOGGER.warning("Calling this script directly is deprecated. Use 'dia_qc validate' instead.")
     _main(parse_args(sys.argv[1:]))
 
 
