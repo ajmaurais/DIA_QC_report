@@ -312,161 +312,6 @@ def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') 
     return f"{base_url}/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
 
 
-def parse_args(argv, prog=None):
-
-    ###### Common subcommand arguments ######
-    common_subcommand_args = argparse.ArgumentParser(add_help=False)
-    panorama_args = common_subcommand_args.add_mutually_exclusive_group()
-    panorama_args.add_argument(
-        '-k', '--api-key', dest='api_key', default=None,
-        help='API key to use for authentication.'
-    )
-    panorama_args.add_argument(
-        '-n', '--nextflow-key', dest='nextflow_key', action='store_true', default=False,
-        help="Get Panorama API key from Nextflow secrets manager. "
-             "A Nextflow secret with the name 'PANORAMA_API_KEY' must be set up to use this option."
-    )
-    panorama_args.add_argument(
-        '--panorama-public', dest='panorama_public', action='store_true',
-        help='Use Panorama Public API key instead of user API key.'
-    )
-
-    ####### Top level parser #######
-    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
-    subparsers = parser.add_subparsers(required=True, dest='subcommand', description='Validation modes')
-
-    ####### Config subcommand #######
-    config_description = 'Validate nf-skyline-dia-ms pipeline parameters.'
-    config_command_args = subparsers.add_parser(
-        'config',
-        parents=[common_subcommand_args],
-        help=config_description,
-        description=config_description
-    )
-    config_command_args.add_argument(
-        'pipeline_config', nargs='+',
-        help='Path to pipeline config file(s). If multiple config files are provided, '
-             'they will be merged from left to right.'
-    )
-
-    schema_args = config_command_args.add_argument_group(
-        'Options for specifing pipeline schema.'
-        'By default, the pipeline config scheaa is downloaded from the latest '
-        f'revision of "{DEFAULT_PIPELINE}"'
-    )
-    schema_args.add_argument(
-        '--pipeline', default=argparse.SUPPRESS,
-        help=f'Remote pipeline repository to use for validation. Default is "{DEFAULT_PIPELINE}".'
-    )
-    schema_args.add_argument(
-        '-r', '--revision', default=argparse.SUPPRESS,
-        help="Remote pipeline branch or tag to use for validation. "
-             f"Default is '{DEFAULT_PIPELINE_REVISION}'"
-    )
-    schema_args.add_argument(
-        '-s', '--schema', default=None, help='Path to local pipeline config schema file.'
-    )
-
-    ###### Params subcommand #######
-    params_description = 'Validate parameters passed as arguments.'
-    params_command_args = subparsers.add_parser(
-        'params',
-        parents=[common_subcommand_args],
-        help=params_description,
-        description=params_description,
-    )
-
-    metadata_args = params_command_args.add_argument_group(
-        'Metadata options', 'Options to manually specify metadata parameters.'
-    )
-    metadata_args.add_argument(
-        '--bcMethod', choices=('limma', 'combat'), default='combat',
-        help='Batch correction method. Default is "combat".'
-    )
-    metadata_args.add_argument(
-        '--batch1', default=None, help='sampleMetadata variable to use for batch 1.'
-    )
-    metadata_args.add_argument(
-        '--batch2', default=None, help='sampleMetadata variable to use for batch 2.'
-    )
-    metadata_args.add_argument(
-        '--addCovariate', action='append', dest='covariate_vars',
-        help='Add a sampleMetadata annotationKey to use as a covariate for batch correction.'
-    )
-    metadata_args.add_argument(
-        '--addColor', action='append', dest='color_vars',
-        help='Add a sampleMetadata annotationKey to use to color PCA plots.'
-    )
-    metadata_args.add_argument(
-        '--controlKey', default=None, dest='control_key',
-        help='sampleMetadata annotationKey that has variable indication whether a replicate is a control.'
-    )
-    metadata_args.add_argument(
-        '--addControlValue', action='append', dest='control_values',
-        help='Add sampleMetadata annotationValue(s) which indicate whether a replicate is a control.'
-    )
-
-    input_args = params_command_args.add_argument_group('Input files options')
-    input_args.add_argument(
-        '-m', '--metadata', help='Replicate metadata file.'
-    )
-    input_args.add_argument(
-        '--chrom-lib-dir', dest='chrom_lib_spectra_dir', action='append', default=None,
-        help='Add chromatogram library spectra directory.'
-    )
-    quant_dir_args = input_args.add_mutually_exclusive_group(required=True)
-    quant_dir_args.add_argument(
-        '-q', '--quant-file-dir', dest='quant_spectra_dir', action='append', default=None,
-        help='Add quantative spectra directory.'
-    )
-    quant_dir_args.add_argument(
-        '--quant-file-param', dest='quant_spectra_param',
-        help='JSON file with quant_spectra_dir parameter'
-    )
-    quant_spectra_patterns = input_args.add_mutually_exclusive_group(required=True)
-    quant_spectra_patterns.add_argument(
-        '--quant-spectra-glob', dest='quant_spectra_glob',
-        help='Glob pattern to match quant_spectra_dir files.'
-    )
-    quant_spectra_patterns.add_argument(
-        '--quant-spectra-regex', dest='quant_spectra_regex',
-        help='Regex pattern to match quant_spectra_dir files.'
-    )
-    chrom_spectra_patterns = input_args.add_mutually_exclusive_group(required=False)
-    chrom_spectra_patterns.add_argument(
-        '--chromatogram-library-spectra-glob', dest='chrom_lib_spectra_glob',
-        help='Glob pattern to match chromatogram_library_spectra_dir files.'
-    )
-    chrom_spectra_patterns.add_argument(
-        '--chromatogram-library-spectra-regex', dest='chrom_lib_spectra_regex',
-        help='Regex pattern to match chromatogram_library_spectra_dir files.'
-    )
-
-    ###### Argument validation ######
-    args = parser.parse_args(argv)
-    if args.subcommand == 'config':
-        if (hasattr(args, 'pipeline') and not hasattr(args, 'schema')) or \
-           (hasattr(args, 'schema') and not hasattr(args, 'pipeline')):
-            sys.stderr.write('--pipeline and --schema options conflict.\n')
-            sys.exit(2)
-
-        if not hasattr(args, 'pipeline'):
-            args.pipeline = DEFAULT_PIPELINE
-
-        revision = DEFAULT_PIPELINE_REVISION if not hasattr(args, 'revision') else args.revision
-        args.schema = generate_git_url(
-            args.pipeline, revision, filename='nextflow_schema.json'
-        ) if not hasattr(args, 'schema') else args.schema
-
-    if args.subcommand == 'params':
-        have_pattern = args.chrom_lib_spectra_glob is not None or args.chrom_lib_spectra_regex is not None
-        if args.chrom_lib_spectra_dir is not None and not have_pattern:
-            sys.stderr.write('Chromatogram library spectra glob or regex pattern must be provided.\n')
-            sys.exit(2)
-
-    return args
-
-
 def validate_config_files(config_paths, schema_path):
     '''
     Read, merge, and validate Nextflow pipeline config files against the schema.
@@ -667,6 +512,162 @@ def validate_metadata(
         return False
 
     # Add metadata to replicates
+
+
+def parse_args(argv, prog=None):
+
+    ###### Common subcommand arguments ######
+    common_subcommand_args = argparse.ArgumentParser(add_help=False)
+    panorama_args = common_subcommand_args.add_mutually_exclusive_group()
+    panorama_args.add_argument(
+        '-k', '--api-key', dest='api_key', default=None,
+        help='API key to use for authentication.'
+    )
+    panorama_args.add_argument(
+        '-n', '--nextflow-key', dest='nextflow_key', action='store_true', default=False,
+        help="Get Panorama API key from Nextflow secrets manager. "
+             "A Nextflow secret with the name 'PANORAMA_API_KEY' must be set up to use this option."
+    )
+    panorama_args.add_argument(
+        '--panorama-public', dest='panorama_public', action='store_true',
+        help='Use Panorama Public API key instead of user API key.'
+    )
+
+    ####### Top level parser #######
+    parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
+    subparsers = parser.add_subparsers(required=True, dest='subcommand', description='Validation modes')
+
+    ####### Config subcommand #######
+    config_description = 'Validate nf-skyline-dia-ms pipeline parameters.'
+    config_command_args = subparsers.add_parser(
+        'config',
+        parents=[common_subcommand_args],
+        help=config_description,
+        description=config_description
+    )
+    config_command_args.add_argument(
+        'pipeline_config', nargs='+',
+        help='Path to pipeline config file(s). If multiple config files are provided, '
+             'they will be merged from left to right.'
+    )
+
+    schema_args = config_command_args.add_argument_group(
+        'Options for specifing pipeline schema.'
+        'By default, the pipeline config scheaa is downloaded from the latest '
+        f'revision of "{DEFAULT_PIPELINE}"'
+    )
+    schema_args.add_argument(
+        '--pipeline', default=argparse.SUPPRESS,
+        help=f'Remote pipeline repository to use for validation. Default is "{DEFAULT_PIPELINE}".'
+    )
+    schema_args.add_argument(
+        '-r', '--revision', default=argparse.SUPPRESS,
+        help="Remote pipeline branch or tag to use for validation. "
+             f"Default is '{DEFAULT_PIPELINE_REVISION}'"
+    )
+    schema_args.add_argument(
+        '-s', '--schema', default=None, help='Path to local pipeline config schema file.'
+    )
+
+    ###### Params subcommand #######
+    params_description = 'Validate parameters passed as arguments.'
+    params_command_args = subparsers.add_parser(
+        'params',
+        parents=[common_subcommand_args],
+        description=f"{params_description} This subcommand is intended for use in computational pipelines. "
+                     "Human users should use the 'config' subcommand instead.",
+        help=params_description
+    )
+
+    metadata_args = params_command_args.add_argument_group(
+        'Metadata options', 'Options to manually specify metadata parameters.'
+    )
+    metadata_args.add_argument(
+        '--bcMethod', choices=('limma', 'combat'), default='combat',
+        help='Batch correction method. Default is "combat".'
+    )
+    metadata_args.add_argument(
+        '--batch1', default=None, help='sampleMetadata variable to use for batch 1.'
+    )
+    metadata_args.add_argument(
+        '--batch2', default=None, help='sampleMetadata variable to use for batch 2.'
+    )
+    metadata_args.add_argument(
+        '--addCovariate', action='append', dest='covariate_vars',
+        help='Add a sampleMetadata annotationKey to use as a covariate for batch correction.'
+    )
+    metadata_args.add_argument(
+        '--addColor', action='append', dest='color_vars',
+        help='Add a sampleMetadata annotationKey to use to color PCA plots.'
+    )
+    metadata_args.add_argument(
+        '--controlKey', default=None, dest='control_key',
+        help='sampleMetadata annotationKey that has variable indication whether a replicate is a control.'
+    )
+    metadata_args.add_argument(
+        '--addControlValue', action='append', dest='control_values',
+        help='Add sampleMetadata annotationValue(s) which indicate whether a replicate is a control.'
+    )
+
+    input_args = params_command_args.add_argument_group('Input files options')
+    input_args.add_argument(
+        '-m', '--metadata', help='Replicate metadata file.'
+    )
+    input_args.add_argument(
+        '--chrom-lib-dir', dest='chrom_lib_spectra_dir', action='append', default=None,
+        help='Add chromatogram library spectra directory.'
+    )
+    quant_dir_args = input_args.add_mutually_exclusive_group(required=True)
+    quant_dir_args.add_argument(
+        '-q', '--quant-file-dir', dest='quant_spectra_dir', action='append', default=None,
+        help='Add quantative spectra directory.'
+    )
+    quant_dir_args.add_argument(
+        '--quant-file-param', dest='quant_spectra_param',
+        help='JSON file with quant_spectra_dir parameter'
+    )
+    quant_spectra_patterns = input_args.add_mutually_exclusive_group(required=True)
+    quant_spectra_patterns.add_argument(
+        '--quant-spectra-glob', dest='quant_spectra_glob',
+        help='Glob pattern to match quant_spectra_dir files.'
+    )
+    quant_spectra_patterns.add_argument(
+        '--quant-spectra-regex', dest='quant_spectra_regex',
+        help='Regex pattern to match quant_spectra_dir files.'
+    )
+    chrom_spectra_patterns = input_args.add_mutually_exclusive_group(required=False)
+    chrom_spectra_patterns.add_argument(
+        '--chromatogram-library-spectra-glob', dest='chrom_lib_spectra_glob',
+        help='Glob pattern to match chromatogram_library_spectra_dir files.'
+    )
+    chrom_spectra_patterns.add_argument(
+        '--chromatogram-library-spectra-regex', dest='chrom_lib_spectra_regex',
+        help='Regex pattern to match chromatogram_library_spectra_dir files.'
+    )
+
+    ###### Argument validation ######
+    args = parser.parse_args(argv)
+    if args.subcommand == 'config':
+        if (hasattr(args, 'pipeline') and not hasattr(args, 'schema')) or \
+           (hasattr(args, 'schema') and not hasattr(args, 'pipeline')):
+            sys.stderr.write('--pipeline and --schema options conflict.\n')
+            sys.exit(2)
+
+        if not hasattr(args, 'pipeline'):
+            args.pipeline = DEFAULT_PIPELINE
+
+        revision = DEFAULT_PIPELINE_REVISION if not hasattr(args, 'revision') else args.revision
+        args.schema = generate_git_url(
+            args.pipeline, revision, filename='nextflow_schema.json'
+        ) if not hasattr(args, 'schema') else args.schema
+
+    if args.subcommand == 'params':
+        have_pattern = args.chrom_lib_spectra_glob is not None or args.chrom_lib_spectra_regex is not None
+        if args.chrom_lib_spectra_dir is not None and not have_pattern:
+            sys.stderr.write('Chromatogram library spectra glob or regex pattern must be provided.\n')
+            sys.exit(2)
+
+    return args
 
 
 def _main(args):
