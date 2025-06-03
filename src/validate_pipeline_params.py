@@ -292,7 +292,7 @@ def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') 
     Parameters
     ----------
     repo : str
-        Repository name formated as "user/repo" (e.g., "mriffle/nf-skyline-dia-ms").
+        Repository name formatted as "user/repo" (e.g., "mriffle/nf-skyline-dia-ms").
     revision : str
         Any valid ref—branch name ("main"), tag ("v1.2.0"), or full / short commit SHA.
     filename : str, optional
@@ -328,7 +328,7 @@ def validate_config_files(config_paths, schema_path):
     bool
         True pipeline config is valid, False otherwise.
     dict
-        Merged config parmeters from all config files.
+        Merged config parameters from all config files.
     '''
     config_data = {}
     all_good = True
@@ -398,7 +398,7 @@ def _validate_metadata_params(
             LOGGER.warning('Replicate metadata is None, but metadata parameters are specified.')
         for var, name in meta_params.items():
             if var is not None:
-                LOGGER.error(f"Paremeter {name} = '{var}' will be ignored.")
+                LOGGER.error(f"Parameter {name} = '{var}' will be ignored.")
     else:
         all_meta_vard_good = True
         df_meta_vars = set(metadata_df['annotationKey'].to_list())
@@ -552,7 +552,7 @@ def parse_args(argv, prog=None):
     )
 
     schema_args = config_command_args.add_argument_group(
-        'Options for specifing pipeline schema.'
+        'Options for specifying pipeline schema.'
         'By default, the pipeline config scheaa is downloaded from the latest '
         f'revision of "{DEFAULT_PIPELINE}"'
     )
@@ -685,7 +685,7 @@ def _main(args):
     chromatogram_library_spectra_glob = None
     chromatogram_library_spectra_regex = None
 
-    # Metadata setings
+    # Metadata settings
     color_vars = None
     batch1 = None
     batch2 = None

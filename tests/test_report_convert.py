@@ -71,7 +71,7 @@ class TestConvertToParquet(unittest.TestCase):
         df_out = precursorReport.read_report(target_path)
         df_headers = set(df_out.columns)
 
-        # check that there were columns removed from orriginal tsv
+        # check that there were columns removed from original tsv
         diff_cols = all_headers - df_headers
         self.assertGreater(len(diff_cols), 0)
 

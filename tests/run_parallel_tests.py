@@ -39,7 +39,7 @@ def run_test_file(path, render=False):
             command, text=True, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         )
-        # count sucessful tests
+        # count successful tests
         passed = sum(1 for line in result.stdout.splitlines() if OK_RE.search(line))
         failed = sum(1 for line in result.stdout.splitlines() if FAIL_RE.search(line))
         return (path.name, passed, failed, result.returncode, result.stdout)
@@ -280,7 +280,7 @@ def main(test_paths, max_workers=None, verbose=False, **kwargs):
 
     n_cores = min(cpu_count() if max_workers is None else max_workers, len(test_files))
 
-    # Count invidual tests in each file
+    # Count individual tests in each file
     loader = TestLoader()
     file_test_counts = {}
     for f in test_files:

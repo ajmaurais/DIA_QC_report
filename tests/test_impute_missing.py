@@ -319,7 +319,7 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
 
         impute_result = setup_functions.run_command(command, self.work_dir)
 
-        # test that imputation was sucessful and there are now 1 or more imputed values
+        # test that imputation was successful and there are now 1 or more imputed values
         self.assertEqual(impute_result.returncode, 0)
         self.do_imputed_value_count_test(expect_prot=impute_proteins,
                                          expect_prec=impute_precursors)

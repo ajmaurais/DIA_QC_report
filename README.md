@@ -113,7 +113,7 @@ Rscript -e 'rmarkdown::render("bc_report.rmd")'
 
 ## Other sub-commands
 
-### Export databse tables to tsv file(s).
+### Export database tables to tsv file(s).
 
 The `db_export` sub-command is used to export precursor, protein, or metadate tables from the batch/qc database to a tsv file.
 
