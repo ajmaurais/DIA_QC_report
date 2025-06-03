@@ -214,12 +214,16 @@ def _find_params_block(tree) -> dict:
     raise ValueError('No `params { ... }` block found in the config.')
 
 
-def parse_params(path='pipeline.config') -> Dict[str, Any]:
+def parse_params(file=None, text=None) -> Dict[str, Any]:
     '''
     Parses a Nextflow pipeline configuration file and extracts parameters from the 'params' block.
 
-    Args:
-        path (str): Path to the Nextflow pipeline configuration file. Defaults to 'pipeline.config'.
+    Parameters
+    ----------
+    file : str, optional
+        The path to the Nextflow configuration file. If not provided, *text* must be given.
+    text : str, optional
+        The content of the Nextflow configuration file as a string. If not provided, *file* must be given.
 
     Returns:
         Dict[str, Any]: A dictionary containing parameter names and their corresponding values extracted from the 'params' block.
@@ -228,7 +232,11 @@ def parse_params(path='pipeline.config') -> Dict[str, Any]:
         FileNotFoundError: If the specified configuration file does not exist.
         ValueError: If the 'params' block cannot be found or parsed in the configuration file.
     '''
-    text = pathlib.Path(path).read_text()
+    if file is not None:
+        text = pathlib.Path(file).read_text()
+    if text is None:
+        raise ValueError('Either `file` or `text` must be provided.')
+
     tree = parse_and_digest_groovy_content(text)
     params_block = _find_params_block(tree)
     out: Dict[str, Any] = {}
