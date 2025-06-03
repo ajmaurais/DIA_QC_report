@@ -10,6 +10,7 @@ import json
 from shutil import which
 import subprocess
 from io import StringIO
+from collections import Counter
 
 from jsonschema import validate, ValidationError
 from requests import HTTPError
@@ -28,32 +29,45 @@ DEFAULT_PIPELINE_REVISION = 'main'
 
 QUANT_SPECTRA_SCHEMA = {
     "oneOf": [
-        { "type": "string" },
+        {
+            "type": "string",
+            'minProperties': 1
+        },
         {
             "type": "array",
             "items": {"type": "string"},
+            'minProperties': 1
         },
         {
             "type": "object",
             "additionalProperties": {
                 "oneOf": [
-                    {"type": "string"},
+                    {
+                        "type": "string",
+                        'minProperties': 1
+                    },
                     {
                         "type": "array",
                         "items": {"type": "string"},
+                        'minProperties': 1
                     },
                 ]
             },
+            'minProperties': 1
         },
     ],
 }
 
 CHROM_SPECTRA_SCHEMA = {
     "oneOf": [
-        { "type": "string" },
+        {
+            "type": "string",
+            'minProperties': 1
+        },
         {
             "type": "array",
             "items": {"type": "string"},
+            'minProperties': 1
         }
     ]
 }
@@ -615,6 +629,14 @@ def validate_metadata(
     ):
         return False
 
+    # make sure that there are not duplicated replicates
+    rep_counts = Counter(rep for batch_files in ms_files.values() for rep in batch_files)
+    if any(count > 1 for count in rep_counts.values()):
+        for rep, count in rep_counts.items():
+            if count > 1:
+                LOGGER.error(f"Replicate '{rep}' is duplicated {count} times in quant_spectra_dir.")
+        return False
+
     replicates = {}
     for batch_name, files in ms_files.items():
         for file_name in files:
@@ -623,12 +645,14 @@ def validate_metadata(
     metadata_reps = set(metadata_df['replicateName'].to_list())
     ms_file_reps = set(replicates.keys())
 
+    # Warn if there are extra replicates in the metadata
     if len(metadata_reps - ms_file_reps) > 0:
         LOGGER.warning('There are %d replicates in the metadata that are not in quant_spectra_dir',
                        len(metadata_reps - ms_file_reps))
 
+    # Error if there are missing replicates in the metadata
     bad_reps = ms_file_reps - metadata_reps
-    for bad_rep in ms_file_reps - metadata_reps:
+    for bad_rep in bad_reps:
         _log_warn_error(
             "Replicate '%s' in quant_spectra_dir is not present in the metadata.",
             bad_rep, warning=not strict
@@ -636,6 +660,8 @@ def validate_metadata(
 
     if len(bad_reps) > 0 and strict:
         return False
+
+    # Add metadata to replicates
 
 
 def _main(args):
