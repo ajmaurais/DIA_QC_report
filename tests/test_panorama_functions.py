@@ -6,6 +6,11 @@ import os
 from DIA_QC_report.submodules import panorama
 import setup_functions
 
+PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/'
+PUBLIC_FILE = 'https://panoramaweb.org/_webdav/Panorama%20Public/2022/MacCoss%20-%20Human%20AD%20Clean%20Diagnosis%20DIA%20Data/SMTG/%40files/MetaData/Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv'
+
+MOCK_PANORAMA = True
+
 class TestListPanoramaFiles(unittest.TestCase):
     def setUp(self):
         self.data_dir = f'{setup_functions.TEST_DIR}/data/'
@@ -34,35 +39,66 @@ class TestListPanoramaFiles(unittest.TestCase):
         return mock
 
 
-    def test_list_panorama_files_anonymous(self):
-        with mock.patch('DIA_QC_report.submodules.panorama.requests.request',
-                                 return_value=self._make_mock_response(self.flat_response)):
-            files = panorama.list_panorama_files(
-                url='https://panoramaweb.org/_webdav/dummy/path'
-            )
-            self.assertIsInstance(files, list)
-            self.assertEqual(set(files), self.target_files)
+    def test_list_panorama_files(self):
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.submodules.panorama.requests.request',
+                            return_value=self._make_mock_response(self.flat_response)) as mock_request:
+                files = panorama.list_panorama_files(PUBLIC_URL)
+
+            headers={'Depth': '1', 'Content-Type': 'text/xml; charset=utf-8'}
+            call_args = ('PROPFIND', PUBLIC_URL)
+            call_kwargs = {
+                'headers': headers, 'data': panorama._LIST_BODY,
+                'verify': True, 'auth': None
+            }
+            mock_request.assert_called_once_with(*call_args, **call_kwargs)
+
+        else:
+            if not panorama.have_internet():
+                self.skipTest("Internet connection is required for this test.")
+
+            files = panorama.list_panorama_files(url=PUBLIC_URL)
+
+        self.assertIsInstance(files, list)
+        self.assertEqual(set(files), self.target_files)
 
 
     def test_list_panorama_files_api_key(self):
-        with mock.patch('DIA_QC_report.submodules.panorama.requests.Session.request',
-                                 return_value=self._make_mock_response(self.flat_response)):
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.submodules.panorama.requests.Session.request',
+                            return_value=self._make_mock_response(self.flat_response)) as mock_request:
+                files = panorama.list_panorama_files(PUBLIC_URL, api_key=panorama.PANORA_PUBLIC_KEY)
+
+            headers={'Depth': '1', 'Content-Type': 'text/xml; charset=utf-8'}
+            token = panorama.b64encode(f'apikey:{panorama.PANORA_PUBLIC_KEY}'.encode()).decode()
+            headers['Authorization'] = f'Basic {token}'
+
+            call_args = ('PROPFIND', PUBLIC_URL)
+            call_kwargs = {
+                'headers': headers, 'data': panorama._LIST_BODY,
+                'verify': True, 'auth': ()
+            }
+            mock_request.assert_called_once_with(*call_args, **call_kwargs)
+
+        else:
+            if not panorama.have_internet():
+                self.skipTest("Internet connection is required for this test.")
+
             files = panorama.list_panorama_files(
-                url='https://panoramaweb.org/_webdav/dummy/path',
-                api_key=panorama.PANORA_PUBLIC_KEY
+                url=PUBLIC_URL, api_key=panorama.PANORA_PUBLIC_KEY
             )
-            self.assertIsInstance(files, list)
-            self.assertEqual(set(files), self.target_files)
+
+        self.assertIsInstance(files, list)
+        self.assertEqual(set(files), self.target_files)
 
 
     def test_list_panorama_files_full_url(self):
-        test_data_url = 'https://panoramaweb.org/_webdav/Panorama Public/2024/Thermo Fisher Research and Development - 2024_Stellar_Instrument_Platform/Label Free - E. coli/@files/RawFiles/ReplicatesSmall/'
-        target_files = {f'{test_data_url}{file_name}' for file_name in self.target_files}
+        target_files = {f'{PUBLIC_URL}{file_name}' for file_name in self.target_files}
 
         with mock.patch('DIA_QC_report.submodules.panorama.requests.request',
                                  return_value=self._make_mock_response(self.flat_response)):
             files = panorama.list_panorama_files(
-                url='https://panoramaweb.org/_webdav/dummy/path',
+                url=PUBLIC_URL,
                 full_url=True
             )
             self.assertIsInstance(files, list)
@@ -89,56 +125,70 @@ class TestDownloadWebDAVFile(unittest.TestCase):
 
 
     def test_download_with_api_key(self):
-        test_file = 'Sp3_metadata.json'
-        with open(f'{self.data_dir}/metadata/{test_file}', 'rb') as inF:
+        test_file = 'Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv'
+        with open(f'{self.data_dir}/validate_pipeline_params/panorama/{test_file}', 'rb') as inF:
             payload = inF.read()
 
-        with mock.patch('DIA_QC_report.submodules.panorama.requests.Session.get',
-                   return_value=self._fake_response(data=payload)) as mock_get:
-            out_path = panorama.download_webdav_file(
-                f'https://server/_webdav/lab/%40files/{test_file}',
-                dest_path=f'{self.work_dir}/{test_file}',
-                api_key='DUMMY_KEY'
-            )
-
-            # ensure file is written
-            self.assertTrue(os.path.isfile(out_path))
-            with open(out_path, 'rb') as outF:
-                self.assertEqual(outF.read(), payload)
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.submodules.panorama.requests.Session.get',
+                    return_value=self._fake_response(data=payload)) as mock_get:
+                out_path = panorama.download_webdav_file(
+                    PUBLIC_FILE,
+                    dest_path=f'{self.work_dir}/{test_file}',
+                    api_key=panorama.PANORA_PUBLIC_KEY
+                )
 
             # verify the URL passed to get()
             mock_get.assert_called_once_with(
-                f'https://server/_webdav/lab/%40files/{test_file}',
-                headers={'Authorization': 'Basic YXBpa2V5OkRVTU1ZX0tFWQ=='},
-                stream=True,
-                verify=True
+                PUBLIC_FILE,
+                headers={'Authorization': f'Basic {panorama._encode_api_key(panorama.PANORA_PUBLIC_KEY)}'},
+                stream=True, verify=True
             )
+
+        else:
+            if not panorama.have_internet():
+                self.skipTest("Internet connection is required for this test.")
+
+            out_path = panorama.download_webdav_file(
+                PUBLIC_FILE,
+                dest_path=f'{self.work_dir}/{test_file}',
+                api_key=panorama.PANORA_PUBLIC_KEY
+            )
+
+        # ensure file is written
+        self.assertTrue(os.path.isfile(out_path))
+        with open(out_path, 'rb') as outF:
+            self.assertEqual(outF.read(), payload)
 
 
     def test_download_anonymous(self):
-        test_file = 'Sp3_metadata.tsv'
-        with open(f'{self.data_dir}/metadata/{test_file}', 'rb') as inF:
+        test_file = 'Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv'
+        with open(f'{self.data_dir}/validate_pipeline_params/panorama/{test_file}', 'rb') as inF:
             payload = inF.read()
 
-        with mock.patch('DIA_QC_report.submodules.panorama.requests.get',
-                   return_value=self._fake_response(data=payload)) as mock_get:
-            out_path = panorama.download_webdav_file(
-                f'https://server/_webdav/lab/%40files/{test_file}',
-                dest_path=f'{self.work_dir}/{test_file}'
-            )
-
-            # ensure file is written
-            self.assertTrue(os.path.isfile(out_path))
-            with open(out_path, 'rb') as outF:
-                self.assertEqual(outF.read(), payload)
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.submodules.panorama.requests.get',
+                    return_value=self._fake_response(data=payload)) as mock_get:
+                out_path = panorama.download_webdav_file(
+                    PUBLIC_FILE, dest_path=f'{self.work_dir}/{test_file}'
+                )
 
             # verify the URL passed to get()
             mock_get.assert_called_once_with(
-                f'https://server/_webdav/lab/%40files/{test_file}',
-                headers={},
-                stream=True,
-                verify=True
+                PUBLIC_FILE, headers={}, stream=True, verify=True
             )
+        else:
+            if not panorama.have_internet():
+                self.skipTest("Internet connection is required for this test.")
+
+            out_path = panorama.download_webdav_file(
+                PUBLIC_FILE, dest_path=f'{self.work_dir}/{test_file}'
+            )
+
+        # ensure file is written
+        self.assertTrue(os.path.isfile(out_path))
+        with open(out_path, 'rb') as outF:
+            self.assertEqual(outF.read(), payload)
 
 
     def test_download_file_to_string(self):
@@ -153,13 +203,11 @@ class TestDownloadWebDAVFile(unittest.TestCase):
                 return_text=True
             )
 
-            target_text = payload.decode('utf-8')
-            self.assertEqual(file_text, target_text)
+        # verify the URL passed to get()
+        mock_get.assert_called_once_with(
+            f'https://server/_webdav/lab/%40files/{test_file}',
+            headers={}, stream=True, verify=True
+        )
 
-            # verify the URL passed to get()
-            mock_get.assert_called_once_with(
-                f'https://server/_webdav/lab/%40files/{test_file}',
-                headers={},
-                stream=True,
-                verify=True
-            )
+        target_text = payload.decode('utf-8')
+        self.assertEqual(file_text, target_text)

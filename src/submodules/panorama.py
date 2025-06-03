@@ -11,6 +11,29 @@ import requests
 
 PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c510d10'
 
+_LIST_BODY = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<d:propfind xmlns:d="DAV:">'
+    '<d:prop><d:displayname/><d:resourcetype/></d:prop>'
+    '</d:propfind>'
+)
+
+def _encode_api_key(api_key: str) -> str:
+    '''
+    Encode the LabKey API key for use in the HTTP Basic Authorization header.
+
+    Parameters
+    ----------
+    api_key : str
+        LabKey API key.
+
+    Returns
+    -------
+    str
+        Base64-encoded string for the HTTP Basic Authorization header.
+    '''
+    return b64encode(f'apikey:{api_key}'.encode()).decode()
+
 
 def list_panorama_files(
     url: str,
@@ -60,15 +83,7 @@ def list_panorama_files(
     }
 
     if api_key:
-        token = b64encode(f'apikey:{api_key}'.encode()).decode()
-        headers['Authorization'] = f'Basic {token}'
-
-    body = (
-        '<?xml version="1.0" encoding="utf-8"?>'
-        '<d:propfind xmlns:d="DAV:">'
-        '<d:prop><d:displayname/><d:resourcetype/></d:prop>'
-        '</d:propfind>'
-    )
+        headers['Authorization'] = f'Basic {_encode_api_key(api_key)}'
 
     # Send request
     if api_key:
@@ -84,7 +99,7 @@ def list_panorama_files(
         'PROPFIND',
         url,
         headers=headers,
-        data=body,
+        data=_LIST_BODY,
         verify=verify_ssl,
         auth=dummy_auth,
     )
@@ -105,7 +120,7 @@ def list_panorama_files(
     results = list()
     for node in root.findall('d:response', ns):
         href = node.find('d:href', ns).text
-        full_path = unquote(urlparse(href).path)
+        full_path = urlparse(href).path
 
         if full_path == base_path:
             continue
@@ -245,8 +260,7 @@ def webdav_file_exists(
     # Build headers
     headers = dict()
     if api_key:
-        token = b64encode(f'apikey:{api_key}'.encode()).decode()
-        headers['Authorization'] = f'Basic {token}'
+        headers['Authorization'] = f'Basic {_encode_api_key(api_key)}'
 
     # Choose transport
     if api_key:
@@ -275,7 +289,7 @@ def webdav_file_exists(
     raise requests.HTTPError(error_message, response=resp)
 
 
-def have_internet(target = ("8.8.8.8", 53), timeout=3.0):
+def have_internet(target=("8.8.8.8", 53), timeout=3.0):
     ''' Return True if a TCP handshake to target succeeds within timeout.'''
     try:
         with closing(socket.create_connection(target, timeout=timeout)):
@@ -299,3 +313,24 @@ def url_exists(url: str, timeout: float = 5.0) -> bool:
         return r.status_code == 200
     except requests.RequestException:
         return False
+
+
+def download_text_file(url: str, timeout: float = 10.0) -> str:
+    '''
+    Download a text file from the given URL and return its contents as a string.
+
+    Parameters
+    ----------
+    url : str
+        The HTTP(S) URL pointing to the text file.
+    timeout : float
+        How many seconds to wait for the server to send data before giving up.
+
+    Returns
+    -------
+    str
+        The full contents of the file.
+    '''
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+    return response.text
