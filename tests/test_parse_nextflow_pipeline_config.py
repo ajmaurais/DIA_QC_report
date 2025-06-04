@@ -22,13 +22,12 @@ class TestGToPy(unittest.TestCase):
         self.assertEqual(nextflow_pipeline_config._g_to_py('"hi"'), "hi")
 
 
-    def test_brace_list(self):
-        self.assertEqual(nextflow_pipeline_config._g_to_py("{a,b,c}"), ["a", "b", "c"])
-
-
     def test_groovy_list(self):
         self.assertEqual(nextflow_pipeline_config._g_to_py("['x', 'y']"), ["x", "y"])
         self.assertEqual(nextflow_pipeline_config._g_to_py("['https://aurl.com', 'y']"), ["https://aurl.com", "y"])
+        self.assertEqual(nextflow_pipeline_config._g_to_py("['https://example.com/raw/', '/local/dir']"),
+                                                           ['https://example.com/raw/', '/local/dir'])
+
 
 
     def test_groovy_map(self):
@@ -69,14 +68,14 @@ class TestFindParamsBlock(unittest.TestCase):
         tree = nextflow_pipeline_config.parse_and_digest_groovy_content("")
         with self.assertRaises(ValueError) as e:
             nextflow_pipeline_config._find_params_block(tree)
-        self.assertIn('No `params { ... }` block found in the config.', str(e.exception))
+        self.assertIn('No top-level params { ... } block found in the config', str(e.exception))
 
 
     def test_no_params(self):
         tree = nextflow_pipeline_config.parse_and_digest_groovy_content('not_a_params_block { hello = "world" }')
         with self.assertRaises(ValueError) as e:
             nextflow_pipeline_config._find_params_block(tree)
-        self.assertIn('No `params { ... }` block found in the config.', str(e.exception))
+        self.assertIn('No top-level params { ... } block found in the config', str(e.exception))
 
 
     def test_params_block(self):
@@ -85,11 +84,23 @@ class TestFindParamsBlock(unittest.TestCase):
                 input = "data.txt"
                 output = "results.txt"
             }
-             includeConfig '/path/to/another/pipeline.config'
+
+            docker {
+                enabled = true
+            }
+            includeConfig '/path/to/another/pipeline.config'
         '''
         tree = nextflow_pipeline_config.parse_and_digest_groovy_content(config)
         params_tree = nextflow_pipeline_config._find_params_block(tree)
         self.assertIsInstance(params_tree, dict)
+
+        data = nextflow_pipeline_config.parse_params(text=config)
+        self.assertIsInstance(data, dict)
+        self.assertIn('input', data)
+        self.assertIn('output', data)
+        self.assertEqual(data['input'], 'data.txt')
+        self.assertEqual(data['output'], 'results.txt')
+        self.assertEqual(len(data), 2)
 
 
 class TestNodeHasIdentifier(unittest.TestCase):
@@ -114,19 +125,6 @@ class TestNodeHasIdentifier(unittest.TestCase):
             ]
         }
         self.assertFalse(nextflow_pipeline_config._node_has_ident(node, 'baz'))
-
-
-class TestContainsLeaf(unittest.TestCase):
-    def test_contains_leaf(self):
-        node = {
-            'leaf': 'ASSIGN',
-            'children': [
-                {'leaf': 'IDENTIFIER', 'value': 'foo'},
-                {'leaf': 'STRING', 'value': 'bar'}
-            ]
-        }
-        self.assertTrue(nextflow_pipeline_config._contains_leaf(node, 'IDENTIFIER'))
-        self.assertFalse(nextflow_pipeline_config._contains_leaf(node, 'NON_EXISTENT_LEAF'))
 
 
 class TestParseParams(unittest.TestCase):
@@ -180,9 +178,59 @@ class TestParseParams(unittest.TestCase):
                     '''
             } """ % url_str
 
-        with mock.patch('pathlib.Path.read_text', return_value=config):
-            params = nextflow_pipeline_config.parse_params('pipeline.config')
-            self.assertEqual(
-                nextflow_pipeline_config.param_to_list(params['multi_line']),
-                ['/dir/one', url_str]
-            )
+        params = nextflow_pipeline_config.parse_params(text=config)
+        self.assertEqual(
+            nextflow_pipeline_config.param_to_list(params['multi_line']),
+            ['/dir/one', url_str]
+        )
+
+
+    def test_tripple_quoted_string(self):
+        target = {'tripple_quoted': 'text'}
+
+        config_single = "params { tripple_quoted = '''text''' }"
+        config_data = nextflow_pipeline_config.parse_params(text=config_single)
+        self.assertDictEqual(config_data, target)
+
+        config_double = 'params { tripple_quoted = """text""" }'
+        config_data = nextflow_pipeline_config.parse_params(text=config_double)
+        self.assertDictEqual(config_data, target)
+
+
+    def test_parse_nested_identifiers(self):
+        config = '''
+            params {
+                string_list      = ['https://example.com/raw/', '/local/dir']
+            }
+            '''
+
+        target = {
+            'string_list': ['https://example.com/raw/', '/local/dir']
+            }
+
+        config_data = nextflow_pipeline_config.parse_params(text=config)
+        self.assertDictEqual(config_data, target)
+
+
+    def test_dot_and_brace_nesting_identical(self):
+        brace_config = '''
+            params {
+                carafe {
+                    spectra_file         = '/path/to/spectra.mzML'
+                    peptide_results_file = 'results.tsv'
+                }
+            } '''
+
+        dot_config = '''
+            params {
+                carafe.spectra_file         = '/path/to/spectra.mzML'
+                carafe.peptide_results_file = 'results.tsv'
+            } '''
+
+        target = {'carafe': {'spectra_file': '/path/to/spectra.mzML',
+                             'peptide_results_file': 'results.tsv'}}
+
+        brace_data = nextflow_pipeline_config.parse_params(text=brace_config)
+        dot_data = nextflow_pipeline_config.parse_params(text=dot_config)
+        self.assertDictEqual(brace_data, target)
+        self.assertDictEqual(brace_data, dot_data)

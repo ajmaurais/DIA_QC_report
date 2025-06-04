@@ -24,12 +24,22 @@ def _flatten_identifiers(node) -> str:
 
 
 def _src(node) -> str:
-    '''Re-assemble source code for any subtree.'''
-    if isinstance(node, dict):
-        if 'leaf' in node:
-            return node['value']
-        return ''.join(_src(c) for c in node.get('children', []))
-    return ''
+    ''' Walk the AST subtree rooted at *node* and rebuild the Groovy source text. '''
+    if not isinstance(node, dict):
+        return ''
+
+    # leaf token
+    if 'leaf' in node:
+        leaf_type = node['leaf']
+        value     = node['value']
+
+        if leaf_type == 'STRING_LITERAL':
+            if '\n' in value:
+                return "'''{}'''".format(value)
+            return "'" + value + "'"
+
+        return value
+    return ''.join(_src(child) for child in node.get('children', []))
 
 
 def _split_top(expr: str, delimiter: str):
@@ -119,30 +129,30 @@ def _parse_map(body: str):
 
 
 def _g_to_py(src: str):
-    '''
-    Convert a Groovy literal to its Python equivalent.
-    Falls back to the raw text when not valid Python after conversion.
-    '''
+    """
+    Convert a Groovy literal string to its Python equivalent.
+
+    * Square-bracket text is a MAP iff it has a *top-level* colon,
+      otherwise it is treated as a LIST.
+    * Groovy booleans / null are mapped to Python.
+    * Everything else falls back to ast.literal_eval or raw string.
+    """
     src = src.strip()
 
-    # 0. Braced literal: decide between map and brace-list
-    if (src.startswith('{') and src.endswith('}')) or \
-       (src.startswith('[') and src.endswith(']')):
-
+    if src.startswith('[') and src.endswith(']'):
         body = src[1:-1]
+        if _has_top_level_colon(body):
+            return _parse_map(body)
 
-        if _has_top_level_colon(body):          # ← new robust test
-            return _parse_map(body)             # treat as MAP
+        parts = [p.strip() for p in _split_top(body, ',') if p.strip()]
+        return [_g_to_py(p) for p in parts]
 
-        # otherwise treat as brace-list {a,b,c}
-        items = [s.strip() for s in _split_top(body, ',') if s.strip()]
-        return [_g_to_py(item) for item in items]
+    if src.startswith('{') and src.endswith('}') and _has_top_level_colon(src[1:-1]):
+        return _parse_map(src[1:-1])
 
-    # 1. Replace Groovy booleans / null
     for pat, repl in _GROOVY_BOOL_NULL.items():
         src = re.sub(pat, repl, src)
 
-    # 2. Evaluate if now valid Python, else return raw string
     try:
         return ast.literal_eval(src)
     except Exception:
