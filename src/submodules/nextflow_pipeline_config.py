@@ -3,6 +3,51 @@ from groovy_parser.parser import parse_and_digest_groovy_content
 import ast, pathlib, re
 from typing import Any, Dict, List
 
+QUANT_SPECTRA_SCHEMA = {
+    "oneOf": [
+        {
+            "type": "string",
+            'minProperties': 1
+        },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+            'minProperties': 1
+        },
+        {
+            "type": "object",
+            "additionalProperties": {
+                "oneOf": [
+                    {
+                        "type": "string",
+                        'minProperties': 1
+                    },
+                    {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        'minProperties': 1
+                    },
+                ]
+            },
+            'minProperties': 1
+        },
+    ],
+}
+
+CHROM_SPECTRA_SCHEMA = {
+    "oneOf": [
+        {
+            "type": "string",
+            'minProperties': 1
+        },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+            'minProperties': 1
+        }
+    ]
+}
+
 _GROOVY_BOOL_NULL = {
     re.compile(r'\btrue\b'):  'True',
     re.compile(r'\bfalse\b'): 'False',

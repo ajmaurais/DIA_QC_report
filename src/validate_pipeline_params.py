@@ -16,7 +16,8 @@ from jsonschema import validate, ValidationError
 from requests import HTTPError
 from pandas import isna as pd_isna
 
-from .submodules import nextflow_pipeline_config
+from .submodules.nextflow_pipeline_config import parse_params
+from .submodules.nextflow_pipeline_config import QUANT_SPECTRA_SCHEMA, CHROM_SPECTRA_SCHEMA
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, download_webdav_file
 from .submodules.panorama import download_text_file
@@ -28,52 +29,6 @@ COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-
 
 DEFAULT_PIPELINE = 'mriffle/nf-skyline-dia-ms'
 DEFAULT_PIPELINE_REVISION = 'main'
-
-QUANT_SPECTRA_SCHEMA = {
-    "oneOf": [
-        {
-            "type": "string",
-            'minProperties': 1
-        },
-        {
-            "type": "array",
-            "items": {"type": "string"},
-            'minProperties': 1
-        },
-        {
-            "type": "object",
-            "additionalProperties": {
-                "oneOf": [
-                    {
-                        "type": "string",
-                        'minProperties': 1
-                    },
-                    {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        'minProperties': 1
-                    },
-                ]
-            },
-            'minProperties': 1
-        },
-    ],
-}
-
-CHROM_SPECTRA_SCHEMA = {
-    "oneOf": [
-        {
-            "type": "string",
-            'minProperties': 1
-        },
-        {
-            "type": "array",
-            "items": {"type": "string"},
-            'minProperties': 1
-        }
-    ]
-}
-
 
 def merge_params(lhs, rhs):
     ''' Recursively “add” two params dicts together.  '''
@@ -338,7 +293,7 @@ def validate_config_files(config_paths, schema_path):
         if config_path.startswith('http://') or config_path.startswith('https://'):
             try:
                 config_text = download_text_file(config_path)
-                this_config = nextflow_pipeline_config.parse_params(text=config_text)
+                this_config = parse_params(text=config_text)
             except HTTPError as e:
                 LOGGER.error(f'Error downloading pipeline config file {config_path}: {e}')
                 all_good = False
@@ -347,7 +302,7 @@ def validate_config_files(config_paths, schema_path):
             if not os.path.exists(config_path):
                 LOGGER.error(f'Pipeline config file {config_path} does not exist.')
                 all_good = False
-            this_config = nextflow_pipeline_config.parse_params(file=config_path)
+            this_config = parse_params(file=config_path)
 
         config_data = merge_params(config_data, this_config)
 
@@ -381,7 +336,6 @@ class Replicate:
     '''
     Class representing a single replicate in the metadata.
     '''
-
     def __init__(self, name, batch=None):
         self.name = name
         self.batch = batch
