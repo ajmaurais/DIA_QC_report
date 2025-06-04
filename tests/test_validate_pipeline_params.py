@@ -5,6 +5,7 @@ import os
 from functools import partial
 import re
 import pandas as pd
+import random
 
 from DIA_QC_report import validate_pipeline_params
 from DIA_QC_report.submodules.panorama import url_exists, have_internet
@@ -376,7 +377,7 @@ class TestParseInputFiles(unittest.TestCase):
                     )
 
 
-class TestValidateMetadataParams(unittest.TestCase):
+class ValidateMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):
     def setUp(self):
         self.data_dir = f'{setup_functions.TEST_DIR}/data'
 
@@ -386,22 +387,13 @@ class TestValidateMetadataParams(unittest.TestCase):
             df = pd.read_csv(f'{self.data_dir}/skyline_reports/{project}_replicate_quality.tsv', sep='\t')
             self.project_replicates[project] = df['FileName'].tolist()
 
-        self.project_metadata = {}
-        for project in self.projects:
-            metadata_reader = Metadata()
-            metadata_reader.read(f'{self.data_dir}/metadata/{project}_metadata.tsv')
-            self.project_metadata[project] = metadata_reader.df
-
         metadata_reader = Metadata()
         metadata_reader.read(f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv')
         self.combined_metadata = metadata_reader.df
+        # self.metadata_types = metadata_reader.types
 
 
-    def assertInLog(self, message, cm):
-        self.assertTrue(any(message in m for m in cm.output),
-                        f"Expected log message '{message}' not found in {cm.output}")
-
-
+class TestValidateMetadataParams(ValidateMetadata):
     def test_missing_color_var(self):
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
@@ -449,3 +441,140 @@ class TestValidateMetadataParams(unittest.TestCase):
             )
         self.assertFalse(success)
         self.assertInLog("Control value 'notACellLine' for key 'cellLine' not found in metadata.", cm)
+
+
+class TestValidateMetadataReps(ValidateMetadata):
+    def test_duplicate_replicate(self):
+        random.seed(40)
+        duplicate_rep = random.choice(self.project_replicates['Sp3'])
+        self.project_replicates['Strap'].append(duplicate_rep)
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata
+            )
+        self.assertInLog(f"Replicate '{duplicate_rep}' is duplicated 1 time in quant_spectra_dir.", cm)
+        self.assertFalse(success)
+
+
+    def test_duplicate_replicate_flat(self):
+        random.seed(12)
+        duplicate_rep = random.choice(self.project_replicates['Strap'])
+        project_reps_flat = {None: self.project_replicates['Strap']}
+
+        n_duplicates = random.randint(1, 5)
+        for _ in range(n_duplicates):
+            project_reps_flat[None].append(duplicate_rep)
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                project_reps_flat, self.combined_metadata
+            )
+        self.assertInLog(f"Replicate '{duplicate_rep}' is duplicated {n_duplicates} times in quant_spectra_dir.", cm)
+        self.assertFalse(success)
+
+
+    def test_extra_metadata_reps(self):
+        project_reps_flat = {None: self.project_replicates['Strap']}
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                project_reps_flat, self.combined_metadata
+            )
+        self.assertInLog("There are 20 replicates in the metadata that are not in quant_spectra_dir", cm)
+        self.assertTrue(success)
+
+
+    def test_missing_metadata_rep(self):
+        random.seed(7)
+        remove_reps = set(random.sample(self.combined_metadata['Replicate'].drop_duplicates().to_list(), 2))
+        metadata_df = self.combined_metadata.loc[~self.combined_metadata['Replicate'].isin(remove_reps)]
+        metadata_df = metadata_df.reset_index(drop=True)
+
+        # test with strict=True
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, metadata_df, strict=True
+            )
+        for rep in remove_reps:
+            self.assertInLog(f":Replicate '{rep}' in quant_spectra_dir is not present in the metadata.", cm)
+        self.assertFalse(success)
+
+        # test with strict=False
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, metadata_df, strict=False
+            )
+        for rep in remove_reps:
+            self.assertInLog(f":Replicate '{rep}' in quant_spectra_dir is not present in the metadata.", cm)
+        self.assertTrue(success)
+
+
+    def test_duplicate_metadata_value(self):
+        random.seed(12)
+        i = random.randint(0, len(self.combined_metadata.index) - 1)
+        new_row = self.combined_metadata.loc[i].to_list()
+        new_row[2] = 'NewValue'
+        metadata_df = self.combined_metadata
+        metadata_df.loc[len(metadata_df.index)] = new_row
+
+        # test with strict=True
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, metadata_df, strict=True
+            )
+        self.assertInLog(f"Replicate '{new_row[0]}' already has metadata key '{new_row[1]}'. Overwriting with value '{new_row[2]}'.", cm)
+        self.assertInLog('Duplicate metadata keys found in replicates.', cm)
+        self.assertFalse(success)
+
+        # test with strict=False
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, metadata_df, strict=False
+            )
+        self.assertInLog(f"Replicate '{new_row[0]}' already has metadata key '{new_row[1]}'. Overwriting with value '{new_row[2]}'.", cm)
+        self.assertNotInLog('Duplicate metadata keys found in replicates.', cm)
+        self.assertTrue(success)
+
+
+    def test_missing_metadata_value(self):
+        random.seed(7)
+
+        color_vars = ['cellLine', 'experiment']
+        metadata_df = self.combined_metadata
+        remove_index = random.sample(
+            metadata_df[metadata_df['annotationKey'].isin(color_vars)].index.to_list(),
+            random.randint(1, min(len(metadata_df.index), 5))
+        )
+        removed_reps = metadata_df.loc[remove_index].to_dict()
+        metadata_df = metadata_df.drop(remove_index).reset_index(drop=True)
+
+        # test with strict=True
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, metadata_df,
+                color_vars=color_vars, strict=True
+            )
+        self.assertFalse(success)
+        for i in remove_index:
+            self.assertInLog(
+                "Replicate '{}' is missing metadata key '{}' from 'color_vars' parameter.".format(
+                    removed_reps['Replicate'][i],
+                    removed_reps['annotationKey'][i]),
+                cm
+            )
+
+        # test with strict=False
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, metadata_df,
+                color_vars=color_vars, strict=False
+            )
+        self.assertTrue(success)
+        for i in remove_index:
+            self.assertInLog(
+                "Replicate '{}' is missing metadata key '{}' from 'color_vars' parameter.".format(
+                    removed_reps['Replicate'][i],
+                    removed_reps['annotationKey'][i]),
+                cm
+            )

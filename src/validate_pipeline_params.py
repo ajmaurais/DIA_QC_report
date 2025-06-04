@@ -375,51 +375,6 @@ def validate_config_files(config_paths, schema_path):
     return True, config_data
 
 
-def _validate_metadata_params(
-    metadata_df,
-    color_vars=None, batch1=None, batch2=None,
-    control_key=None, control_values=None
-):
-    if (control_key is None) != (control_values is None):
-        LOGGER.error("Both 'control_key' and 'color_vars' must be specified or both omitted.")
-        return False
-
-    # Check that metadata parameters match in replicate metadata
-    meta_params = {}
-    if color_vars is not None:
-        meta_params = {var: 'color_vars' for var in color_vars}
-    other_vars = {batch1: 'batch1', batch2: 'batch2', control_key: 'control_key'}
-    for var, name in other_vars.items():
-        if var is not None:
-            meta_params[var] = name
-
-    if metadata_df is None:
-        if len(meta_params) > 0:
-            LOGGER.warning('Replicate metadata is None, but metadata parameters are specified.')
-        for var, name in meta_params.items():
-            if var is not None:
-                LOGGER.error(f"Parameter {name} = '{var}' will be ignored.")
-    else:
-        all_meta_vard_good = True
-        df_meta_vars = set(metadata_df['annotationKey'].to_list())
-        for var, name in meta_params.items():
-            if var is not None and var not in df_meta_vars:
-                LOGGER.error(f"Metadata variable '{var}' from '{name}' parameter not found in metadata.")
-                all_meta_vard_good = False
-
-        if control_values:
-            df_control_values = set(metadata_df[metadata_df['annotationKey'] == control_key]['annotationValue'].to_list())
-            for param_value in control_values:
-                if param_value not in df_control_values:
-                    LOGGER.error(f"Control value '{param_value}' for key '{control_key}' not found in metadata.")
-                    all_meta_vard_good = False
-
-        if not all_meta_vard_good:
-            return False
-        LOGGER.info('All metadata parameters are present in replicate metadata.')
-        return True
-
-
 class Replicate:
     '''
     Class representing a single replicate in the metadata.
@@ -445,7 +400,8 @@ def validate_metadata(
     ms_files, metadata_df,
     color_vars=None, batch1=None, batch2=None,
     control_key=None, control_values=None,
-    strict=True
+    write_replicate_report=False, write_metadata_report=False,
+    report_format='json', strict=True
 ):
     '''
     Validate metadata against the provided parameters.
@@ -473,26 +429,64 @@ def validate_metadata(
         True if metadata is valid, False otherwise.
     '''
 
-    if not _validate_metadata_params(
-        metadata_df, color_vars=color_vars, batch1=batch1, batch2=batch2,
-        control_key=control_key, control_values=control_values
-    ):
+    if (control_key is None) != (control_values is None):
+        LOGGER.error("Both 'control_key' and 'color_vars' must be specified or both omitted.")
         return False
+
+    ###### Validate metadata_df ######
+
+    # Check that metadata parameters match in replicate metadata
+    meta_params = {}
+    if color_vars is not None:
+        meta_params = {var: 'color_vars' for var in color_vars}
+    other_vars = {batch1: 'batch1', batch2: 'batch2', control_key: 'control_key'}
+    for var, name in other_vars.items():
+        if var is not None:
+            meta_params[var] = name
+
+    if metadata_df is None:
+        if len(meta_params) > 0:
+            LOGGER.warning('Replicate metadata is None, but metadata parameters are specified.')
+        for var, name in meta_params.items():
+            if var is not None:
+                LOGGER.error(f"Parameter {name} = '{var}' will be ignored.")
+    else:
+        all_meta_vars_good = True
+        df_meta_vars = set(metadata_df['annotationKey'].to_list())
+        for var, name in meta_params.items():
+            if var is not None and var not in df_meta_vars:
+                LOGGER.error(f"Metadata variable '{var}' from '{name}' parameter not found in metadata.")
+                all_meta_vars_good = False
+
+        if control_values:
+            df_control_values = set(metadata_df[metadata_df['annotationKey'] == control_key]['annotationValue'].to_list())
+            for param_value in control_values:
+                if param_value not in df_control_values:
+                    LOGGER.error(f"Control value '{param_value}' for key '{control_key}' not found in metadata.")
+                    all_meta_vars_good = False
+
+        if not all_meta_vars_good:
+            return False
+        LOGGER.info('All metadata parameters are present in replicate metadata.')
+
+    ###### Validate replicates ######
 
     # make sure that there are not duplicated replicates
     rep_counts = Counter(rep for batch_files in ms_files.values() for rep in batch_files)
     if any(count > 1 for count in rep_counts.values()):
         for rep, count in rep_counts.items():
             if count > 1:
-                LOGGER.error(f"Replicate '{rep}' is duplicated {count} times in quant_spectra_dir.")
+                LOGGER.error("Replicate '%s' is duplicated %d time%s in quant_spectra_dir.",
+                             rep, count - 1, 's' if count > 2 else '')
         return False
 
     replicates = {}
     for batch_name, files in ms_files.items():
         for file_name in files:
-            replicates[file_name] = Replicate(file_name, batch=batch_name)
+            rep_name = os.path.splitext(file_name)[0]
+            replicates[rep_name] = Replicate(file_name, batch=batch_name)
 
-    metadata_reps = set(metadata_df['replicateName'].to_list())
+    metadata_reps = set(metadata_df['Replicate'].to_list())
     ms_file_reps = set(replicates.keys())
 
     # Warn if there are extra replicates in the metadata
@@ -512,6 +506,39 @@ def validate_metadata(
         return False
 
     # Add metadata to replicates
+    meta_vars_unique = True
+    for row in metadata_df.itertuples():
+        if row.Replicate in replicates:
+            if row.annotationKey in replicates[row.Replicate].metadata:
+                _log_warn_error(
+                    "Replicate '%s' already has metadata key '%s'. "
+                    "Overwriting with value '%s'.",
+                    row.Replicate, row.annotationKey, row.annotationValue,
+                    warning=not strict
+                )
+                meta_vars_unique = False
+
+            replicates[row.Replicate].metadata[row.annotationKey] = row.annotationValue
+
+    if not meta_vars_unique and strict:
+        LOGGER.error('Duplicate metadata keys found in replicates.')
+        return False
+
+    # Check that all replicates have the required metadata
+    all_reps_good = True
+    for rep_name, rep in replicates.items():
+        for var, name in meta_params.items():
+            if var not in rep.metadata:
+                _log_warn_error(
+                    "Replicate '%s' is missing metadata key '%s' from '%s' parameter.",
+                    rep_name, var, name, warning=not strict
+                )
+                all_reps_good = False
+
+    if not all_reps_good and strict:
+        return False
+
+    return True
 
 
 def parse_args(argv, prog=None):
@@ -740,14 +767,14 @@ def _main(args):
         control_key = _get_config_path(config_data, ['qc_report', 'control_key'])
         control_values = _get_config_path(config_data, ['qc_report', 'control_values'])
 
-        quant_spectra_param = config_data.get('quant_spectra_dir', None)
-        chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir', None)
-        metadata_path = config_data.get('metadata_file', None)
+        quant_spectra_param = config_data.get('quant_spectra_dir')
+        chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir')
+        metadata_path = config_data.get('metadata_file')
 
-        quant_spectra_regex = config_data.get('quant_spectra_regex', None)
-        quant_spectra_glob = config_data.get('quant_spectra_glob', None)
-        chromatogram_library_spectra_regex = config_data.get('chromatogram_library_spectra_regex', None)
-        chromatogram_library_spectra_glob = config_data.get('chromatogram_library_spectra_glob', None)
+        quant_spectra_regex = config_data.get('quant_spectra_regex')
+        quant_spectra_glob = config_data.get('quant_spectra_glob')
+        chromatogram_library_spectra_regex = config_data.get('chromatogram_library_spectra_regex')
+        chromatogram_library_spectra_glob = config_data.get('chromatogram_library_spectra_glob')
 
     elif args.subcommand == 'params':
         color_vars = args.color_vars

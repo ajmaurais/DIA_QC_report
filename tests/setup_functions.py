@@ -111,6 +111,16 @@ class AbstractTestsBase(ABC):
             self.fail(str(e))
 
 
+    def assertInLog(self, message, cm):
+        self.assertTrue(any(message in m for m in cm.output),
+                        f"Expected log message '{message}' not found in {cm.output}")
+
+
+    def assertNotInLog(self, message, cm):
+        self.assertFalse(any(message in m for m in cm.output),
+                         f"Expected log message '{message}' not found in {cm.output}")
+
+
     def assertDataDictEqual(self, lhs, rhs, places=6, col_deltas=None):
         '''
         Check that 2 dictionaries having the format {'rep_name': {<var_name>: <value>, ...}, ...}
