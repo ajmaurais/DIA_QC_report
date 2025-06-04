@@ -14,12 +14,14 @@ from collections import Counter
 
 from jsonschema import validate, ValidationError
 from requests import HTTPError
+from pandas import isna as pd_isna
 
 from .submodules import nextflow_pipeline_config
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, download_webdav_file
 from .submodules.panorama import download_text_file
 from .submodules.read_metadata import Metadata
+from .submodules.dtype import Dtype
 from .submodules.logger import LOGGER
 
 COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-ms pipeline.'
@@ -389,6 +391,106 @@ class Replicate:
         return f'Replicate(name={self.name}, metadata={self.metadata})'
 
 
+def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
+                           output_path='metadata_report.json'):
+    '''
+    Write a report of metadata parameters and their types to a file.
+
+    Parameters
+    ----------
+    meta_params : dict
+        Dictionary of metadata parameters.
+    metadata_types : dict
+        Dictionary of metadata variable names to their dtypes.
+    rep_na_counts : dict
+        Dictionary mapping variables to the number of missing values in replicates.
+    n_reps : int
+        Total number of replicates.
+    output_path : str, optional
+        Path to the output report file. Default is 'metadata_report.json'.
+
+    Raises
+    ------
+    ValueError
+        If the output report format is not 'json' or 'tsv'.
+    '''
+    if len(meta_params) == 0:
+        LOGGER.warning('No metadata parameters to report.')
+        return
+
+    report_data = []
+    for var, name in meta_params.items():
+        if var not in metadata_types:
+            raise ValueError(f"Missing metadata type for variable '{var}'.")
+        if var not in rep_na_counts:
+            raise ValueError(f"Missing NA counts for variable '{var}'.")
+
+        report_data[-1].append({
+            'variable': var,
+            'parameter': name,
+            'type': str(metadata_types[var]),
+            'missing_in_n_replicates': rep_na_counts[var],
+            'found_in_n_replicates': n_reps - rep_na_counts[var]
+        })
+
+    report_ext = os.path.splitext(output_path)[1].lower()
+    if report_ext == '.json':
+        with open(output_path, 'w') as outF:
+            json.dump(report_data, outF, indent=4)
+    elif report_ext == '.tsv':
+        with open(output_path, 'w') as outF:
+            outF.write('\t'.join(report_data[0].keys()))
+            outF.write('\n')
+            for row in report_data:
+                outF.write('\t'.join(str(value) for value in row.values()))
+                outF.write('\n')
+    else:
+        raise ValueError("Output report format must be either 'json' or 'tsv'.")
+
+
+def _write_replicate_report(replicates, output_path='replicate_report.json'):
+    '''
+    Write a report of replicate names and linked metadata.
+
+    Parameters
+    ----------
+    replicates : dict
+        Dictionary mapping replicate names to Replicate objects.
+    output_path : str, optional
+        Path to the output report file. Default is 'replicate_report.json'.
+    '''
+    metadata_names = set(key for rep in replicates.values() for key in rep.metadata.keys())
+    if 'ParameterBatch' in metadata_names:
+        i = 1
+        while f'ParameterBatch_{i}' in metadata_names:
+            i += 1
+
+        LOGGER.warning("'ParameterBatch' is a reserved column header name. "
+                       f"It will be changed to 'ParameterBatch_{i}' in the report.")
+        for rep in replicates.values():
+            rep.metadata[f'ParameterBatch_{i}'] = rep.metadata.pop('ParameterBatch', rep.batch)
+
+    report_data = []
+    for rep_name, rep in replicates.items():
+        report_data.append({'ParameterBatch': rep.batch, 'Replicate': rep_name})
+        for key, value in rep.metadata.items():
+            report_data[-1][key] = value
+
+    report_ext = os.path.splitext(output_path)[1].lower()
+    if report_ext == '.json':
+        with open(output_path, 'w') as outF:
+            json.dump(report_data, outF, indent=4)
+    elif report_ext == '.tsv':
+        with open(output_path, 'w') as outF:
+            outF.write('\t'.join(report_data[0].keys()))
+            outF.write('\n')
+            for row in report_data:
+                outF.write('\t'.join(str(value) for value in row.values()))
+                outF.write('\n')
+    else:
+        raise ValueError("Output report format must be either 'json' or 'tsv'.")
+
+
 def _log_warn_error(message, *args, warning=True):
     if warning:
         LOGGER.warning(message, *args)
@@ -397,7 +499,7 @@ def _log_warn_error(message, *args, warning=True):
 
 
 def validate_metadata(
-    ms_files, metadata_df,
+    ms_files, metadata_df, metadata_types,
     color_vars=None, batch1=None, batch2=None,
     control_key=None, control_values=None,
     write_replicate_report=False, write_metadata_report=False,
@@ -412,6 +514,8 @@ def validate_metadata(
         Dictionary mapping batch names to lists of MS file names.
     metadata_df : pandas.DataFrame
         DataFrame containing metadata for the MS files.
+    metadata_types : dict
+        Dictionary mapping metadata variable names to their dtypes.
     color_vars : list of str, optional
         List of metadata variables to use for coloring PCA plots.
     batch1 : str, optional
@@ -422,6 +526,15 @@ def validate_metadata(
         Metadata key indicating control samples.
     control_values : list of str, optional
         List of metadata values indicating control samples.
+    write_replicate_report : bool, optional
+        Write a report of replicate annotations to a file.
+    write_metadata_report : bool, optional
+        Write a summary of metadata parameters to a file.
+    report_format : str, optional
+        Format of the report files. Either 'tsv', or 'json'. Default is 'json'.
+    strict : bool, optional
+        If True, any validation problems which will not cause the pipeline to fail,
+        but are likely to result in unintended behavior, will be logged as errors.
 
     Returns
     -------
@@ -446,17 +559,24 @@ def validate_metadata(
 
     if metadata_df is None:
         if len(meta_params) > 0:
-            LOGGER.warning('Replicate metadata is None, but metadata parameters are specified.')
-        for var, name in meta_params.items():
-            if var is not None:
-                LOGGER.error(f"Parameter {name} = '{var}' will be ignored.")
+            LOGGER.error('Replicate metadata is None, but metadata parameters are specified.')
+            for var, name in meta_params.items():
+                if var is not None:
+                    LOGGER.error("Without a metadata file, parameter %s = '%s' will cause an error.", name, var)
+            return False
+
     else:
+        if metadata_types is None:
+            raise ValueError('metadata_types must be provided if metadata_df is not None.')
+
         all_meta_vars_good = True
-        df_meta_vars = set(metadata_df['annotationKey'].to_list())
         for var, name in meta_params.items():
-            if var is not None and var not in df_meta_vars:
-                LOGGER.error(f"Metadata variable '{var}' from '{name}' parameter not found in metadata.")
+            if var not in metadata_types:
+                LOGGER.error("Metadata variable '%s' from '%s' parameter not found in metadata.", var, name)
                 all_meta_vars_good = False
+                continue
+            if metadata_types[var] is Dtype.NULL:
+                LOGGER.warning("All values for metadata variable '%s' from '%s' parameter are NULL.", var, name)
 
         if control_values:
             df_control_values = set(metadata_df[metadata_df['annotationKey'] == control_key]['annotationValue'].to_list())
@@ -526,6 +646,7 @@ def validate_metadata(
 
     # Check that all replicates have the required metadata
     all_reps_good = True
+    rep_na_counts = {var: 0 for var in meta_params.keys()}
     for rep_name, rep in replicates.items():
         for var, name in meta_params.items():
             if var not in rep.metadata:
@@ -534,9 +655,35 @@ def validate_metadata(
                     rep_name, var, name, warning=not strict
                 )
                 all_reps_good = False
+                continue
+
+            value_empty = pd_isna(rep.metadata[var]) or rep.metadata[var] is None or rep.metadata[var] == ''
+            if value_empty and metadata_types[var] is not Dtype.NULL:
+                rep_na_counts[var] += 1
 
     if not all_reps_good and strict:
         return False
+
+    # Log missing metadata values
+    for var, count in rep_na_counts.items():
+        if count > 0:
+            LOGGER.warning("%s variable '%s' is missing in %d of %d replicates.",
+                           metadata_types[var].name, var, count, len(replicates))
+
+    # Write metadata report
+    if write_metadata_report and len(meta_params) > 0:
+        output_path = f'metadata_report.{report_format}'
+        _write_metadata_report(
+            meta_params, metadata_types, rep_na_counts,
+            len(replicates), output_path=f'metadata_report.{report_format}'
+        )
+        LOGGER.info(f'Metadata report written to {output_path}')
+
+    # Write replicate report
+    if write_replicate_report:
+        output_path = f'replicate_report.{report_format}'
+        _write_replicate_report(replicates, output_path=output_path)
+        LOGGER.info(f'Replicate report written to {output_path}')
 
     return True
 

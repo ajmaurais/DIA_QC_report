@@ -390,14 +390,42 @@ class ValidateMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):
         metadata_reader = Metadata()
         metadata_reader.read(f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv')
         self.combined_metadata = metadata_reader.df
-        # self.metadata_types = metadata_reader.types
+        self.metadata_types = metadata_reader.types
 
 
 class TestValidateMetadataParams(ValidateMetadata):
+    def test_missing_metadata_file(self):
+        color_vars=['cellLine', 'experiment']
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, None, None, color_vars=color_vars
+            )
+
+        self.assertFalse(success)
+        self.assertInLog('Replicate metadata is None, but metadata parameters are specified.', cm)
+        for var in color_vars:
+            self.assertInLog(f"Without a metadata file, parameter color_vars = '{var}' will cause an error.", cm)
+
+
+    def test_all_null_metadata_var(self):
+        reader = Metadata()
+        reader.read(f'{self.data_dir}/metadata/Strap_missing_multi_var_metadata.json')
+        reps = {None: self.project_replicates['Strap']}
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                reps, reader.df, reader.types, color_vars=['na_var']
+            )
+        self.assertTrue(success)
+        self.assertInLog("All values for metadata variable 'na_var' from 'color_vars' parameter are NULL.", cm)
+
+
     def test_missing_color_var(self):
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, self.combined_metadata, color_vars=['missing_color_var']
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                color_vars=['missing_color_var']
             )
 
         self.assertFalse(success)
@@ -407,7 +435,8 @@ class TestValidateMetadataParams(ValidateMetadata):
     def test_missing_batch_var(self):
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, self.combined_metadata, batch1='notABatch'
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                batch1='notABatch'
             )
 
         self.assertFalse(success)
@@ -417,7 +446,8 @@ class TestValidateMetadataParams(ValidateMetadata):
     def test_only_control_key(self):
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, self.combined_metadata, control_key='cellLine'
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                control_key='cellLine'
             )
         self.assertFalse(success)
         self.assertInLog("Both 'control_key' and 'color_vars' must be specified or both omitted.", cm)
@@ -426,7 +456,7 @@ class TestValidateMetadataParams(ValidateMetadata):
     def test_missing_control_key(self):
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, self.combined_metadata,
+                self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='notAVar', control_values=['T47D', 'HeLa']
             )
         self.assertFalse(success)
@@ -436,7 +466,7 @@ class TestValidateMetadataParams(ValidateMetadata):
     def test_missing_control_values(self):
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, self.combined_metadata,
+                self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='cellLine', control_values=['notACellLine']
             )
         self.assertFalse(success)
@@ -451,7 +481,7 @@ class TestValidateMetadataReps(ValidateMetadata):
 
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, self.combined_metadata
+                self.project_replicates, self.combined_metadata, self.metadata_types
             )
         self.assertInLog(f"Replicate '{duplicate_rep}' is duplicated 1 time in quant_spectra_dir.", cm)
         self.assertFalse(success)
@@ -468,7 +498,7 @@ class TestValidateMetadataReps(ValidateMetadata):
 
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                project_reps_flat, self.combined_metadata
+                project_reps_flat, self.combined_metadata, self.metadata_types
             )
         self.assertInLog(f"Replicate '{duplicate_rep}' is duplicated {n_duplicates} times in quant_spectra_dir.", cm)
         self.assertFalse(success)
@@ -479,7 +509,7 @@ class TestValidateMetadataReps(ValidateMetadata):
 
         with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
             success = validate_pipeline_params.validate_metadata(
-                project_reps_flat, self.combined_metadata
+                project_reps_flat, self.combined_metadata, self.metadata_types
             )
         self.assertInLog("There are 20 replicates in the metadata that are not in quant_spectra_dir", cm)
         self.assertTrue(success)
@@ -494,7 +524,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         # test with strict=True
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, metadata_df, strict=True
+                self.project_replicates, metadata_df, self.metadata_types,
+                strict=True
             )
         for rep in remove_reps:
             self.assertInLog(f":Replicate '{rep}' in quant_spectra_dir is not present in the metadata.", cm)
@@ -503,7 +534,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         # test with strict=False
         with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, metadata_df, strict=False
+                self.project_replicates, metadata_df, self.metadata_types,
+                strict=False
             )
         for rep in remove_reps:
             self.assertInLog(f":Replicate '{rep}' in quant_spectra_dir is not present in the metadata.", cm)
@@ -521,7 +553,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         # test with strict=True
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, metadata_df, strict=True
+                self.project_replicates, metadata_df, self.metadata_types,
+                strict=True
             )
         self.assertInLog(f"Replicate '{new_row[0]}' already has metadata key '{new_row[1]}'. Overwriting with value '{new_row[2]}'.", cm)
         self.assertInLog('Duplicate metadata keys found in replicates.', cm)
@@ -530,7 +563,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         # test with strict=False
         with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, metadata_df, strict=False
+                self.project_replicates, metadata_df, self.metadata_types,
+                strict=False
             )
         self.assertInLog(f"Replicate '{new_row[0]}' already has metadata key '{new_row[1]}'. Overwriting with value '{new_row[2]}'.", cm)
         self.assertNotInLog('Duplicate metadata keys found in replicates.', cm)
@@ -552,7 +586,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         # test with strict=True
         with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, metadata_df,
+                self.project_replicates, metadata_df, self.metadata_types,
                 color_vars=color_vars, strict=True
             )
         self.assertFalse(success)
@@ -567,7 +601,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         # test with strict=False
         with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
             success = validate_pipeline_params.validate_metadata(
-                self.project_replicates, metadata_df,
+                self.project_replicates, metadata_df, self.metadata_types,
                 color_vars=color_vars, strict=False
             )
         self.assertTrue(success)
