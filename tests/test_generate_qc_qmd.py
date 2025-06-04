@@ -100,6 +100,7 @@ class TestMissingMetadata(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
+        setup_functions.remove_test_dir(f'{cls.work_dir}/pdf_tab_test_files', recursive=True)
         cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
                                                            cls.work_dir,
                                                            cls.TEST_PROJECT,
@@ -414,7 +415,6 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
 
 class TestProjectOption(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.render_qmd = os.getenv('RENDER_QMD', 'False').lower() == 'true'
