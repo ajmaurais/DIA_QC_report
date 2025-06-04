@@ -346,7 +346,7 @@ class Replicate:
 
 
 def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
-                           output_path='metadata_report.json'):
+                           output_path='metadata_validation_report.json'):
     '''
     Write a report of metadata parameters and types to a file.
 
@@ -361,7 +361,7 @@ def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
     n_reps : int
         Total number of replicates.
     output_path : str, optional
-        Path to the output report file. Default is 'metadata_report.json'.
+        Path to the output report file. Default is 'metadata_validation_report.json'.
 
     Raises
     ------
@@ -402,7 +402,7 @@ def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
         raise ValueError("Output report format must be either 'json' or 'tsv'.")
 
 
-def _write_replicate_report(replicates, output_path='replicate_report.json'):
+def _write_replicate_report(replicates, output_path='replicate_validation_report.json'):
     '''
     Write a report of replicate names and linked metadata.
 
@@ -411,7 +411,7 @@ def _write_replicate_report(replicates, output_path='replicate_report.json'):
     replicates : dict
         Dictionary mapping replicate names to Replicate objects.
     output_path : str, optional
-        Path to the output report file. Default is 'replicate_report.json'.
+        Path to the output report file. Default is 'replicate_validation_report.json'.
     '''
     metadata_names = set(key for rep in replicates.values() for key in rep.metadata.keys())
     if 'ParameterBatch' in metadata_names:
@@ -627,7 +627,7 @@ def validate_metadata(
 
     # Write metadata report
     if write_metadata_report and len(meta_params) > 0:
-        output_path = f'{report_dir + '/' if report_dir else ''}metadata_report.{report_format}'
+        output_path = f'{report_dir + '/' if report_dir else ''}metadata_validation_report.{report_format}'
         _write_metadata_report(
             meta_params, metadata_types, rep_na_counts,
             len(replicates), output_path=output_path
@@ -636,7 +636,7 @@ def validate_metadata(
 
     # Write replicate report
     if write_replicate_report:
-        output_path = f'{report_dir + '/' if report_dir else ''}replicate_report.{report_format}'
+        output_path = f'{report_dir + '/' if report_dir else ''}replicate_validation_report.{report_format}'
         _write_replicate_report(replicates, output_path=output_path)
         LOGGER.info(f'Replicate report written to {output_path}')
 

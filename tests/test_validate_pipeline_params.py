@@ -667,10 +667,10 @@ class TestWriteReorts(ValidateMetadata):
         self.assertTrue(success, cm.output)
         self.assertInLog(f'Metadata report written to {self.work_dir}', cm)
         self.assertTrue(
-            os.path.isfile(f'{self.work_dir}/metadata_report.json'), "Metadata report file was not created."
+            os.path.isfile(f'{self.work_dir}/metadata_validation_report.json'), "Metadata report file was not created."
         )
 
-        with open(f'{self.work_dir}/metadata_report.json', 'r') as inF:
+        with open(f'{self.work_dir}/metadata_validation_report.json', 'r') as inF:
             report = json.load(inF)
 
         expected_rows = {
@@ -706,10 +706,60 @@ class TestWriteReorts(ValidateMetadata):
         self.assertTrue(success, cm.output)
         self.assertInLog(f'Metadata report written to {self.work_dir}', cm)
         self.assertTrue(
-            os.path.isfile(f'{self.work_dir}/metadata_report.tsv'), "Metadata report file was not created."
+            os.path.isfile(f'{self.work_dir}/metadata_validation_report.tsv'), "Metadata report file was not created."
         )
 
-        with open(f'{self.work_dir}/metadata_report.tsv', 'r') as inF:
+        with open(f'{self.work_dir}/metadata_validation_report.tsv', 'r') as inF:
             lines = inF.readlines()
 
         self.assertEqual(len(lines), 5, "Metadata report file does not have the expected number of lines.")
+
+
+    def test_write_json_replicate_report(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                color_vars=['cellLine', 'experiment', 'NCI7std'],
+                write_replicate_report=True, report_dir=self.work_dir, report_format='json'
+            )
+
+        self.assertTrue(success, cm.output)
+        self.assertInLog(f'Replicate report written to {self.work_dir}', cm)
+        self.assertTrue(
+            os.path.isfile(f'{self.work_dir}/replicate_validation_report.json'), "Replicate report file was not created."
+        )
+
+
+    def test_write_tsv_replicate_report(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                color_vars=['cellLine', 'experiment', 'NCI7std'],
+                write_replicate_report=True, report_dir=self.work_dir, report_format='tsv'
+            )
+
+        self.assertTrue(success, cm.output)
+        self.assertInLog(f'Replicate report written to {self.work_dir}', cm)
+        self.assertTrue(
+            os.path.isfile(f'{self.work_dir}/replicate_validation_report.tsv'), "Replicate report file was not created."
+        )
+
+        report = pd.read_csv(f'{self.work_dir}/replicate_validation_report.tsv', sep='\t')
+        self.assertEqual(len(report.index), sum(len(reps) for reps in self.project_replicates.values()),
+                         "Replicate report does not have the expected number of rows.")
+
+
+    def test_reserved_replicate_report_header(self):
+        replicates = {}
+        batch = 'Strap'
+        for rep in self.project_replicates[batch]:
+            replicates[rep] = validate_pipeline_params.Replicate(rep, batch=batch)
+            replicates[rep].metadata['ParameterBatch'] = batch
+            replicates[rep].metadata['ParameterBatch_1'] = batch
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+            validate_pipeline_params._write_replicate_report(
+                replicates, output_path=f'{self.work_dir}/test_reserved_report_header_report.tsv',
+            )
+
+        self.assertInLog("'ParameterBatch' is a reserved column header name. It will be changed to 'ParameterBatch_2' in the report.", cm)
