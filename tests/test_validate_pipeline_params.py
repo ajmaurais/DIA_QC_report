@@ -4,8 +4,10 @@ from unittest import mock
 import os
 from functools import partial
 import re
-import pandas as pd
 import random
+import json
+
+import pandas as pd
 
 from DIA_QC_report import validate_pipeline_params
 from DIA_QC_report.submodules.panorama import url_exists, have_internet
@@ -325,7 +327,7 @@ class TestParseInputFiles(unittest.TestCase):
                              f"Files for project '{project}' do not match expected files.")
 
 
-    def test_multi_batch_invalic_directory_strict(self):
+    def test_multi_batch_invalid_directory_strict(self):
         ext = 'raw'
         input_files = {
             'all_remote': [PUBLIC_URL, STRAP_URL],
@@ -364,7 +366,7 @@ class TestParseInputFiles(unittest.TestCase):
         self.assertEqual(len(files), len(target_files))
 
 
-    def test_multi_batch_invalic_directory_strict(self):
+    def test_flat_invalid_directory_strict(self):
         ext = 'raw'
         input_files = [PUBLIC_URL, STRAP_URL]
 
@@ -388,7 +390,10 @@ class ValidateMetadata(unittest.TestCase, setup_functions.AbstractTestsBase):
             self.project_replicates[project] = df['FileName'].tolist()
 
         metadata_reader = Metadata()
-        metadata_reader.read(f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv')
+        metadata_file = f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
+        if not metadata_reader.read(metadata_file):
+            raise FileNotFoundError(f"Metadata file '{metadata_file}' not found or could not be read.")
+
         self.combined_metadata = metadata_reader.df
         self.metadata_types = metadata_reader.types
 
@@ -410,7 +415,8 @@ class TestValidateMetadataParams(ValidateMetadata):
 
     def test_all_null_metadata_var(self):
         reader = Metadata()
-        reader.read(f'{self.data_dir}/metadata/Strap_missing_multi_var_metadata.json')
+        self.assertTrue(reader.read(f'{self.data_dir}/metadata/Strap_missing_multi_var_metadata.json'),
+                        'Failed to read metadata file')
         reps = {None: self.project_replicates['Strap']}
 
         with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
@@ -612,3 +618,98 @@ class TestValidateMetadataReps(ValidateMetadata):
                     removed_reps['annotationKey'][i]),
                 cm
             )
+
+
+    def test_na_metadata_value(self):
+        reader = Metadata()
+        self.assertTrue(reader.read(f'{self.data_dir}/metadata/Strap_missing_multi_var_metadata.json'),
+                        "Failed to read metadata file for testing.")
+        reps = {None: self.project_replicates['Strap']}
+        color_vars=['int_var', 'float_var', 'bool_var']
+        missing_counts = {}
+        for var in color_vars:
+            missing_counts[var] = sum(reader.df[reader.df['annotationKey'] == var]['annotationValue'].apply(
+                lambda x: pd.isna(x) or x is None or x == ''
+            ))
+
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                reps, reader.df, reader.types, color_vars=color_vars
+            )
+        self.assertTrue(success)
+
+        for var, n_missing in missing_counts.items():
+            if n_missing > 0:
+                self.assertInLog(
+                    f"{str(reader.types[var])} variable '{var}' is missing in {n_missing} of {len(reps[None])} replicates.",
+                    cm
+                )
+            else:
+                self.assertNotInLog(f"{str(reader.types[var])} variable '{var}' is missing in", cm)
+
+
+class TestWriteReorts(ValidateMetadata):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_write_parameter_validation_reports'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
+
+    def test_write_json_metadata_report(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                color_vars=['cellLine', 'experiment', 'NCI7std'],
+                control_key='cellLine', control_values=['T47D', 'HeLa'],
+                write_metadata_report=True, report_dir=self.work_dir, report_format='json'
+            )
+
+        self.assertTrue(success, cm.output)
+        self.assertInLog(f'Metadata report written to {self.work_dir}', cm)
+        self.assertTrue(
+            os.path.isfile(f'{self.work_dir}/metadata_report.json'), "Metadata report file was not created."
+        )
+
+        with open(f'{self.work_dir}/metadata_report.json', 'r') as inF:
+            report = json.load(inF)
+
+        expected_rows = {
+            ('cellLine', 'color_vars'): {'type': 'STRING'},
+            ('experiment', 'color_vars'): {'type': 'STRING'},
+            ('NCI7std', 'color_vars'): {'type': 'BOOL'},
+            ('cellLine', 'control_key'): {'type': 'STRING'}
+        }
+        for row in expected_rows:
+            expected_rows[row]['variable'] = row[0]
+            expected_rows[row]['parameter'] = row[1]
+            expected_rows[row]['missing_in_n_replicates'] = 0
+            expected_rows[row]['found_in_n_replicates'] = sum(len(reps) for reps in self.project_replicates.values())
+
+        report_dict = {(row['variable'], row['parameter']): row for row in report}
+
+        for key, row in expected_rows.items():
+            self.assertIn(key, report_dict, f"Missing expected row for {key} in report.")
+            self.assertDictEqual(report_dict[key], row, f"Row for {key} does not match expected values.")
+
+        self.assertEqual(len(report), 4)
+
+
+    def test_write_tsv_metadata_report(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
+            success = validate_pipeline_params.validate_metadata(
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                color_vars=['cellLine', 'experiment', 'NCI7std'],
+                control_key='cellLine', control_values=['T47D', 'HeLa'],
+                write_metadata_report=True, report_dir=self.work_dir, report_format='tsv'
+            )
+
+        self.assertTrue(success, cm.output)
+        self.assertInLog(f'Metadata report written to {self.work_dir}', cm)
+        self.assertTrue(
+            os.path.isfile(f'{self.work_dir}/metadata_report.tsv'), "Metadata report file was not created."
+        )
+
+        with open(f'{self.work_dir}/metadata_report.tsv', 'r') as inF:
+            lines = inF.readlines()
+
+        self.assertEqual(len(lines), 5, "Metadata report file does not have the expected number of lines.")

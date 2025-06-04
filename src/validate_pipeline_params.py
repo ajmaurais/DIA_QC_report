@@ -348,12 +348,12 @@ class Replicate:
 def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
                            output_path='metadata_report.json'):
     '''
-    Write a report of metadata parameters and their types to a file.
+    Write a report of metadata parameters and types to a file.
 
     Parameters
     ----------
-    meta_params : dict
-        Dictionary of metadata parameters.
+    meta_params : list
+        List of tuples containing metadata variable and parameter names.
     metadata_types : dict
         Dictionary of metadata variable names to their dtypes.
     rep_na_counts : dict
@@ -373,13 +373,13 @@ def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
         return
 
     report_data = []
-    for var, name in meta_params.items():
+    for var, name in meta_params:
         if var not in metadata_types:
             raise ValueError(f"Missing metadata type for variable '{var}'.")
         if var not in rep_na_counts:
             raise ValueError(f"Missing NA counts for variable '{var}'.")
 
-        report_data[-1].append({
+        report_data.append({
             'variable': var,
             'parameter': name,
             'type': str(metadata_types[var]),
@@ -457,7 +457,7 @@ def validate_metadata(
     color_vars=None, batch1=None, batch2=None,
     control_key=None, control_values=None,
     write_replicate_report=False, write_metadata_report=False,
-    report_format='json', strict=True
+    report_format='json', report_dir=None, strict=True
 ):
     '''
     Validate metadata against the provided parameters.
@@ -503,18 +503,19 @@ def validate_metadata(
     ###### Validate metadata_df ######
 
     # Check that metadata parameters match in replicate metadata
-    meta_params = {}
+    meta_params = []
     if color_vars is not None:
-        meta_params = {var: 'color_vars' for var in color_vars}
+        for var in color_vars:
+            meta_params.append((var, 'color_vars'))
     other_vars = {batch1: 'batch1', batch2: 'batch2', control_key: 'control_key'}
     for var, name in other_vars.items():
         if var is not None:
-            meta_params[var] = name
+            meta_params.append((var, name))
 
     if metadata_df is None:
         if len(meta_params) > 0:
             LOGGER.error('Replicate metadata is None, but metadata parameters are specified.')
-            for var, name in meta_params.items():
+            for var, name in meta_params:
                 if var is not None:
                     LOGGER.error("Without a metadata file, parameter %s = '%s' will cause an error.", name, var)
             return False
@@ -524,7 +525,7 @@ def validate_metadata(
             raise ValueError('metadata_types must be provided if metadata_df is not None.')
 
         all_meta_vars_good = True
-        for var, name in meta_params.items():
+        for var, name in meta_params:
             if var not in metadata_types:
                 LOGGER.error("Metadata variable '%s' from '%s' parameter not found in metadata.", var, name)
                 all_meta_vars_good = False
@@ -600,9 +601,9 @@ def validate_metadata(
 
     # Check that all replicates have the required metadata
     all_reps_good = True
-    rep_na_counts = {var: 0 for var in meta_params.keys()}
+    rep_na_counts = {var: 0 for var, _ in meta_params}
     for rep_name, rep in replicates.items():
-        for var, name in meta_params.items():
+        for var, name in meta_params:
             if var not in rep.metadata:
                 _log_warn_error(
                     "Replicate '%s' is missing metadata key '%s' from '%s' parameter.",
@@ -626,16 +627,16 @@ def validate_metadata(
 
     # Write metadata report
     if write_metadata_report and len(meta_params) > 0:
-        output_path = f'metadata_report.{report_format}'
+        output_path = f'{report_dir + '/' if report_dir else ''}metadata_report.{report_format}'
         _write_metadata_report(
             meta_params, metadata_types, rep_na_counts,
-            len(replicates), output_path=f'metadata_report.{report_format}'
+            len(replicates), output_path=output_path
         )
         LOGGER.info(f'Metadata report written to {output_path}')
 
     # Write replicate report
     if write_replicate_report:
-        output_path = f'replicate_report.{report_format}'
+        output_path = f'{report_dir + '/' if report_dir else ''}replicate_report.{report_format}'
         _write_replicate_report(replicates, output_path=output_path)
         LOGGER.info(f'Replicate report written to {output_path}')
 
