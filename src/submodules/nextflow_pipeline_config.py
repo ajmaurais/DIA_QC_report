@@ -3,51 +3,6 @@ from groovy_parser.parser import parse_and_digest_groovy_content
 import ast, pathlib, re
 from typing import Any, Dict, List
 
-QUANT_SPECTRA_SCHEMA = {
-    "oneOf": [
-        {
-            "type": "string",
-            'minProperties': 1
-        },
-        {
-            "type": "array",
-            "items": {"type": "string"},
-            'minProperties': 1
-        },
-        {
-            "type": "object",
-            "additionalProperties": {
-                "oneOf": [
-                    {
-                        "type": "string",
-                        'minProperties': 1
-                    },
-                    {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        'minProperties': 1
-                    },
-                ]
-            },
-            'minProperties': 1
-        },
-    ],
-}
-
-CHROM_SPECTRA_SCHEMA = {
-    "oneOf": [
-        {
-            "type": "string",
-            'minProperties': 1
-        },
-        {
-            "type": "array",
-            "items": {"type": "string"},
-            'minProperties': 1
-        }
-    ]
-}
-
 _GROOVY_BOOL_NULL = {
     re.compile(r'\btrue\b'):  'True',
     re.compile(r'\bfalse\b'): 'False',
@@ -158,9 +113,8 @@ def _parse_map(body: str):
             continue
         key_part, val_part = _split_key_value(item)
 
-        # key: quoted -> eval, else verbatim
         key = ast.literal_eval(key_part) if key_part and key_part[0] in '\'"' else key_part
-        mapping[key] = _g_to_py(val_part)   # recurse for value
+        mapping[key] = _g_to_py(val_part)
     return mapping
 
 
@@ -207,16 +161,35 @@ def _insert_nested(target: dict, dotted: str, value):
     curr[parts[-1]] = value
 
 
-def _collect(node: dict, into: Dict[str, Any]):
+def _collect(node, into, prefix: str = ''):
+    ''' DFS through *node*. '''
+
     if not isinstance(node, dict):
         return
+
     children = node.get('children', [])
-    for i, tok in enumerate(children):
-        if isinstance(tok, dict) and tok.get('leaf') == 'ASSIGN':
+    i = 0
+    while i < len(children):
+        left = children[i]
+        if (
+            i + 1 < len(children)
+            and _desc_with_lbrace(children[i + 1]) is not None
+        ):
+            ident = _first_identifier(left)
+            if ident:
+                block = children[i + 1]
+                _collect(block, into, f'{prefix}{ident}.')
+                i += 2
+                continue
+
+        if isinstance(left, dict) and left.get('leaf') == 'ASSIGN':
             lhs = _flatten_identifiers(children[i - 1])
             rhs = _g_to_py(_src(children[i + 1]))
-            _insert_nested(into, lhs, rhs)
-        _collect(tok, into)
+            key = f'{prefix}{lhs}' if prefix else lhs
+            _insert_nested(into, key, rhs)
+
+        _collect(left, into, prefix)
+        i += 1
 
 
 def _node_has_ident(node, name: str) -> bool:
@@ -228,35 +201,64 @@ def _node_has_ident(node, name: str) -> bool:
     return any(_node_has_ident(c, name) for c in node.get('children', []))
 
 
-def _contains_leaf(node, leaf_value: str) -> bool:
-    '''True if a descendant token has .leaf == *leaf_value*.'''
+def _first_identifier(node):
+    '''Return the first IDENTIFIER leaf under *node*, or None.'''
     if not isinstance(node, dict):
-        return False
-    if node.get('leaf') == leaf_value:
-        return True
-    return any(_contains_leaf(c, leaf_value) for c in node.get('children', []))
+        return None
+    if node.get('leaf') == 'IDENTIFIER':
+        return node.get('value')
+    for child in node.get('children', []):
+        ident = _first_identifier(child)
+        if ident is not None:
+            return ident
+    return None
 
 
-def _find_params_block(tree) -> dict:
+def _desc_with_lbrace(node):
+    '''Return the first descendant node that owns an LBRACE token.'''
+    if not isinstance(node, dict):
+        return None
+    if any(isinstance(c, dict) and c.get('leaf') == 'LBRACE'
+           for c in node.get('children', [])):
+        return node
+    for child in node.get('children', []):
+        found = _desc_with_lbrace(child)
+        if found is not None:
+            return found
+    return None
+
+
+def _top_level_statements(tree):
     '''
-    Return the subtree that holds the braces of the top-level
+    Yield the direct children that represent file-level statements,
+    regardless of whether the parser inserted a script_statements wrapper.
+    '''
+    if not isinstance(tree, dict):
+        return
+    rule = tree.get('rule', [])
+    if rule and rule[0] in ('script_statements', 'compilation_unit'):
+        # dive one level down
+        for child in tree.get('children', []):
+            yield from _top_level_statements(child)
+        return
+    # otherwise this node itself is a statement candidate
+    yield tree
+
+
+def _find_params_block(tree):
+    """
+    Return the subtree that encloses the FIRST top-level
 
         params { ... }
 
-    call. We look for any node whose *first* child contains the identifier
-    'params' and whose *second* child contains a '{' token (the closure).
-    '''
-    stack = [tree]
-    while stack:
-        node = stack.pop()
-        children = node.get('children', [])
-        if len(children) >= 2 and _node_has_ident(children[0], 'params') \
-                          and _contains_leaf(children[1], 'LBRACE'):
-            # children[1] is the whole argument_list / closure node;
-            # that's good enough for the walker that gathers assignments.
-            return children[1]
-        stack.extend(reversed(children))
-    raise ValueError('No `params { ... }` block found in the config.')
+    block found in the file.
+    """
+    for stmt in _top_level_statements(tree):
+        if _first_identifier(stmt) == 'params':
+            block = _desc_with_lbrace(stmt)
+            if block is not None:
+                return block
+    raise ValueError('No top-level params { ... } block found in the config')
 
 
 def parse_params(file=None, text=None) -> Dict[str, Any]:
