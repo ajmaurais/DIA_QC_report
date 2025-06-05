@@ -17,10 +17,9 @@ from requests import HTTPError
 from pandas import isna as pd_isna
 
 from .submodules.nextflow_pipeline_config import parse_params
-# from .submodules.nextflow_pipeline_config import QUANT_SPECTRA_SCHEMA, CHROM_SPECTRA_SCHEMA
 from .submodules.panorama import PANORA_PUBLIC_KEY
-from .submodules.panorama import list_panorama_files, download_webdav_file
-from .submodules.panorama import download_text_file
+from .submodules.panorama import list_panorama_files, get_webdav_file
+from .submodules.panorama import get_http_file
 from .submodules.read_metadata import Metadata
 from .submodules.dtype import Dtype
 from .submodules.logger import LOGGER
@@ -59,20 +58,6 @@ QUANT_SPECTRA_SCHEMA = {
             'minProperties': 1
         },
     ],
-}
-
-CHROM_SPECTRA_SCHEMA = {
-    "oneOf": [
-        {
-            "type": "string",
-            'minProperties': 1
-        },
-        {
-            "type": "array",
-            "items": {"type": "string"},
-            'minProperties': 1
-        }
-    ]
 }
 
 
@@ -123,7 +108,7 @@ def glob_to_regex(file_glob: str) -> str:
     return f'^{regex_body}$'
 
 
-def get_api_key_from_nextflow_secrets():
+def get_api_key_from_nextflow_secrets(name='PANORAMA_API_KEY'):
     '''
     Get Panorama API key from Nextflow secrets manager.
 
@@ -138,7 +123,7 @@ def get_api_key_from_nextflow_secrets():
         return None
 
     result = subprocess.run(
-        [nextflow_exe, 'secrets', 'get', 'PANORAMA_API_KEY'],
+        [nextflow_exe, 'secrets', 'get', name],
         capture_output=True,
         text=True
     )
@@ -148,42 +133,63 @@ def get_api_key_from_nextflow_secrets():
 
     api_key = result.stdout.strip()
     if api_key is None or api_key == 'null':
-        LOGGER.error("No Panorama API key found in Nextflow secrets.")
+        LOGGER.error("Key '%s' not found in Nextflow secrets.", name)
         return None
 
     return api_key
 
 
-def get_input_file_text(path, api_key=None):
+def get_file(file_path, log_name='file', api_key=None,
+             dest_path=None, return_text=True):
     '''
-    Return the text content of a local file or from Panorama.
+    Return the text content of a local or remote file.
 
     Parameters
     ----------
-    path : str
+    file_path : str
         Path to the file or Panorama URL.
+    log_name : str, optional
+        Name to use in log messages (default: 'file').
     api_key : str
         API key for accessing files on Panorama.
+    dest_path : str, optional
+        If the file is downloaded, save it to this path.
+        If None, the base name of the file in the URL will be used.
+    return_text : bool, optional
+        If True, return the text content of the file. If False, return the file path (default: True).
 
     Returns
     -------
     str or None
         Text content of the file if it exists, None otherwise.
     '''
-    if path.startswith('https://panoramaweb.org'):
+    if file_path.startswith('https://panoramaweb.org'):
         try:
-            text = download_webdav_file(
-                path, api_key=api_key, return_text=True
-            )
+            text = get_webdav_file(file_path, api_key=api_key, dest_path=dest_path, return_text=return_text)
         except HTTPError as e:
-            LOGGER.error(f'Error downloading file from Panorama: {e}')
+            LOGGER.error("Failed to download %s '%s': %s", log_name, file_path, e)
             return None
+
+        if not return_text: # return file path
+            return text
+
+    elif file_path.startswith('http://') or file_path.startswith('https://'):
+        try:
+            text = get_http_file(file_path, dest_path=dest_path, return_text=return_text)
+        except HTTPError as e:
+            LOGGER.error("Failed to download %s '%s': %s", log_name, file_path, e)
+            return None
+
     else:
-        if not os.path.exists(path):
-            LOGGER.error(f'File {path} does not exist.')
+        file_path = os.path.abspath(file_path)
+        if not os.path.exists(file_path):
+            LOGGER.error("%s '%s' does not exist.", log_name[0].upper() + log_name[1:], file_path)
             return None
-        with open(path, 'r') as inF:
-            text = inF.read()
+        if return_text:
+            with open(file_path, 'r') as schema_file:
+                text = schema_file.read()
+        else:
+            return file_path
 
     return text
 
@@ -328,10 +334,7 @@ def remove_none_from_param_dict(data):
     return data
 
 
-
-
-
-def validate_config_files(config_paths, schema_path):
+def validate_config_files(config_paths, schema_path, api_key=None):
     '''
     Read, merge, and validate Nextflow pipeline config files against the schema.
 
@@ -355,39 +358,25 @@ def validate_config_files(config_paths, schema_path):
         config_paths = [config_paths]
 
     for config_path in config_paths:
-        if config_path.startswith('http://') or config_path.startswith('https://'):
-            try:
-                config_text = download_text_file(config_path)
-                this_config = parse_params(text=config_text)
-            except HTTPError as e:
-                LOGGER.error(f'Error downloading pipeline config file {config_path}: {e}')
-                all_good = False
-                continue
-        else:
-            if not os.path.exists(config_path):
-                LOGGER.error(f'Pipeline config file {config_path} does not exist.')
-                all_good = False
-            this_config = parse_params(file=config_path)
-
+        config_text = get_file(
+            config_path, log_name='pipeline config file', api_key=api_key
+        )
+        if config_text is None:
+            all_good = False
+            continue
+        this_config = parse_params(text=config_text)
         this_config = remove_none_from_param_dict(this_config)
         config_data = merge_params(config_data, this_config)
 
     if not all_good:
         return False, {}
 
-    if schema_path.startswith('http://') or schema_path.startswith('https://'):
-        try:
-            schema = download_text_file(schema_path)
-        except HTTPError as e:
-            LOGGER.error(f'Error downloading pipeline config schema {schema_path}: {e}')
-            return False, config_data
-    else:
-        schema_path = os.path.abspath(schema_path)
-        if not os.path.exists(schema_path):
-            LOGGER.error(f'Pipeline config schema file {schema_path} does not exist.')
-            return False, config_data
-        with open(schema_path, 'r') as schema_file:
-            schema = json.load(schema_file)
+    schema_text = get_file(
+        schema_path, log_name='pipeline config schema file', api_key=api_key
+    )
+    if schema_text is None:
+        return False, config_data
+    schema = json.loads(schema_text)
 
     try:
         validate(config_data, schema)
@@ -686,10 +675,13 @@ def validate_metadata(
         return False
 
     # Log missing metadata values
-    for var, count in rep_na_counts.items():
-        if count > 0:
+    for var, na_count in rep_na_counts.items():
+        if na_count > 0:
             LOGGER.warning("%s variable '%s' is missing in %d of %d replicates.",
-                           metadata_types[var].name, var, count, len(replicates))
+                           metadata_types[var].name, var, na_count, len(replicates))
+        else:
+            LOGGER.info("%s variable '%s' is present in all %d replicates.",
+                        metadata_types[var].name, var, len(replicates))
 
     # Write metadata report
     if write_metadata_report and len(meta_params) > 0:
@@ -806,7 +798,7 @@ def parse_args(argv, prog=None):
 
     input_args = params_command_args.add_argument_group('Input files options')
     input_args.add_argument(
-        '-m', '--metadata', help='Replicate metadata file.'
+        '-m', '--metadata', help='Replicate metadata file. Can be a local file or Panorama URL.'
     )
     input_args.add_argument(
         '--chrom-lib-dir', dest='chrom_lib_spectra_dir', action='append', default=None,
@@ -900,6 +892,8 @@ def _main(args):
     metadata_path = None
     replicate_metadata = None
 
+    # Determine API key
+    api_key = None
     if args.nextflow_key:
         api_key = get_api_key_from_nextflow_secrets()
         if api_key is None:
@@ -957,10 +951,6 @@ def _main(args):
         chromatogram_library_spectra_glob = args.chrom_lib_spectra_glob
         metadata_path = args.metadata
 
-        if not os.path.exists(args.quant_spectra_dir):
-            LOGGER.error(f'Quant spectra directory {args.quant_spectra_dir} does not exist.')
-            sys.exit(1)
-
         if args.quant_spectra_dir is not None:
             quant_spectra_param = args.quant_spectra_dir
         elif args.quant_spectra_param is not None:
@@ -992,12 +982,25 @@ def _main(args):
 
     # read metadata
     if metadata_path:
-        metadata_text = get_input_file_text(metadata_path, api_key=api_key)
-        sstream = StringIO(metadata_text)
-        sstream.seek(0)
-        metadata_reader = Metadata()
-        if not metadata_reader.read(sstream):
+        download_metadata = args.metadata_output_path is not None
+        metadata = get_file(
+            metadata_path, log_name='replicate metadata', api_key=api_key,
+            dest_path=args.metadata_output_path, return_text=not download_metadata
+        )
+        if metadata is None:
             sys.exit(1)
+
+        metadata_reader = Metadata()
+        if download_metadata:
+            with open(args.metadata_output_path, 'r') as inF:
+                if not metadata_reader.read(inF):
+                    sys.exit(1)
+        else:
+            metadata_stream = StringIO(metadata)
+            metadata_stream.seek(0)
+            if not metadata_reader.read(metadata_stream):
+                sys.exit(1)
+
         replicate_metadata = metadata_reader.df
 
     LOGGER.info('Validating metadata...')

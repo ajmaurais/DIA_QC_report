@@ -137,7 +137,7 @@ def list_panorama_files(
     return results
 
 
-def download_webdav_file(
+def get_webdav_file(
     url: str,
     dest_path: str | None = None,
     api_key: str | None = None,
@@ -153,17 +153,13 @@ def download_webdav_file(
     url : str
         Direct WebDAV URL of the file to fetch.
     dest_path : str, optional
-        Local path to write the file.  If None, the basename of url
-        is used in the current working directory.
+        Local path to write the file.
+        If None, the file is written to the current working directory.
     api_key : str, optional
         LabKey API key.
-    verify_ssl : bool, default True
-        False disables TLS-certificate validation.
-    chunk_size : int, default 8192
-        Number of bytes written per iteration.
     return_text : bool, default False
         When True, the function streams the payload into memory and
-        returns it decoded string.
+        returns it as a string.
 
     Returns
     -------
@@ -315,9 +311,11 @@ def url_exists(url: str, timeout: float = 5.0) -> bool:
         return False
 
 
-def download_text_file(url: str, timeout: float = 10.0) -> str:
+def get_http_file(url: str, dest_path: str | None = None, return_text: bool = False,
+                  timeout: float = 10.0, chunk_size=8192, verify_ssl: bool = True) -> str:
     '''
-    Download a text file from the given URL and return its contents as a string.
+    Download a file from the given URL and save it to a local path or return its
+    contents as a string.
 
     Parameters
     ----------
@@ -325,12 +323,44 @@ def download_text_file(url: str, timeout: float = 10.0) -> str:
         The HTTP(S) URL pointing to the text file.
     timeout : float
         How many seconds to wait for the server to send data before giving up.
+    dest_path : str, optional
+        Local path to write the file.
+        If None, the file is written to the current working directory.
+    return_text : bool, default False
+        If True, the function streams the payload into memory and
+        returns it as a string instead of writing to a file.
 
     Returns
     -------
     str
-        The full contents of the file.
+        Absolute path of the downloaded file, or the text content if
+        `return_text` is True.
     '''
-    response = requests.get(url, timeout=timeout)
+
+    if return_text:
+        dest_fh = BytesIO()
+        close_after = False
+    else:
+        if dest_path is None:
+            dest_path = unquote(urlparse(url).path.rsplit('/', 1)[-1])
+        dest_path = os.path.abspath(dest_path)
+        os.makedirs(os.path.dirname(dest_path) or '.', exist_ok=True)
+        dest_fh = open(dest_path, 'wb')
+        close_after = True
+
+    response = requests.get(url, stream=True, timeout=timeout, verify=verify_ssl)
     response.raise_for_status()
-    return response.text
+
+    for chunk in response.iter_content(chunk_size=chunk_size):
+        if chunk:                      # skip keep-alive chunks
+            dest_fh.write(chunk)
+
+    if return_text:
+        dest_fh.seek(0)
+        text = dest_fh.read().decode('utf-8')
+        return text
+
+    if close_after:
+        dest_fh.close()
+
+    return dest_path

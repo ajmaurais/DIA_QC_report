@@ -131,8 +131,8 @@ class TestDownloadWebDAVFile(unittest.TestCase):
 
         if MOCK_PANORAMA:
             with mock.patch('DIA_QC_report.submodules.panorama.requests.Session.get',
-                    return_value=self._fake_response(data=payload)) as mock_get:
-                out_path = panorama.download_webdav_file(
+                            return_value=self._fake_response(data=payload)) as mock_get:
+                out_path = panorama.get_webdav_file(
                     PUBLIC_FILE,
                     dest_path=f'{self.work_dir}/{test_file}',
                     api_key=panorama.PANORA_PUBLIC_KEY
@@ -149,7 +149,7 @@ class TestDownloadWebDAVFile(unittest.TestCase):
             if not panorama.have_internet():
                 self.skipTest("Internet connection is required for this test.")
 
-            out_path = panorama.download_webdav_file(
+            out_path = panorama.get_webdav_file(
                 PUBLIC_FILE,
                 dest_path=f'{self.work_dir}/{test_file}',
                 api_key=panorama.PANORA_PUBLIC_KEY
@@ -168,8 +168,8 @@ class TestDownloadWebDAVFile(unittest.TestCase):
 
         if MOCK_PANORAMA:
             with mock.patch('DIA_QC_report.submodules.panorama.requests.get',
-                    return_value=self._fake_response(data=payload)) as mock_get:
-                out_path = panorama.download_webdav_file(
+                            return_value=self._fake_response(data=payload)) as mock_get:
+                out_path = panorama.get_webdav_file(
                     PUBLIC_FILE, dest_path=f'{self.work_dir}/{test_file}'
                 )
 
@@ -181,7 +181,7 @@ class TestDownloadWebDAVFile(unittest.TestCase):
             if not panorama.have_internet():
                 self.skipTest("Internet connection is required for this test.")
 
-            out_path = panorama.download_webdav_file(
+            out_path = panorama.get_webdav_file(
                 PUBLIC_FILE, dest_path=f'{self.work_dir}/{test_file}'
             )
 
@@ -197,8 +197,8 @@ class TestDownloadWebDAVFile(unittest.TestCase):
             payload = inF.read()
 
         with mock.patch('DIA_QC_report.submodules.panorama.requests.get',
-                   return_value=self._fake_response(data=payload)) as mock_get:
-            file_text = panorama.download_webdav_file(
+                        return_value=self._fake_response(data=payload)) as mock_get:
+            file_text = panorama.get_webdav_file(
                 f'https://server/_webdav/lab/%40files/{test_file}',
                 return_text=True
             )
