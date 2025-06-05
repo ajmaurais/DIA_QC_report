@@ -719,6 +719,15 @@ def parse_args(argv, prog=None):
         '--panorama-public', dest='panorama_public', action='store_true',
         help='Use Panorama Public API key instead of user API key.'
     )
+    common_subcommand_args.add_argument(
+        '--report-format', dest='report_format', default=argparse.SUPPRESS, choices=['json', 'tsv'],
+        help='Write metadata and MS file validation reports in specified format. '
+             'By default no reports are written.'
+    )
+    common_subcommand_args.add_argument(
+        '--metadata-output-path', dest='metadata_output_path', default=None,
+        help='Path to write replicate metadata file if it is downloaded.'
+    )
 
     ####### Top level parser #######
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
@@ -903,21 +912,20 @@ def _main(args):
     elif args.panorama_public:
         api_key = PANORA_PUBLIC_KEY
 
+    write_reports = False
+    report_format = None
+    if hasattr(args, 'report_format'):
+        write_reports = True
+        report_format = args.report_format
+
     if args.subcommand == 'config':
         if not os.path.exists(args.pipeline_config):
             LOGGER.error(f'Pipeline config file {args.pipeline_config} does not exist.')
             sys.exit(1)
 
-        # Download base config if using remote pipeline dir
-        config_paths = []
-        if hasattr(args, 'pipeline') and args.pipeline.startswith('http'):
-            config_paths.append(generate_git_url(
-                args.pipeline, args.revision, filename='nextflow_config.nf'
-            ))
-        config_paths.extend(args.pipeline_config)
-
+        # Read and validate pipeline config file(s)
         LOGGER.info('Reading pipeline config files...')
-        success, config_data = validate_config_files(config_paths, args.schema)
+        success, config_data = validate_config_files(args.config_paths, args.schema)
         if not success:
             LOGGER.error('Pipeline config validation failed.')
             sys.exit(1)
@@ -980,6 +988,13 @@ def _main(args):
             file_regex=chromatogram_library_spectra_regex,
         )
 
+        if write_reports:
+            chrom_reps = {os.path.splitext(file_name)[0]: Replicate(file_name)
+                          for file_name in chromatogram_library_spectra_dir}
+            _write_replicate_report(
+                chrom_reps, output_path=f'chromatogram_library_replicate_report.{report_format}'
+            )
+
     # read metadata
     if metadata_path:
         download_metadata = args.metadata_output_path is not None
@@ -1007,7 +1022,9 @@ def _main(args):
     success = validate_metadata(
         quant_spectra_dir, replicate_metadata,
         color_vars=color_vars, batch1=batch1, batch2=batch2,
-        control_key=control_key, control_values=control_values
+        control_key=control_key, control_values=control_values,
+        write_replicate_report=write_reports, write_metadata_report=write_reports,
+        report_format=report_format
     )
     if not success:
         LOGGER.error('Metadata validation failed.')
