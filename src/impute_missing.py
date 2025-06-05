@@ -3,6 +3,7 @@ import sys
 import argparse
 import sqlite3
 import os
+from shutil import get_terminal_size
 
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
 from .submodules.dia_db_utils import check_schema_version
@@ -14,7 +15,6 @@ from .submodules.transformation import MethodOptions
 from .submodules.imputation import IMPUTATION_METHODS
 from .submodules.imputation import KNNImputer
 from .submodules.logger import LOGGER
-from . import __version__ as PROGRAM_VERSION
 
 COMMAND_DESCRIPTION = 'Impute missing precursor and/or protein values.'
 
@@ -66,7 +66,7 @@ def get_manager(method, method_args, method_help=False,
 
     parser.description = f'Options for {Manager.__name__}'
     if method_help:
-        terminal_width = os.get_terminal_size().columns if sys.stderr.isatty() else 100
+        terminal_width = get_terminal_size().columns
         parser.get_help(sys.stdout, max_width=terminal_width)
         sys.exit(0)
 
