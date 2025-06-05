@@ -197,16 +197,40 @@ class TestParseParams(unittest.TestCase):
         self.assertDictEqual(config_data, target)
 
 
+    def test_parse_string_list(self):
+        config = '''
+            params {
+                string_list = ['https://example.com/raw/', '/local/dir']
+            } '''
+        target = {'string_list': ['https://example.com/raw/', '/local/dir']}
+
+        config_data = nextflow_pipeline_config.parse_params(text=config)
+        self.assertDictEqual(config_data, target)
+
+
+    def test_parse_map(self):
+        config = '''
+            params {
+                map = [ key1: 'https://example.com/raw/', key2: '/local/dir' ]
+            } '''
+        target = {'map': {'key1': 'https://example.com/raw/', 'key2': '/local/dir'}}
+
+        config_data = nextflow_pipeline_config.parse_params(text=config)
+        self.assertDictEqual(config_data, target)
+
+
     def test_parse_nested_identifiers(self):
         config = '''
             params {
-                string_list      = ['https://example.com/raw/', '/local/dir']
-            }
-            '''
-
-        target = {
-            'string_list': ['https://example.com/raw/', '/local/dir']
-            }
+                map = [ key1: 'https://example.com/raw/', key2: '/local/dir' ]
+                carafe {
+                    spectra_file         = '/path/to/spectra.mzML'
+                    peptide_results_file = 'results.tsv'
+                }
+            } '''
+        target = {'map': {'key1': 'https://example.com/raw/', 'key2': '/local/dir'},
+                  'carafe': {'spectra_file': '/path/to/spectra.mzML',
+                             'peptide_results_file': 'results.tsv'}}
 
         config_data = nextflow_pipeline_config.parse_params(text=config)
         self.assertDictEqual(config_data, target)

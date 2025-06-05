@@ -171,6 +171,27 @@ def _insert_nested(target: dict, dotted: str, value):
     curr[parts[-1]] = value
 
 
+def _leftmost_leaf(node):
+    '''Return the first leaf token name inside *node* (skips whitespace).'''
+    if not isinstance(node, dict):
+        return None
+    if 'leaf' in node:
+        t = node['leaf']
+        return None if t in {'NLS', 'SEMI'} else t
+    for child in node.get('children', []):
+        t = _leftmost_leaf(child)
+        if t is not None:
+            return t
+    return None
+
+
+def _is_block_header(left, right) -> bool:
+    '''
+    True when *left* starts with an identifier and *right*'s first significant token is LBRACE
+    '''
+    return _first_identifier(left) is not None and _leftmost_leaf(right) == 'LBRACE'
+
+
 def _collect(node, into, prefix: str = ''):
     ''' DFS through *node*. '''
 
@@ -181,16 +202,13 @@ def _collect(node, into, prefix: str = ''):
     i = 0
     while i < len(children):
         left = children[i]
-        if (
-            i + 1 < len(children)
-            and _desc_with_lbrace(children[i + 1]) is not None
-        ):
+
+        if i + 1 < len(children) and _is_block_header(left, children[i + 1]):
             ident = _first_identifier(left)
-            if ident:
-                block = children[i + 1]
-                _collect(block, into, f'{prefix}{ident}.')
-                i += 2
-                continue
+            block = children[i + 1]
+            _collect(block, into, f'{prefix}{ident}.')
+            i += 2
+            continue
 
         if isinstance(left, dict) and left.get('leaf') == 'ASSIGN':
             lhs = _flatten_identifiers(children[i - 1])
