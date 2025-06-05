@@ -4,6 +4,9 @@ import subprocess
 from shlex import join as join_shell
 import inspect
 from abc import ABC, abstractmethod
+import io
+import contextlib
+import traceback
 
 from pandas import testing as pd_testing
 from numpy import isnan
@@ -245,6 +248,71 @@ def run_command(command, wd, prefix=None):
         outF.write(f'{str(result.returncode)}\n')
 
     return result
+
+
+class ProcessResult:
+    def __init__(self, stdout, stderr, returncode):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+
+def run_main(main_fxn, argv, wd, prog=None, prefix=None):
+    '''
+    Run a module main function and capture its output.
+
+    Parameters
+    ----------
+    main_fxn: callable
+        The main function to run. Should accept `argv` and `prog` as arguments.
+    argv: list
+        The command line arguments to pass to the main function.
+    wd: str
+        The working directory to run the main function in.
+    prog: str, optional
+        The program name to use in the output files. If None, the name of the calling function is used.
+    prefix: str, optional
+        A prefix to add to stdout, stderr, rc and command files.
+
+    Returns
+    -------
+    ProcessResult
+        An object containing the captured stdout, stderr, and return code.
+    '''
+
+    # ensure working dir exists
+    if not os.path.isdir(wd):
+        os.makedirs(wd)
+    prefix_path = f'{wd}/{prefix if prefix else inspect.stack()[1][3]}'
+
+    # capture
+    stdout_buf = io.StringIO()
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+        try:
+            main_fxn(argv, prog=prog)
+            rc = 0
+        except SystemExit as e:
+            rc = e.code if isinstance(e.code, int) else 0
+        except Exception:
+            traceback.print_exc(file=stderr_buf)
+            rc = 1
+
+    out_str = stdout_buf.getvalue()
+    err_str = stderr_buf.getvalue()
+
+    # write files
+    command = f'{main_fxn.__module__}.{main_fxn.__name__}' if prog is None else prog
+    with open(f"{prefix_path}.command.txt", "w") as outF:
+        outF.write(f"{join_shell([command] + argv)}\n")
+    with open(f"{prefix_path}.stdout.txt", "w") as outF:
+        outF.write(out_str)
+    with open(f"{prefix_path}.stderr.txt", "w") as outF:
+        outF.write(err_str)
+    with open(f"{prefix_path}.rc.txt", "w") as outF:
+        outF.write(f"{rc}\n")
+
+    return ProcessResult(out_str, err_str, rc)
 
 
 def setup_single_db(data_dir, output_dir, project,

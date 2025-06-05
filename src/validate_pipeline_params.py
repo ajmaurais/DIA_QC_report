@@ -877,10 +877,11 @@ def _get_config_path(data, vars, default=None):
     return _get_config_path(_node, vars[1:], default=default)
 
 
-def _main(args):
-    '''
-    Actual main method. `args` Should be initialized argparse namespace.
-    '''
+def _main(argv, prog=None):
+    args = parse_args(
+        sys.argv[1:] if argv is None else argv,
+        prog=prog
+    )
 
     # Input files
     quant_spectra_dir = None
@@ -1034,7 +1035,7 @@ def _main(args):
 
 def main():
     LOGGER.warning("Calling this script directly is deprecated. Use 'dia_qc validate' instead.")
-    _main(parse_args(sys.argv[1:]))
+    _main(sys.argv[1:])
 
 
 if __name__ == '__main__':

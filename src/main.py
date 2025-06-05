@@ -100,8 +100,7 @@ Available commands:
 
 
     def validate(self, argv):
-        args = validate_pipeline_params.parse_args(argv, prog='dia_qc validate')
-        validate_pipeline_params._main(args)
+        validate_pipeline_params._main(argv, prog='dia_qc validate')
 
 
     def filter(self, argv):
