@@ -17,7 +17,7 @@ from requests import HTTPError
 from pandas import isna as pd_isna
 
 from .submodules.nextflow_pipeline_config import parse_params
-from .submodules.nextflow_pipeline_config import QUANT_SPECTRA_SCHEMA, CHROM_SPECTRA_SCHEMA
+# from .submodules.nextflow_pipeline_config import QUANT_SPECTRA_SCHEMA, CHROM_SPECTRA_SCHEMA
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, download_webdav_file
 from .submodules.panorama import download_text_file
@@ -30,8 +30,54 @@ COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-
 DEFAULT_PIPELINE = 'mriffle/nf-skyline-dia-ms'
 DEFAULT_PIPELINE_REVISION = 'main'
 
+QUANT_SPECTRA_SCHEMA = {
+    "oneOf": [
+        {
+            "type": "string",
+            'minProperties': 1
+        },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+            'minProperties': 1
+        },
+        {
+            "type": "object",
+            "additionalProperties": {
+                "oneOf": [
+                    {
+                        "type": "string",
+                        'minProperties': 1
+                    },
+                    {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        'minProperties': 1
+                    },
+                ]
+            },
+            'minProperties': 1
+        },
+    ],
+}
+
+CHROM_SPECTRA_SCHEMA = {
+    "oneOf": [
+        {
+            "type": "string",
+            'minProperties': 1
+        },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+            'minProperties': 1
+        }
+    ]
+}
+
+
 def merge_params(lhs, rhs):
-    ''' Recursively “add” two params dicts together.  '''
+    ''' Recursively "add" two params dicts together. '''
     if not isinstance(lhs, dict) or not isinstance(rhs, dict):
         raise TypeError("both arguments must be dict-like at the top level")
 
@@ -70,11 +116,7 @@ def glob_to_regex(file_glob: str) -> str:
 
     # Any metacharacter except * should be taken literally.
     def escape_regex(s: str) -> str:
-        return re.sub(
-            r'([.\^$+?{}\[\]\\|()])',     # chars to escape 1-for-1
-            lambda m: r'\{}'.format(m.group(1)),
-            s,
-        )
+        return re.sub( r'([.\^$+?{}\[\]\\|()])', lambda m: r'\{}'.format(m.group(1)), s)
 
     # build the final pattern exactly as in the workflow
     regex_body = escape_regex(file_glob).replace('*', '.*')
@@ -269,6 +311,26 @@ def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') 
     return f"{base_url}/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
 
 
+def remove_none_from_param_dict(data):
+    ''' Recursively remove any keys in dictionaries whose value is None.  '''
+    if isinstance(data, dict):
+        cleaned = {}
+        for key, value in data.items():
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                nested = remove_none_from_param_dict(value)
+                if nested:
+                    cleaned[key] = nested
+            else:
+                cleaned[key] = value
+        return cleaned
+    return data
+
+
+
+
+
 def validate_config_files(config_paths, schema_path):
     '''
     Read, merge, and validate Nextflow pipeline config files against the schema.
@@ -289,6 +351,9 @@ def validate_config_files(config_paths, schema_path):
     '''
     config_data = {}
     all_good = True
+    if isinstance(config_paths, str):
+        config_paths = [config_paths]
+
     for config_path in config_paths:
         if config_path.startswith('http://') or config_path.startswith('https://'):
             try:
@@ -304,6 +369,7 @@ def validate_config_files(config_paths, schema_path):
                 all_good = False
             this_config = parse_params(file=config_path)
 
+        this_config = remove_none_from_param_dict(this_config)
         config_data = merge_params(config_data, this_config)
 
     if not all_good:

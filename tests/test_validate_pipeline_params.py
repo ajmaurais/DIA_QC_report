@@ -2,8 +2,9 @@
 import unittest
 from unittest import mock
 import os
-from functools import partial
 import re
+from functools import partial
+from shutil import which
 import random
 import json
 
@@ -15,6 +16,7 @@ from DIA_QC_report.submodules.panorama import PANORA_PUBLIC_KEY
 from DIA_QC_report.submodules.read_metadata import Metadata
 
 import setup_functions
+from test_panorama_functions import PUBLIC_FILE
 
 STRAP_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/S-Trap/'
 SP3_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/SP3/'
@@ -122,6 +124,52 @@ class TestGenerateSchemaUrl(unittest.TestCase):
             filename = 'main.nf'
         )
         self.assertTrue(url_exists(url))
+
+
+class TestGetInputFileText(unittest.TestCase):
+    def test_get_input_file_text(self):
+        if not have_internet():
+            self.skipTest("No internet connection available for testing.")
+
+        text = validate_pipeline_params.get_input_file_text(PUBLIC_FILE, api_key=PANORA_PUBLIC_KEY)
+        with open(f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/panorama/Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv', 'r') as f:
+            target_text = f.read()
+
+        self.assertEqual(text.splitlines(), target_text.splitlines())
+
+
+class TestGetApiKeyFromNextflow(unittest.TestCase, setup_functions.AbstractTestsBase):
+    def _mock_process_run(self, return_value):
+        mock = unittest.mock.MagicMock()
+        mock.returncode = 0
+        mock.stdout = return_value
+        return mock
+
+
+    def test_get_api_key_from_nextflow_secrets(self):
+        with mock.patch('DIA_QC_report.validate_pipeline_params.subprocess.run',
+                        return_value=self._mock_process_run(PANORA_PUBLIC_KEY)) as mock_run, \
+             mock.patch('DIA_QC_report.validate_pipeline_params.which',
+                        return_value='nextflow') as mock_which:
+            api_key = validate_pipeline_params.get_api_key_from_nextflow_secrets()
+
+        self.assertEqual(api_key, PANORA_PUBLIC_KEY)
+        mock_run.assert_called_once_with(
+            ['nextflow', 'secrets', 'get', 'PANORAMA_API_KEY'],
+            capture_output=True, text=True
+        )
+
+
+    def test_no_key_in_secrets_manager(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            with mock.patch('DIA_QC_report.validate_pipeline_params.subprocess.run',
+                            return_value=self._mock_process_run('null')), \
+                mock.patch('DIA_QC_report.validate_pipeline_params.which', return_value='nextflow'):
+                 api_key = validate_pipeline_params.get_api_key_from_nextflow_secrets()
+
+        self.assertIsNone(api_key)
+        self.assertInLog("No Panorama API key found in Nextflow secrets.", cm)
+
 
 
 class TestParseInputFiles(unittest.TestCase):
@@ -763,3 +811,88 @@ class TestWriteReorts(ValidateMetadata):
             )
 
         self.assertInLog("'ParameterBatch' is a reserved column header name. It will be changed to 'ParameterBatch_2' in the report.", cm)
+
+
+class TestRemoveNoneFromParamDict(unittest.TestCase):
+    def test_remove_none_values(self):
+        params = { 'param1': 'value1', 'param2': None, 'param3': 'value3', 'param4': None }
+        expected = { 'param1': 'value1', 'param3': 'value3' }
+        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_remove_none_values_in_branch(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': {'n1': 'v', 'n2': None}}
+        expected = {'param1': 'value1',
+                    'param3': 'value3',
+                    'param4': {'n1': 'v'} }
+        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_remove_empty_branch(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': {'n1': None, 'n2': None} }
+        expected = {'param1': 'value1',
+                    'param3': 'value3' }
+        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_cascading_branch_removal(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': {'n1': {'inner': None}}}
+        expected = {'param1': 'value1',
+                    'param3': 'value3' }
+        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_list_unchanged(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': ['a', None, 'b']}
+        expected = {'param1': 'value1',
+                    'param3': 'value3',
+                    'param4': ['a', None, 'b']}
+        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_primitive_returns_unchanged(self):
+        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict(42), 42)
+        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict("string"), "string")
+        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict(3.14), 3.14)
+        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict(True), True)
+
+
+class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBase):
+    def setUp(self):
+        self.data_dir = f'{setup_functions.TEST_DIR}/data/'
+        self.local_schema_path = f'{self.data_dir}/validate_pipeline_params/config_files/nextflow_schema.json'
+        self.local_config_path = f'{self.data_dir}/validate_pipeline_params/config_files/nextflow.config'
+
+
+    def test_bad_config_url(self):
+        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+            successs, data = validate_pipeline_params.validate_config_files(
+                'https://example.com/bad_config.config', self.local_schema_path
+            )
+        self.assertFalse(successs, "Config validation should fail for a bad URL.")
+        self.assertInLog('Error downloading pipeline config file', cm)
+
+
+    def test_valid_config(self):
+        config_path = f'{self.data_dir}/validate_pipeline_params/config_files/pdc_pipeline.config'
+        success, data = validate_pipeline_params.validate_config_files(
+            [self.local_config_path, config_path], self.local_schema_path
+        )
+        self.assertTrue(success, "Config validation failed for a valid config file.")
