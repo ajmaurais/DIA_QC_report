@@ -1,12 +1,14 @@
 
 import os
 import subprocess
+import re
 from shlex import join as join_shell
 import inspect
 from abc import ABC, abstractmethod
 import io
 import contextlib
 import traceback
+import logging
 
 from pandas import testing as pd_testing
 from numpy import isnan
@@ -289,6 +291,9 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
     stdout_buf = io.StringIO()
     stderr_buf = io.StringIO()
     with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+        for handler in logging.root.handlers:
+            if hasattr(handler, 'stream'):
+                handler.stream = stderr_buf
         try:
             main_fxn(argv, prog=prog)
             rc = 0
@@ -302,9 +307,9 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
     err_str = stderr_buf.getvalue()
 
     # write files
-    command = f'{main_fxn.__module__}.{main_fxn.__name__}' if prog is None else prog
+    command = f'{main_fxn.__module__}.{main_fxn.__name__}' if prog is None else re.split(r'\s+', prog)
     with open(f"{prefix_path}.command.txt", "w") as outF:
-        outF.write(f"{join_shell([command] + argv)}\n")
+        outF.write(f"{join_shell(command + argv)}\n")
     with open(f"{prefix_path}.stdout.txt", "w") as outF:
         outF.write(out_str)
     with open(f"{prefix_path}.stderr.txt", "w") as outF:
