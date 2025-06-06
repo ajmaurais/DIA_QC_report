@@ -17,7 +17,7 @@ from jsonschema import validate, ValidationError
 from requests import HTTPError
 from pandas import isna as pd_isna
 
-from .submodules.nextflow_pipeline_config import parse_params
+from .submodules.nextflow_pipeline_config import parse_params, namespace_to_dict
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file
@@ -345,7 +345,7 @@ def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') 
     return f"{base_url}/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
 
 
-def remove_none_from_param_dict(data):
+def _remove_none_from_param_dict(data):
     ''' Recursively remove any keys in dictionaries whose value is None.  '''
     if isinstance(data, dict):
         cleaned = {}
@@ -353,7 +353,7 @@ def remove_none_from_param_dict(data):
             if value is None:
                 continue
             if isinstance(value, dict):
-                nested = remove_none_from_param_dict(value)
+                nested = _remove_none_from_param_dict(value)
                 if nested:
                     cleaned[key] = nested
             else:
@@ -393,7 +393,6 @@ def validate_config_files(config_paths, schema_path, api_key=None):
             all_good = False
             continue
         this_config = parse_params(text=config_text)
-        this_config = remove_none_from_param_dict(this_config)
         config_data = merge_params(config_data, this_config)
 
     if not all_good:
@@ -407,7 +406,8 @@ def validate_config_files(config_paths, schema_path, api_key=None):
     schema = json.loads(schema_text)
 
     try:
-        validate(config_data, schema)
+        param_dict = _remove_none_from_param_dict(namespace_to_dict(config_data))
+        validate(param_dict, schema)
     except ValidationError as e:
         LOGGER.error(f'Pipeline config validation failed: {e.message}')
         return False, config_data

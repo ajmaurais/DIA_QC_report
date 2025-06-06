@@ -375,6 +375,36 @@ def param_to_list(param_variable):
     return [param_variable]
 
 
+def namespace_to_dict(obj):
+    '''
+    Recursively convert a params namespace tree back into the original
+    nested-dictionary structure.
+
+    Parameters
+    ----------
+    obj : Any
+        A SimpleNamespace returned by parse_params, or any nested value
+        within it (dict, list, scalar).
+
+    Returns
+    -------
+    Any
+        The same data represented entirely with builtin container types
+    '''
+    if isinstance(obj, SimpleNamespace):
+        obj = vars(obj)
+
+    if isinstance(obj, dict):
+        return {k: namespace_to_dict(v) for k, v in obj.items()}
+
+    if isinstance(obj, list):
+        return [namespace_to_dict(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(namespace_to_dict(v) for v in obj)
+
+    return obj
+
+
 def _quote_str(s: str) -> str:
     """Return *s* as a Groovy string literal (single or triple quotes)."""
     if '\n' in s:

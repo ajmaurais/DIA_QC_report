@@ -36,31 +36,15 @@ class TestAddParams(unittest.TestCase):
             fasta="db.fasta",
             search_engine="diann"
         )
-        rhs = {
-            "dir":       {"b1": "/path/b1", "b2": "/path/b2"},
-            "qc_report": {"color_vars": ["a", "b", "c"]},
-            "fasta": "db.fasta",
-            "search_engine": "diann",
-        }
-        target = {
-            'dir': {'b1': '/path/b1', 'b2': '/path/b2'},
-            'qc_report': {'color_vars': ['a', 'b', 'c']},
-            'fasta': 'db.fasta',
-            'search_engine': 'diann',
-            'skyline': {'skip': False, 'doc_name': 'final'}
-        }
+        target = SimpleNamespace(
+            dir={'b1': '/path/b1', 'b2': '/path/b2'},
+            qc_report=SimpleNamespace(color_vars=['a', 'b', 'c']),
+            fasta='db.fasta',
+            search_engine='diann',
+            skyline=SimpleNamespace(skip=False, doc_name='final')
+        )
         result = vpp.merge_params(lhs, rhs)
-
-        self.assertIsInstance(result, dict)
-        self.assertEqual(set(result.keys()), set(target.keys()))
-        for key in target:
-            if isinstance(target[key], dict):
-                self.assertIsInstance(result[key], dict)
-                self.assertEqual(set(result[key].keys()), set(target[key].keys()))
-                for subkey in target[key]:
-                    self.assertEqual(result[key][subkey], target[key][subkey])
-            else:
-                self.assertEqual(result[key], target[key])
+        self.assertEqual(result, target)
 
 
 class TestGetConfigPath(unittest.TestCase):
@@ -824,7 +808,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
     def test_remove_none_values(self):
         params = { 'param1': 'value1', 'param2': None, 'param3': 'value3', 'param4': None }
         expected = { 'param1': 'value1', 'param3': 'value3' }
-        result = vpp.remove_none_from_param_dict(params)
+        result = vpp._remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -836,7 +820,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
         expected = {'param1': 'value1',
                     'param3': 'value3',
                     'param4': {'n1': 'v'} }
-        result = vpp.remove_none_from_param_dict(params)
+        result = vpp._remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -847,7 +831,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
                     'param4': {'n1': None, 'n2': None} }
         expected = {'param1': 'value1',
                     'param3': 'value3' }
-        result = vpp.remove_none_from_param_dict(params)
+        result = vpp._remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -858,7 +842,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
                     'param4': {'n1': {'inner': None}}}
         expected = {'param1': 'value1',
                     'param3': 'value3' }
-        result = vpp.remove_none_from_param_dict(params)
+        result = vpp._remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -870,15 +854,15 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
         expected = {'param1': 'value1',
                     'param3': 'value3',
                     'param4': ['a', None, 'b']}
-        result = vpp.remove_none_from_param_dict(params)
+        result = vpp._remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
     def test_primitive_returns_unchanged(self):
-        self.assertEqual(vpp.remove_none_from_param_dict(42), 42)
-        self.assertEqual(vpp.remove_none_from_param_dict("string"), "string")
-        self.assertEqual(vpp.remove_none_from_param_dict(3.14), 3.14)
-        self.assertEqual(vpp.remove_none_from_param_dict(True), True)
+        self.assertEqual(vpp._remove_none_from_param_dict(42), 42)
+        self.assertEqual(vpp._remove_none_from_param_dict("string"), "string")
+        self.assertEqual(vpp._remove_none_from_param_dict(3.14), 3.14)
+        self.assertEqual(vpp._remove_none_from_param_dict(True), True)
 
 
 class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBase):

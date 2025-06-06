@@ -226,12 +226,14 @@ class TestParseParams(unittest.TestCase):
         config = '''
             params {
                 map = [ key1: 'https://example.com/raw/', key2: '/local/dir' ]
+                list = ['https://example.com/raw/', '/local/dir']
                 carafe {
                     spectra_file         = '/path/to/spectra.mzML'
                     peptide_results_file = 'results.tsv'
                 }
             } '''
         target = SimpleNamespace(
+            list=['https://example.com/raw/', '/local/dir'],
             map={'key1': 'https://example.com/raw/', 'key2': '/local/dir'},
             carafe=SimpleNamespace(spectra_file='/path/to/spectra.mzML',
                                    peptide_results_file='results.tsv')
@@ -251,13 +253,13 @@ class TestParseParams(unittest.TestCase):
 
         dot_config = '''
             params {
-                carafe.spectra_file         = '/path/to/spectra.mzML'
                 carafe.peptide_results_file = 'results.tsv'
+                carafe.spectra_file         = '/path/to/spectra.mzML'
             } '''
 
-        target = SimpleNamespace(carafe=SimpleNamespace(spectra_file='/path/to/spectra.mzML',
-                                                        peptide_results_file='results.tsv'))
-
+        target = SimpleNamespace(
+            carafe=SimpleNamespace(peptide_results_file='results.tsv', spectra_file='/path/to/spectra.mzML')
+        )
         brace_data = npc.parse_params(text=brace_config)
         dot_data = npc.parse_params(text=dot_config)
         self.assertEqual(brace_data, dot_data)
@@ -324,6 +326,28 @@ class TestParseParams(unittest.TestCase):
         npc.write_params_namespace(SimpleNamespace(params=config_data), file=out)
         out.seek(0)
         written_config = out.read()
-        print(written_config)
         written_data = npc.parse_params(text=written_config)
         self.assertEqual(config_data, written_data)
+
+
+    def test_namespace_to_dict(self):
+        config = '''
+            params {
+                map = [ key1: 'https://example.com/raw/', key2: '/local/dir' ]
+                list = ['https://example.com/raw/', '/local/dir']
+                carafe {
+                    spectra_file         = '/path/to/spectra.mzML'
+                    peptide_results_file = 'results.tsv'
+                }
+            } '''
+        target = {
+            'map': { 'key1': 'https://example.com/raw/', 'key2': '/local/dir' },
+            'list': ['https://example.com/raw/', '/local/dir'],
+            'carafe': {
+                'spectra_file'         : '/path/to/spectra.mzML',
+                'peptide_results_file' : 'results.tsv'
+            }
+        }
+        config_data = npc.parse_params(text=config)
+        config_dict = npc.namespace_to_dict(config_data)
+        self.assertEqual(config_dict, target)
