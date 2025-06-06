@@ -264,7 +264,7 @@ class TestParseParams(unittest.TestCase):
 
 
     def test_complex_config(self):
-        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/panorama_multi_batch_diann.config'
+        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/multi_batch.config'
 
         target = SimpleNamespace(
             carafe=SimpleNamespace(
@@ -316,7 +316,7 @@ class TestParseParams(unittest.TestCase):
 
 
     def test_write_params(self):
-        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/panorama_multi_batch_diann.config'
+        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/multi_batch.config'
         config_data = pipeline_config.PipelineConfig(config_file)
 
         out = io.StringIO()
