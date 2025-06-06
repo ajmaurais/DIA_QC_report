@@ -11,6 +11,7 @@ from shutil import which
 import subprocess
 from io import StringIO
 from collections import Counter
+from types import SimpleNamespace
 
 from jsonschema import validate, ValidationError
 from requests import HTTPError
@@ -62,23 +63,50 @@ QUANT_SPECTRA_SCHEMA = {
 
 
 def merge_params(lhs, rhs):
-    ''' Recursively "add" two params dicts together. '''
-    if not isinstance(lhs, dict) or not isinstance(rhs, dict):
-        raise TypeError("both arguments must be dict-like at the top level")
+    """
+    Recursively “add” two params objects together.
+
+    Both *lhs* and *rhs* may be either dicts or SimpleNamespace
+    objects produced by `parse_params`.
+    """
+
+    if not isinstance(lhs, (dict, SimpleNamespace)) \
+       or not isinstance(rhs, (dict, SimpleNamespace)):
+        raise TypeError('both arguments must be dict- or namespace-like')
+
+    def _to_mapping(obj):
+        """Return the underlying dict for a mapping-like object."""
+        return vars(obj) if isinstance(obj, SimpleNamespace) else obj
+
+    def _wrap(template, mapping):
+        """
+        Wrap *mapping* back into the same container type as *template*
+        (namespace or plain dict).
+        """
+        return (SimpleNamespace(**mapping)
+                if isinstance(template, SimpleNamespace)
+                else mapping)
 
     def _merge(a, b):
-        # If both are dicts → merge; otherwise rhs wins.
-        if isinstance(a, dict) and isinstance(b, dict):
+        if isinstance(a, (dict, SimpleNamespace)) \
+           and isinstance(b, (dict, SimpleNamespace)):
+            map_a, map_b = _to_mapping(a), _to_mapping(b)
+
             merged = {}
-            for key in a.keys() | b.keys(): # union of keys
-                if key in a and key in b:
-                    merged[key] = _merge(a[key], b[key])
-                elif key in a:
-                    merged[key] = copy.deepcopy(a[key])
+            for key in map_a.keys() | map_b.keys():          # union of keys
+                if key in map_a and key in map_b:
+                    merged[key] = _merge(map_a[key], map_b[key])
+                elif key in map_a:
+                    merged[key] = copy.deepcopy(map_a[key])
                 else:
-                    merged[key] = copy.deepcopy(b[key])
+                    merged[key] = copy.deepcopy(map_b[key])
+
+            # If either side was a namespace, keep the result a namespace
+            if isinstance(a, SimpleNamespace) or isinstance(b, SimpleNamespace):
+                return SimpleNamespace(**merged)
             return merged
         else:
+            # scalars / lists / literal maps → rhs wins (deep-copied)
             return copy.deepcopy(b)
 
     return _merge(lhs, rhs)

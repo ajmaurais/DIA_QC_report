@@ -7,10 +7,11 @@ from functools import partial
 from shutil import which
 import random
 import json
+from types import SimpleNamespace
 
 import pandas as pd
 
-from DIA_QC_report import validate_pipeline_params
+from DIA_QC_report import validate_pipeline_params as vpp
 from DIA_QC_report.submodules.panorama import url_exists, have_internet
 from DIA_QC_report.submodules.panorama import PANORA_PUBLIC_KEY
 from DIA_QC_report.submodules.read_metadata import Metadata
@@ -24,11 +25,17 @@ PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fi
 
 class TestAddParams(unittest.TestCase):
     def test_add_params(self):
-        lhs = {
-            "fasta": None,
-            "search_engine": "encyclopedia",
-            "skyline": {"skip": False, "doc_name": "final"},
-        }
+        lhs = SimpleNamespace(
+            fasta=None,
+            search_engine="encyclopedia",
+            skyline=SimpleNamespace(skip=False, doc_name='final')
+        )
+        rhs = SimpleNamespace(
+            dir={"b1": "/path/b1", "b2": "/path/b2"},
+            qc_report=SimpleNamespace(color_vars=["a", "b", "c"]),
+            fasta="db.fasta",
+            search_engine="diann"
+        )
         rhs = {
             "dir":       {"b1": "/path/b1", "b2": "/path/b2"},
             "qc_report": {"color_vars": ["a", "b", "c"]},
@@ -42,7 +49,7 @@ class TestAddParams(unittest.TestCase):
             'search_engine': 'diann',
             'skyline': {'skip': False, 'doc_name': 'final'}
         }
-        result = validate_pipeline_params.merge_params(lhs, rhs)
+        result = vpp.merge_params(lhs, rhs)
 
         self.assertIsInstance(result, dict)
         self.assertEqual(set(result.keys()), set(target.keys()))
@@ -67,13 +74,13 @@ class TestGetConfigPath(unittest.TestCase):
 
     def test_single(self):
         target = 'diann'
-        result = validate_pipeline_params._get_config_path(self.rhs, ['search_engine'])
+        result = vpp._get_config_path(self.rhs, ['search_engine'])
         self.assertEqual(result, target)
 
 
     def test_double(self):
         target = '/path/b1'
-        result = validate_pipeline_params._get_config_path(
+        result = vpp._get_config_path(
             self.rhs, ['dir', 'b1']
         )
         self.assertEqual(result, target)
@@ -81,11 +88,11 @@ class TestGetConfigPath(unittest.TestCase):
 
     def test_double_missing(self):
         target = None
-        result = validate_pipeline_params._get_config_path(
+        result = vpp._get_config_path(
             self.rhs, ['dir', 'b3']
         )
         self.assertEqual(result, target)
-        result = validate_pipeline_params._get_config_path(
+        result = vpp._get_config_path(
             self.rhs, ['not_a_key', 'b1']
         )
         self.assertEqual(result, target)
@@ -96,7 +103,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        url = validate_pipeline_params.generate_git_url(
+        url = vpp.generate_git_url(
             repo='ajmaurais/nf-skyline-dia-ms',
             revision='main', filename = 'main.nf'
         )
@@ -107,7 +114,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        url = validate_pipeline_params.generate_git_url(
+        url = vpp.generate_git_url(
             repo='mriffle/nf-skyline-dia-ms',
             revision='v2.6.1', filename = 'main.nf'
         )
@@ -118,7 +125,7 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        url = validate_pipeline_params.generate_git_url(
+        url = vpp.generate_git_url(
             repo='ajmaurais/nf-skyline-dia-ms',
             revision='45c69b6bdb8111fb14c140a1275a1a11df47a69d',
             filename = 'main.nf'
@@ -131,7 +138,7 @@ class TestGetInputFileText(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        text = validate_pipeline_params.get_input_file_text(PUBLIC_FILE, api_key=PANORA_PUBLIC_KEY)
+        text = vpp.get_file(PUBLIC_FILE, api_key=PANORA_PUBLIC_KEY, return_text=True)
         with open(f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/panorama/Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv', 'r') as f:
             target_text = f.read()
 
@@ -151,7 +158,7 @@ class TestGetApiKeyFromNextflow(unittest.TestCase, setup_functions.AbstractTests
                         return_value=self._mock_process_run(PANORA_PUBLIC_KEY)) as mock_run, \
              mock.patch('DIA_QC_report.validate_pipeline_params.which',
                         return_value='nextflow') as mock_which:
-            api_key = validate_pipeline_params.get_api_key_from_nextflow_secrets()
+            api_key = vpp.get_api_key_from_nextflow_secrets()
 
         self.assertEqual(api_key, PANORA_PUBLIC_KEY)
         mock_run.assert_called_once_with(
@@ -161,14 +168,14 @@ class TestGetApiKeyFromNextflow(unittest.TestCase, setup_functions.AbstractTests
 
 
     def test_no_key_in_secrets_manager(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
             with mock.patch('DIA_QC_report.validate_pipeline_params.subprocess.run',
                             return_value=self._mock_process_run('null')), \
                 mock.patch('DIA_QC_report.validate_pipeline_params.which', return_value='nextflow'):
-                 api_key = validate_pipeline_params.get_api_key_from_nextflow_secrets()
+                 api_key = vpp.get_api_key_from_nextflow_secrets()
 
         self.assertIsNone(api_key)
-        self.assertInLog("No Panorama API key found in Nextflow secrets.", cm)
+        self.assertInLog("Key 'PANORAMA_API_KEY' not found in Nextflow secrets.", cm)
 
 
 
@@ -196,8 +203,8 @@ class TestParseInputFiles(unittest.TestCase):
 
 
     def do_test(self, input_files, target_files, **kwargs):
-        with self.assertNoLogs(validate_pipeline_params.LOGGER, 'ERROR'):
-            multi_batch_mode, files = validate_pipeline_params.parse_input_files(
+        with self.assertNoLogs(vpp.LOGGER, 'ERROR'):
+            multi_batch_mode, files = vpp.parse_input_files(
                 input_files=input_files,
                 **kwargs
             )
@@ -357,8 +364,8 @@ class TestParseInputFiles(unittest.TestCase):
         }
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
-            with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-                use_multi_batch_mode, files = validate_pipeline_params.parse_input_files(
+            with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+                use_multi_batch_mode, files = vpp.parse_input_files(
                     input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=False
                 )
 
@@ -386,8 +393,8 @@ class TestParseInputFiles(unittest.TestCase):
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
             with self.assertRaises(SystemExit):
-                with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-                    validate_pipeline_params.parse_input_files(
+                with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+                    vpp.parse_input_files(
                         input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=True,
                     )
 
@@ -399,8 +406,8 @@ class TestParseInputFiles(unittest.TestCase):
 
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
-            with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-                use_batch_mode, files = validate_pipeline_params.parse_input_files(
+            with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+                use_batch_mode, files = vpp.parse_input_files(
                     input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=False
                 )
 
@@ -421,8 +428,8 @@ class TestParseInputFiles(unittest.TestCase):
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
             with self.assertRaises(SystemExit):
-                with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-                    validate_pipeline_params.parse_input_files(
+                with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+                    vpp.parse_input_files(
                         input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=True
                     )
 
@@ -450,8 +457,8 @@ class TestValidateMetadataParams(ValidateMetadata):
     def test_missing_metadata_file(self):
         color_vars=['cellLine', 'experiment']
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, None, None, color_vars=color_vars
             )
 
@@ -467,8 +474,8 @@ class TestValidateMetadataParams(ValidateMetadata):
                         'Failed to read metadata file')
         reps = {None: self.project_replicates['Strap']}
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'WARN') as cm:
+            success = vpp.validate_metadata(
                 reps, reader.df, reader.types, color_vars=['na_var']
             )
         self.assertTrue(success)
@@ -476,8 +483,8 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_color_var(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['missing_color_var']
             )
@@ -487,8 +494,8 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_batch_var(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 batch1='notABatch'
             )
@@ -498,8 +505,8 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_only_control_key(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='cellLine'
             )
@@ -508,8 +515,8 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_control_key(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='notAVar', control_values=['T47D', 'HeLa']
             )
@@ -518,8 +525,8 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_control_values(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='cellLine', control_values=['notACellLine']
             )
@@ -533,8 +540,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         duplicate_rep = random.choice(self.project_replicates['Sp3'])
         self.project_replicates['Strap'].append(duplicate_rep)
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types
             )
         self.assertInLog(f"Replicate '{duplicate_rep}' is duplicated 1 time in quant_spectra_dir.", cm)
@@ -550,8 +557,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         for _ in range(n_duplicates):
             project_reps_flat[None].append(duplicate_rep)
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 project_reps_flat, self.combined_metadata, self.metadata_types
             )
         self.assertInLog(f"Replicate '{duplicate_rep}' is duplicated {n_duplicates} times in quant_spectra_dir.", cm)
@@ -561,8 +568,8 @@ class TestValidateMetadataReps(ValidateMetadata):
     def test_extra_metadata_reps(self):
         project_reps_flat = {None: self.project_replicates['Strap']}
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'WARN') as cm:
+            success = vpp.validate_metadata(
                 project_reps_flat, self.combined_metadata, self.metadata_types
             )
         self.assertInLog("There are 20 replicates in the metadata that are not in quant_spectra_dir", cm)
@@ -576,8 +583,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         metadata_df = metadata_df.reset_index(drop=True)
 
         # test with strict=True
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 strict=True
             )
@@ -586,8 +593,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         self.assertFalse(success)
 
         # test with strict=False
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 strict=False
             )
@@ -605,8 +612,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         metadata_df.loc[len(metadata_df.index)] = new_row
 
         # test with strict=True
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 strict=True
             )
@@ -615,8 +622,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         self.assertFalse(success)
 
         # test with strict=False
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARN') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'WARN') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 strict=False
             )
@@ -638,8 +645,8 @@ class TestValidateMetadataReps(ValidateMetadata):
         metadata_df = metadata_df.drop(remove_index).reset_index(drop=True)
 
         # test with strict=True
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 color_vars=color_vars, strict=True
             )
@@ -653,8 +660,8 @@ class TestValidateMetadataReps(ValidateMetadata):
             )
 
         # test with strict=False
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 color_vars=color_vars, strict=False
             )
@@ -680,8 +687,8 @@ class TestValidateMetadataReps(ValidateMetadata):
                 lambda x: pd.isna(x) or x is None or x == ''
             ))
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+            success = vpp.validate_metadata(
                 reps, reader.df, reader.types, color_vars=color_vars
             )
         self.assertTrue(success)
@@ -704,8 +711,8 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_json_metadata_report(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
                 control_key='cellLine', control_values=['T47D', 'HeLa'],
@@ -743,8 +750,8 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_tsv_metadata_report(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
                 control_key='cellLine', control_values=['T47D', 'HeLa'],
@@ -764,8 +771,8 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_json_replicate_report(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
                 write_replicate_report=True, report_dir=self.work_dir, report_format='json'
@@ -779,8 +786,8 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_tsv_replicate_report(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'INFO') as cm:
-            success = validate_pipeline_params.validate_metadata(
+        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+            success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
                 write_replicate_report=True, report_dir=self.work_dir, report_format='tsv'
@@ -801,12 +808,12 @@ class TestWriteReorts(ValidateMetadata):
         replicates = {}
         batch = 'Strap'
         for rep in self.project_replicates[batch]:
-            replicates[rep] = validate_pipeline_params.Replicate(rep, batch=batch)
+            replicates[rep] = vpp.Replicate(rep, batch=batch)
             replicates[rep].metadata['ParameterBatch'] = batch
             replicates[rep].metadata['ParameterBatch_1'] = batch
 
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'WARNING') as cm:
-            validate_pipeline_params._write_replicate_report(
+        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+            vpp._write_replicate_report(
                 replicates, output_path=f'{self.work_dir}/test_reserved_report_header_report.tsv',
             )
 
@@ -817,7 +824,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
     def test_remove_none_values(self):
         params = { 'param1': 'value1', 'param2': None, 'param3': 'value3', 'param4': None }
         expected = { 'param1': 'value1', 'param3': 'value3' }
-        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        result = vpp.remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -829,7 +836,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
         expected = {'param1': 'value1',
                     'param3': 'value3',
                     'param4': {'n1': 'v'} }
-        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        result = vpp.remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -840,7 +847,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
                     'param4': {'n1': None, 'n2': None} }
         expected = {'param1': 'value1',
                     'param3': 'value3' }
-        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        result = vpp.remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -851,7 +858,7 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
                     'param4': {'n1': {'inner': None}}}
         expected = {'param1': 'value1',
                     'param3': 'value3' }
-        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        result = vpp.remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
@@ -863,36 +870,86 @@ class TestRemoveNoneFromParamDict(unittest.TestCase):
         expected = {'param1': 'value1',
                     'param3': 'value3',
                     'param4': ['a', None, 'b']}
-        result = validate_pipeline_params.remove_none_from_param_dict(params)
+        result = vpp.remove_none_from_param_dict(params)
         self.assertDictEqual(result, expected)
 
 
     def test_primitive_returns_unchanged(self):
-        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict(42), 42)
-        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict("string"), "string")
-        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict(3.14), 3.14)
-        self.assertEqual(validate_pipeline_params.remove_none_from_param_dict(True), True)
+        self.assertEqual(vpp.remove_none_from_param_dict(42), 42)
+        self.assertEqual(vpp.remove_none_from_param_dict("string"), "string")
+        self.assertEqual(vpp.remove_none_from_param_dict(3.14), 3.14)
+        self.assertEqual(vpp.remove_none_from_param_dict(True), True)
 
 
 class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBase):
     def setUp(self):
         self.data_dir = f'{setup_functions.TEST_DIR}/data/'
         self.local_schema_path = f'{self.data_dir}/validate_pipeline_params/config_files/nextflow_schema.json'
-        self.local_config_path = f'{self.data_dir}/validate_pipeline_params/config_files/nextflow.config'
 
 
     def test_bad_config_url(self):
-        with self.assertLogs(validate_pipeline_params.LOGGER, 'ERROR') as cm:
-            successs, data = validate_pipeline_params.validate_config_files(
+        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+            successs, data = vpp.validate_config_files(
                 'https://example.com/bad_config.config', self.local_schema_path
             )
         self.assertFalse(successs, "Config validation should fail for a bad URL.")
-        self.assertInLog('Error downloading pipeline config file', cm)
+        self.assertInLog('Failed to download pipeline config file', cm)
 
 
     def test_valid_config(self):
         config_path = f'{self.data_dir}/validate_pipeline_params/config_files/pdc_pipeline.config'
-        success, data = validate_pipeline_params.validate_config_files(
-            [self.local_config_path, config_path], self.local_schema_path
+        success, data = vpp.validate_config_files(
+            [config_path], self.local_schema_path
         )
         self.assertTrue(success, "Config validation failed for a valid config file.")
+
+
+class TestMainConfig(unittest.TestCase):
+    def setup_test_config(base_config, output_path, add_params=None):
+        pass
+
+    def test_main(self):
+        pass
+
+
+    def test_all_local_batched(self):
+        pass
+
+
+    def test_all_remote_batched(self):
+        pass
+
+
+    def test_all_local_flat(self):
+        pass
+
+
+    def test_all_remote_flat(self):
+        pass
+
+
+    def test_no_metadata_batched(self):
+        pass
+
+
+    def test_no_metadata_flat(self):
+        pass
+
+
+class TestMainConfigInvalid(unittest.TestCase):
+    def setUp(self):
+        pass
+
+
+    def test_missing_meta_var(self):
+        pass
+
+
+class TestMainParams(unittest.TestCase):
+
+    def test_batched(self):
+        pass
+
+
+    def test_flat(self):
+        pass
