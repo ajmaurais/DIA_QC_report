@@ -1,13 +1,17 @@
 
-from groovy_parser.parser import parse_and_digest_groovy_content
 import ast, pathlib, re
 from typing import Any, Dict, List
+from types import SimpleNamespace
+
+from groovy_parser.parser import parse_and_digest_groovy_content
 
 _GROOVY_BOOL_NULL = {
     re.compile(r'\btrue\b'):  'True',
     re.compile(r'\bfalse\b'): 'False',
     re.compile(r'\bnull\b'):  'None',
 }
+
+_BLOCK_DICT = '__block_dict__'
 
 #  Low-level tree helpers
 def _flatten_identifiers(node) -> str:
@@ -161,13 +165,18 @@ def _g_to_py(src: str):
 
 def _insert_nested(target: dict, dotted: str, value):
     '''
-    Insert *value* into *target* following a dotted path,
-    e.g. dotted='panorama.upload'  ->  target['panorama']['upload'] = value
+    Insert *value* under *dotted* path.
+
+    Any dict we create along that path (i.e. because that level did not
+    exist yet) is tagged with _BLOCK_DICT so we know it represents a
+    section, not a literal map.
     '''
     parts = dotted.split('.')
     curr = target
     for key in parts[:-1]:
-        curr = curr.setdefault(key, {})
+        if key not in curr:
+            curr[key] = {_BLOCK_DICT: True}
+        curr = curr[key]
     curr[parts[-1]] = value
 
 
@@ -289,6 +298,24 @@ def _find_params_block(tree):
     raise ValueError('No top-level params { ... } block found in the config')
 
 
+def _dict_to_ns(obj):
+    '''
+    Recursively walk *obj*.
+
+    If we meet a dict tagged with _BLOCK_DICT, convert it (minus the tag)
+    into SimpleNamespace(**children).
+    Untagged dicts (literal maps) are left unchanged.
+    '''
+    if isinstance(obj, dict):
+        # recurse into children first
+        converted = {k: _dict_to_ns(v) for k, v in obj.items()
+                     if k != _BLOCK_DICT}
+        if obj.get(_BLOCK_DICT):
+            return SimpleNamespace(**converted)
+        return converted
+    return obj
+
+
 def parse_params(file=None, text=None) -> Dict[str, Any]:
     '''
     Parses a Nextflow pipeline configuration file and extracts parameters from the 'params' block.
@@ -316,7 +343,7 @@ def parse_params(file=None, text=None) -> Dict[str, Any]:
     params_block = _find_params_block(tree)
     out: Dict[str, Any] = {}
     _collect(params_block, out)
-    return out
+    return SimpleNamespace(**_dict_to_ns(out))
 
 
 def param_to_list(param_variable):
@@ -346,3 +373,68 @@ def param_to_list(param_variable):
         return [line.strip() for line in param_variable.split('\n') if line.strip()]
 
     return [param_variable]
+
+
+def _quote_str(s: str) -> str:
+    """Return *s* as a Groovy string literal (single or triple quotes)."""
+    if '\n' in s:
+        return f"'''{s}'''"
+    return f"'{s}'"
+
+
+def _render_value(val, indent: str, lvl: int) -> str:
+    """
+    Convert *val* (scalar, list, dict) to Groovy syntax.
+    Lists & maps are rendered inline; nested namespaces are handled by caller.
+    """
+    if isinstance(val, SimpleNamespace):
+        raise ValueError('Nested namespace must be rendered by caller')
+
+    if isinstance(val, dict):                                 # literal map
+        pairs = [f'{k}: {_render_value(v, indent, lvl)}' for k, v in val.items()]
+        return '[ ' + ', '.join(pairs) + ' ]'
+
+    if isinstance(val, list):                                 # list
+        items = ', '.join(_render_value(x, indent, lvl) for x in val)
+        return f'[ {items} ]'
+
+    if isinstance(val, str):
+        return _quote_str(val)
+
+    if val is None:
+        return 'null'
+
+    if isinstance(val, bool):
+        return 'true' if val else 'false'
+
+    # numbers or anything else repr-able
+    return str(val)
+
+
+def _dump_ns(ns: SimpleNamespace, fh, indent: str, lvl: int):
+    """
+    Recursively write *ns* to *fh* as Groovy config with indentation.
+    """
+    pad = indent * lvl
+    for key, val in vars(ns).items():
+        if isinstance(val, SimpleNamespace):
+            fh.write(f'{pad}{key} {{\n')
+            _dump_ns(val, fh, indent, lvl + 1)
+            fh.write(f'{pad}}}\n')
+        else:
+            groovy_val = _render_value(val, indent, lvl)
+            fh.write(f'{pad}{key} = {groovy_val}\n')
+
+
+def write_params_namespace(obj: SimpleNamespace, file: str, indent: str = '  '):
+    '''
+    '''
+
+    _needs_close = isinstance(file, str)
+    fh = open(file, 'w', encoding='utf-8') if _needs_close else file
+
+    try:
+        _dump_ns(obj, fh, indent, 0)
+    finally:
+        if _needs_close:
+            fh.close()
