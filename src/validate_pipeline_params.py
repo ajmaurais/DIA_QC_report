@@ -467,7 +467,7 @@ def _log_warn_error(message, *args, warning=True):
 
 
 def validate_metadata(
-    ms_files, metadata_df, metadata_types,
+    ms_files, metadata_df, metadata_types, *,
     color_vars=None, batch1=None, batch2=None,
     control_key=None, control_values=None,
     write_replicate_report=False, write_metadata_report=False,
@@ -596,7 +596,11 @@ def validate_metadata(
 
     # Add metadata to replicates
     meta_vars_unique = True
+    meta_params_set = {var for var, _ in meta_params}
     for row in metadata_df.itertuples():
+        if row.annotationKey not in meta_params_set:
+            continue
+
         if row.Replicate in replicates:
             if row.annotationKey in replicates[row.Replicate].metadata:
                 _log_warn_error(
@@ -721,7 +725,7 @@ def parse_args(argv, prog=None):
              f"Default is '{DEFAULT_PIPELINE_REVISION}'"
     )
     schema_args.add_argument(
-        '-s', '--schema', default=None, help='Path to local pipeline config schema file.'
+        '-s', '--schema', default=argparse.SUPPRESS, help='Path to local pipeline config schema file.'
     )
 
     ###### Params subcommand #######
@@ -803,18 +807,26 @@ def parse_args(argv, prog=None):
     ###### Argument validation ######
     args = parser.parse_args(argv)
     if args.subcommand == 'config':
-        if (hasattr(args, 'pipeline') and not hasattr(args, 'schema')) or \
-           (hasattr(args, 'schema') and not hasattr(args, 'pipeline')):
+        if (hasattr(args, 'pipeline') and hasattr(args, 'schema')):
             sys.stderr.write('--pipeline and --schema options conflict.\n')
             sys.exit(2)
 
         if not hasattr(args, 'pipeline'):
             args.pipeline = DEFAULT_PIPELINE
 
-        revision = DEFAULT_PIPELINE_REVISION if not hasattr(args, 'revision') else args.revision
-        args.schema = generate_git_url(
-            args.pipeline, revision, filename='nextflow_schema.json'
-        ) if not hasattr(args, 'schema') else args.schema
+        if os.path.isfile(args.pipeline): # If pipeline is a local file, use it directly
+            if hasattr(args, 'revision'):
+                sys.stderr.write('--revision cannot be used for a local pipeline script.\n')
+                sys.exit(2)
+
+            args.schema = args.schema if hasattr(args, 'schema') \
+                                      else f'{os.path.dirname(args.pipeline)}/nextflow_schema.json'
+
+        else: # If pipeline is not a local file, assume it is a GitHub repository
+            revision = DEFAULT_PIPELINE_REVISION if not hasattr(args, 'revision') else args.revision
+            args.schema = generate_git_url(
+                args.pipeline, revision, filename='nextflow_schema.json'
+            ) if not hasattr(args, 'schema') else args.schema
 
     if args.subcommand == 'params':
         have_pattern = args.chrom_lib_spectra_glob is not None or args.chrom_lib_spectra_regex is not None
@@ -842,6 +854,23 @@ def _main(argv, prog=None):
         prog=prog
     )
 
+    # Determine API key
+    api_key = None
+    if args.nextflow_key:
+        api_key = get_api_key_from_nextflow_secrets()
+        if api_key is None:
+            sys.exit(1)
+    elif args.api_key:
+        api_key = args.api_key
+    elif args.panorama_public:
+        api_key = PANORA_PUBLIC_KEY
+
+    write_reports = False
+    report_format = None
+    if hasattr(args, 'report_format'):
+        write_reports = True
+        report_format = args.report_format
+
     # Input files
     quant_spectra_dir = None
     quant_spectra_param = None
@@ -861,31 +890,10 @@ def _main(argv, prog=None):
     metadata_path = None
     replicate_metadata = None
 
-    # Determine API key
-    api_key = None
-    if args.nextflow_key:
-        api_key = get_api_key_from_nextflow_secrets()
-        if api_key is None:
-            sys.exit(1)
-    elif args.api_key:
-        api_key = args.api_key
-    elif args.panorama_public:
-        api_key = PANORA_PUBLIC_KEY
-
-    write_reports = False
-    report_format = None
-    if hasattr(args, 'report_format'):
-        write_reports = True
-        report_format = args.report_format
-
     if args.subcommand == 'config':
-        if not os.path.exists(args.pipeline_config):
-            LOGGER.error(f'Pipeline config file {args.pipeline_config} does not exist.')
-            sys.exit(1)
-
         # Read and validate pipeline config file(s)
         LOGGER.info('Reading pipeline config files...')
-        success, config_data = validate_config_files(args.config_paths, args.schema)
+        success, config_data = validate_config_files(args.pipeline_config, args.schema)
         if not success:
             LOGGER.error('Pipeline config validation failed.')
             sys.exit(1)
@@ -899,7 +907,7 @@ def _main(argv, prog=None):
 
         quant_spectra_param = config_data.get('quant_spectra_dir')
         chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir')
-        metadata_path = config_data.get('metadata_file')
+        metadata_path = config_data.get('replicate_metadata')
 
         quant_spectra_regex = config_data.get('quant_spectra_regex')
         quant_spectra_glob = config_data.get('quant_spectra_glob')
@@ -937,15 +945,30 @@ def _main(argv, prog=None):
     else:
         raise RuntimeError(f'Unknown subcommand: {args.subcommand}')
 
-    quant_spectra_dir = parse_input_files(
+    multi_batch, quant_spectra_dir = parse_input_files(
         quant_spectra_param, api_key=api_key,
         file_glob=quant_spectra_glob, file_regex=quant_spectra_regex,
     )
+    if multi_batch:
+        for batch_name, files in quant_spectra_dir.items():
+            LOGGER.info('Batch %s has %d files.', batch_name, len(files))
+    else:
+        LOGGER.info('Quantitative spectra directory has %d files.', len(quant_spectra_dir))
+        quant_spectra_dir = {None: quant_spectra_dir}
+
     if chromatogram_library_spectra_param is not None:
-        chromatogram_library_spectra_dir = parse_input_files(
+        chrom_multi_batch, chromatogram_library_spectra_dir = parse_input_files(
             chromatogram_library_spectra_param, api_key=api_key,
             file_glob=chromatogram_library_spectra_glob,
             file_regex=chromatogram_library_spectra_regex,
+        )
+        if chrom_multi_batch:
+            LOGGER.error('Chromatogram library spectra directories cannot be in multiple batches.')
+            sys.exit(1)
+
+        LOGGER.info(
+            'Chromatogram library spectra directory has %d files.',
+            len(chromatogram_library_spectra_dir)
         )
 
         if write_reports:
@@ -956,6 +979,8 @@ def _main(argv, prog=None):
             )
 
     # read metadata
+    replicate_metadata = None
+    metadata_types = None
     if metadata_path:
         download_metadata = args.metadata_output_path is not None
         metadata = get_file(
@@ -973,14 +998,16 @@ def _main(argv, prog=None):
         else:
             metadata_stream = StringIO(metadata)
             metadata_stream.seek(0)
-            if not metadata_reader.read(metadata_stream):
+            metadata_format = os.path.splitext(metadata_path)[1].lower()
+            if not metadata_reader.read(metadata_stream, metadata_format=metadata_format[1:]):
                 sys.exit(1)
 
         replicate_metadata = metadata_reader.df
+        metadata_types = metadata_reader.types
 
     LOGGER.info('Validating metadata...')
     success = validate_metadata(
-        quant_spectra_dir, replicate_metadata,
+        quant_spectra_dir, replicate_metadata, metadata_types,
         color_vars=color_vars, batch1=batch1, batch2=batch2,
         control_key=control_key, control_values=control_values,
         write_replicate_report=write_reports, write_metadata_report=write_reports,
