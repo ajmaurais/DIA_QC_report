@@ -15,7 +15,7 @@ from jsonschema import validate, ValidationError
 from requests import HTTPError
 from pandas import isna as pd_isna
 
-from .submodules.nextflow_pipeline_config import PipelineConfig
+from .submodules.pipeline_config import PipelineConfig
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file

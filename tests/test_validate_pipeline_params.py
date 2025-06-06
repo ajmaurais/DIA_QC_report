@@ -4,7 +4,7 @@ from unittest import mock
 from types import SimpleNamespace
 
 from DIA_QC_report import validate_pipeline_params as vpp
-from DIA_QC_report.submodules import nextflow_pipeline_config as npc
+from DIA_QC_report.submodules import pipeline_config as npc
 from DIA_QC_report.submodules.panorama import have_internet
 from DIA_QC_report.submodules.panorama import PANORA_PUBLIC_KEY
 
