@@ -3,7 +3,6 @@ import sys
 import os
 import argparse
 import re
-import copy
 from pathlib import PurePosixPath
 from urllib.parse import quote
 import json
@@ -11,13 +10,12 @@ from shutil import which
 import subprocess
 from io import StringIO
 from collections import Counter
-from types import SimpleNamespace
 
 from jsonschema import validate, ValidationError
 from requests import HTTPError
 from pandas import isna as pd_isna
 
-from .submodules.nextflow_pipeline_config import parse_params, namespace_to_dict
+from .submodules.nextflow_pipeline_config import PipelineConfig
 from .submodules.panorama import PANORA_PUBLIC_KEY
 from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file
@@ -60,56 +58,6 @@ QUANT_SPECTRA_SCHEMA = {
         },
     ],
 }
-
-
-def merge_params(lhs, rhs):
-    """
-    Recursively “add” two params objects together.
-
-    Both *lhs* and *rhs* may be either dicts or SimpleNamespace
-    objects produced by `parse_params`.
-    """
-
-    if not isinstance(lhs, (dict, SimpleNamespace)) \
-       or not isinstance(rhs, (dict, SimpleNamespace)):
-        raise TypeError('both arguments must be dict- or namespace-like')
-
-    def _to_mapping(obj):
-        """Return the underlying dict for a mapping-like object."""
-        return vars(obj) if isinstance(obj, SimpleNamespace) else obj
-
-    def _wrap(template, mapping):
-        """
-        Wrap *mapping* back into the same container type as *template*
-        (namespace or plain dict).
-        """
-        return (SimpleNamespace(**mapping)
-                if isinstance(template, SimpleNamespace)
-                else mapping)
-
-    def _merge(a, b):
-        if isinstance(a, (dict, SimpleNamespace)) \
-           and isinstance(b, (dict, SimpleNamespace)):
-            map_a, map_b = _to_mapping(a), _to_mapping(b)
-
-            merged = {}
-            for key in map_a.keys() | map_b.keys():          # union of keys
-                if key in map_a and key in map_b:
-                    merged[key] = _merge(map_a[key], map_b[key])
-                elif key in map_a:
-                    merged[key] = copy.deepcopy(map_a[key])
-                else:
-                    merged[key] = copy.deepcopy(map_b[key])
-
-            # If either side was a namespace, keep the result a namespace
-            if isinstance(a, SimpleNamespace) or isinstance(b, SimpleNamespace):
-                return SimpleNamespace(**merged)
-            return merged
-        else:
-            # scalars / lists / literal maps → rhs wins (deep-copied)
-            return copy.deepcopy(b)
-
-    return _merge(lhs, rhs)
 
 
 def glob_to_regex(file_glob: str) -> str:
@@ -345,23 +293,6 @@ def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') 
     return f"{base_url}/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
 
 
-def _remove_none_from_param_dict(data):
-    ''' Recursively remove any keys in dictionaries whose value is None.  '''
-    if isinstance(data, dict):
-        cleaned = {}
-        for key, value in data.items():
-            if value is None:
-                continue
-            if isinstance(value, dict):
-                nested = _remove_none_from_param_dict(value)
-                if nested:
-                    cleaned[key] = nested
-            else:
-                cleaned[key] = value
-        return cleaned
-    return data
-
-
 def validate_config_files(config_paths, schema_path, api_key=None):
     '''
     Read, merge, and validate Nextflow pipeline config files against the schema.
@@ -380,7 +311,7 @@ def validate_config_files(config_paths, schema_path, api_key=None):
     dict
         Merged config parameters from all config files.
     '''
-    config_data = {}
+    config_data = PipelineConfig()
     all_good = True
     if isinstance(config_paths, str):
         config_paths = [config_paths]
@@ -392,8 +323,8 @@ def validate_config_files(config_paths, schema_path, api_key=None):
         if config_text is None:
             all_good = False
             continue
-        this_config = parse_params(text=config_text)
-        config_data = merge_params(config_data, this_config)
+        this_config = PipelineConfig(text=config_text)
+        config_data += this_config
 
     if not all_good:
         return False, {}
@@ -406,7 +337,7 @@ def validate_config_files(config_paths, schema_path, api_key=None):
     schema = json.loads(schema_text)
 
     try:
-        param_dict = _remove_none_from_param_dict(namespace_to_dict(config_data))
+        param_dict = config_data.to_dict(remove_none=True)
         validate(param_dict, schema)
     except ValidationError as e:
         LOGGER.error(f'Pipeline config validation failed: {e.message}')
@@ -960,11 +891,11 @@ def _main(argv, prog=None):
             sys.exit(1)
         LOGGER.info('Pipeline config validation succeeded.')
 
-        color_vars = _get_config_path(config_data, ['qc_report', 'color_vars'])
-        batch1 = _get_config_path(config_data, ['batch_report', 'batch1'])
-        batch2 = _get_config_path(config_data, ['batch_report', 'batch2'])
-        control_key = _get_config_path(config_data, ['qc_report', 'control_key'])
-        control_values = _get_config_path(config_data, ['qc_report', 'control_values'])
+        color_vars = config_data.get('qc_report.color_vars')
+        batch1 = config_data.get('batch_report.batch1')
+        batch2 = config_data.get('batch_report.batch2')
+        control_key = config_data.get('qc_report.control_key')
+        control_values = config_data.get('qc_report.control_values')
 
         quant_spectra_param = config_data.get('quant_spectra_dir')
         chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir')

@@ -97,13 +97,13 @@ class TestFindParamsBlock(unittest.TestCase):
         params_tree = npc._find_params_block(tree)
         self.assertIsInstance(params_tree, dict)
 
-        data = npc.parse_params(text=config)
-        self.assertIsInstance(data, SimpleNamespace)
-        self.assertTrue(hasattr(data, 'input'))
-        self.assertTrue(hasattr(data, 'output'))
-        self.assertEqual(data.input, 'data.txt')
-        self.assertEqual(data.output, 'results.txt')
-        self.assertEqual(len(vars(data)), 2)
+        data = npc.PipelineConfig(text=config)
+        self.assertIsInstance(data.params, SimpleNamespace)
+        self.assertTrue(hasattr(data.params, 'input'))
+        self.assertTrue(hasattr(data.params, 'output'))
+        self.assertEqual(data.params.input, 'data.txt')
+        self.assertEqual(data.params.output, 'results.txt')
+        self.assertEqual(len(vars(data.params)), 2)
 
 
 class TestNodeHasIdentifier(unittest.TestCase):
@@ -143,14 +143,13 @@ class TestParseParams(unittest.TestCase):
                 n_files = 10
             }
         '''
-        with mock.patch('pathlib.Path.read_text', return_value=config):
-            params = npc.parse_params('pipeline.config')
-            self.assertEqual(params.input, 'data.txt')
-            self.assertEqual(params.output, 'results.txt')
-            self.assertEqual(params.threshold, 0.05)
-            self.assertEqual(params.a_boolean, True)
-            self.assertIsNone(params.a_null_value)
-            self.assertEqual(params.n_files, 10)
+        params = npc.PipelineConfig(text=config).params
+        self.assertEqual(params.input, 'data.txt')
+        self.assertEqual(params.output, 'results.txt')
+        self.assertEqual(params.threshold, 0.05)
+        self.assertEqual(params.a_boolean, True)
+        self.assertIsNone(params.a_null_value)
+        self.assertEqual(params.n_files, 10)
 
 
     def test_parse_complex_types(self):
@@ -164,11 +163,10 @@ class TestParseParams(unittest.TestCase):
                 map = [key1: "/local/dir", key2: "%s"]
             } ''' % (url_str, url_str, url_str)
 
-        with mock.patch('pathlib.Path.read_text', return_value=config):
-            params = npc.parse_params('pipeline.config')
-            self.assertEqual(params.string_param, url_str)
-            self.assertEqual(params.list, ["/local/dir", url_str])
-            self.assertEqual(params.map, {'key1': '/local/dir', 'key2': url_str})
+        params = npc.PipelineConfig(text=config).params
+        self.assertEqual(params.string_param, url_str)
+        self.assertEqual(params.list, ["/local/dir", url_str])
+        self.assertEqual(params.map, {'key1': '/local/dir', 'key2': url_str})
 
 
     def test_multi_line_string(self):
@@ -181,7 +179,7 @@ class TestParseParams(unittest.TestCase):
                     '''
             } """ % url_str
 
-        params = npc.parse_params(text=config)
+        params = npc.PipelineConfig(text=config).params
         self.assertEqual(
             npc.param_to_list(params.multi_line),
             ['/dir/one', url_str]
@@ -192,11 +190,11 @@ class TestParseParams(unittest.TestCase):
         target = SimpleNamespace(tripple_quoted='text')
 
         config_single = "params { tripple_quoted = '''text''' }"
-        config_data = npc.parse_params(text=config_single)
+        config_data = npc.PipelineConfig(text=config_single).params
         self.assertEqual(config_data, target)
 
         config_double = 'params { tripple_quoted = """text""" }'
-        config_data = npc.parse_params(text=config_double)
+        config_data = npc.PipelineConfig(text=config_double).params
         self.assertEqual(config_data, target)
 
 
@@ -207,7 +205,7 @@ class TestParseParams(unittest.TestCase):
             } '''
         target = SimpleNamespace(string_list=['https://example.com/raw/', '/local/dir'])
 
-        config_data = npc.parse_params(text=config)
+        config_data = npc.PipelineConfig(text=config).params
         self.assertEqual(config_data, target)
 
 
@@ -218,7 +216,7 @@ class TestParseParams(unittest.TestCase):
             } '''
         target = SimpleNamespace(map={'key1': 'https://example.com/raw/', 'key2': '/local/dir'})
 
-        config_data = npc.parse_params(text=config)
+        config_data = npc.PipelineConfig(text=config).params
         self.assertEqual(config_data, target)
 
 
@@ -238,7 +236,7 @@ class TestParseParams(unittest.TestCase):
             carafe=SimpleNamespace(spectra_file='/path/to/spectra.mzML',
                                    peptide_results_file='results.tsv')
         )
-        config_data = npc.parse_params(text=config)
+        config_data = npc.PipelineConfig(text=config).params
         self.assertEqual(config_data, target)
 
 
@@ -260,8 +258,8 @@ class TestParseParams(unittest.TestCase):
         target = SimpleNamespace(
             carafe=SimpleNamespace(peptide_results_file='results.tsv', spectra_file='/path/to/spectra.mzML')
         )
-        brace_data = npc.parse_params(text=brace_config)
-        dot_data = npc.parse_params(text=dot_config)
+        brace_data = npc.PipelineConfig(text=brace_config).params
+        dot_data = npc.PipelineConfig(text=dot_config).params
         self.assertEqual(brace_data, dot_data)
         self.assertEqual(brace_data, target)
 
@@ -314,20 +312,81 @@ class TestParseParams(unittest.TestCase):
             panorama = SimpleNamespace(upload = False, upload_url = '<path>', import_skyline = False)
         )
 
-        config_data = npc.parse_params(config_file)
+        config_data = npc.PipelineConfig(config_file).params
         self.assertEqual(config_data, target)
 
 
     def test_write_params(self):
         config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/panorama_multi_batch_diann.config'
-        config_data = npc.parse_params(config_file)
+        config_data = npc.PipelineConfig(config_file)
 
         out = io.StringIO()
-        npc.write_params_namespace(SimpleNamespace(params=config_data), file=out)
+        config_data.write(file=out)
         out.seek(0)
         written_config = out.read()
-        written_data = npc.parse_params(text=written_config)
+        written_data = npc.PipelineConfig(text=written_config)
         self.assertEqual(config_data, written_data)
+
+
+class TestParamsToDict(unittest.TestCase):
+    def test_remove_none_values(self):
+        params = { 'param1': 'value1', 'param2': None, 'param3': 'value3', 'param4': None }
+        expected = { 'param1': 'value1', 'param3': 'value3' }
+        result = npc._remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_remove_none_values_in_branch(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': {'n1': 'v', 'n2': None}}
+        expected = {'param1': 'value1',
+                    'param3': 'value3',
+                    'param4': {'n1': 'v'} }
+        result = npc._remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_remove_empty_branch(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': {'n1': None, 'n2': None} }
+        expected = {'param1': 'value1',
+                    'param3': 'value3' }
+        result = npc._remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_cascading_branch_removal(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': {'n1': {'inner': None}}}
+        expected = {'param1': 'value1',
+                    'param3': 'value3' }
+        result = npc._remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_list_unchanged(self):
+        params   = {'param1': 'value1',
+                    'param2': None,
+                    'param3': 'value3',
+                    'param4': ['a', None, 'b']}
+        expected = {'param1': 'value1',
+                    'param3': 'value3',
+                    'param4': ['a', None, 'b']}
+        result = npc._remove_none_from_param_dict(params)
+        self.assertDictEqual(result, expected)
+
+
+    def test_primitive_returns_unchanged(self):
+        self.assertEqual(npc._remove_none_from_param_dict(42), 42)
+        self.assertEqual(npc._remove_none_from_param_dict("string"), "string")
+        self.assertEqual(npc._remove_none_from_param_dict(3.14), 3.14)
+        self.assertEqual(npc._remove_none_from_param_dict(True), True)
 
 
     def test_namespace_to_dict(self):
@@ -348,6 +407,77 @@ class TestParseParams(unittest.TestCase):
                 'peptide_results_file' : 'results.tsv'
             }
         }
-        config_data = npc.parse_params(text=config)
-        config_dict = npc.namespace_to_dict(config_data)
+        config_data = npc.PipelineConfig(text=config)
+        config_dict = config_data.to_dict(config_data)
         self.assertEqual(config_dict, target)
+
+
+class TestAddParams(unittest.TestCase):
+    def test_add_params(self):
+        lhs = npc.PipelineConfig(text='''
+            params {
+                search_engine="encyclopedia"; fasta = null;
+                skyline { doc_name = "final"; skip = false } }
+        ''')
+        rhs = SimpleNamespace(
+            dir={"b1": "/path/b1", "b2": "/path/b2"},
+            qc_report=SimpleNamespace(color_vars=["a", "b", "c"]),
+            fasta="db.fasta",
+            search_engine="diann"
+        )
+        rhs = npc.PipelineConfig(text='''
+            params {
+                dir = [b1: "/path/b1", b2: "/path/b2"]
+                qc_report { color_vars = ["a", "b", "c"] }
+                fasta = "db.fasta"
+                search_engine = "diann" }
+        ''')
+        target = SimpleNamespace(
+            dir={'b1': '/path/b1', 'b2': '/path/b2'},
+            qc_report=SimpleNamespace(color_vars=['a', 'b', 'c']),
+            fasta='db.fasta',
+            search_engine='diann',
+            skyline=SimpleNamespace(skip=False, doc_name='final')
+        )
+        result = lhs + rhs
+        self.assertEqual(result.params, target)
+
+
+class TestGetParamsPath(unittest.TestCase):
+    def setUp(self):
+        self.config = npc.PipelineConfig(text='''
+            params {
+                dir = [b1: "/path/b1", b2: "/path/b2"]
+                qc_report { color_vars = ["a", "b", "c"] }
+                fasta = "db.fasta"
+                search_engine = "diann"
+            }
+        ''')
+
+    def test_single(self):
+        target = 'diann'
+        result = self.config.get('search_engine')
+        self.assertEqual(result, target)
+
+
+    def test_double(self):
+        target = '/path/b1'
+
+        result = self.config.get(['dir', 'b1'])
+        self.assertEqual(result, target)
+
+        result = self.config.get('dir.b1')
+        self.assertEqual(result, target)
+
+
+    def test_double_missing(self):
+        target = None
+
+        result = self.config.get(['dir', 'b3'])
+        self.assertEqual(result, target)
+
+        result = self.config.get(['not_a_key', 'b1'])
+        self.assertEqual(result, target)
+
+        result = self.config.get('not_a_key.b1')
+        self.assertEqual(result, target)

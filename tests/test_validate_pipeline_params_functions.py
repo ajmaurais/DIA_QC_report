@@ -2,12 +2,10 @@
 import unittest
 from unittest import mock
 import os
-import re
 from functools import partial
 from shutil import which
 import random
 import json
-from types import SimpleNamespace
 
 import pandas as pd
 
@@ -22,64 +20,6 @@ from test_panorama_functions import PUBLIC_FILE
 STRAP_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/S-Trap/'
 SP3_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/SP3/'
 PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/'
-
-class TestAddParams(unittest.TestCase):
-    def test_add_params(self):
-        lhs = SimpleNamespace(
-            fasta=None,
-            search_engine="encyclopedia",
-            skyline=SimpleNamespace(skip=False, doc_name='final')
-        )
-        rhs = SimpleNamespace(
-            dir={"b1": "/path/b1", "b2": "/path/b2"},
-            qc_report=SimpleNamespace(color_vars=["a", "b", "c"]),
-            fasta="db.fasta",
-            search_engine="diann"
-        )
-        target = SimpleNamespace(
-            dir={'b1': '/path/b1', 'b2': '/path/b2'},
-            qc_report=SimpleNamespace(color_vars=['a', 'b', 'c']),
-            fasta='db.fasta',
-            search_engine='diann',
-            skyline=SimpleNamespace(skip=False, doc_name='final')
-        )
-        result = vpp.merge_params(lhs, rhs)
-        self.assertEqual(result, target)
-
-
-class TestGetConfigPath(unittest.TestCase):
-    def setUp(self):
-        self.rhs = {
-            "dir":       {"b1": "/path/b1", "b2": "/path/b2"},
-            "qc_report": {"color_vars": ["a", "b", "c"]},
-            "fasta": "db.fasta",
-            "search_engine": "diann",
-        }
-
-    def test_single(self):
-        target = 'diann'
-        result = vpp._get_config_path(self.rhs, ['search_engine'])
-        self.assertEqual(result, target)
-
-
-    def test_double(self):
-        target = '/path/b1'
-        result = vpp._get_config_path(
-            self.rhs, ['dir', 'b1']
-        )
-        self.assertEqual(result, target)
-
-
-    def test_double_missing(self):
-        target = None
-        result = vpp._get_config_path(
-            self.rhs, ['dir', 'b3']
-        )
-        self.assertEqual(result, target)
-        result = vpp._get_config_path(
-            self.rhs, ['not_a_key', 'b1']
-        )
-        self.assertEqual(result, target)
 
 
 class TestGenerateSchemaUrl(unittest.TestCase):
@@ -802,67 +742,6 @@ class TestWriteReorts(ValidateMetadata):
             )
 
         self.assertInLog("'ParameterBatch' is a reserved column header name. It will be changed to 'ParameterBatch_2' in the report.", cm)
-
-
-class TestRemoveNoneFromParamDict(unittest.TestCase):
-    def test_remove_none_values(self):
-        params = { 'param1': 'value1', 'param2': None, 'param3': 'value3', 'param4': None }
-        expected = { 'param1': 'value1', 'param3': 'value3' }
-        result = vpp._remove_none_from_param_dict(params)
-        self.assertDictEqual(result, expected)
-
-
-    def test_remove_none_values_in_branch(self):
-        params   = {'param1': 'value1',
-                    'param2': None,
-                    'param3': 'value3',
-                    'param4': {'n1': 'v', 'n2': None}}
-        expected = {'param1': 'value1',
-                    'param3': 'value3',
-                    'param4': {'n1': 'v'} }
-        result = vpp._remove_none_from_param_dict(params)
-        self.assertDictEqual(result, expected)
-
-
-    def test_remove_empty_branch(self):
-        params   = {'param1': 'value1',
-                    'param2': None,
-                    'param3': 'value3',
-                    'param4': {'n1': None, 'n2': None} }
-        expected = {'param1': 'value1',
-                    'param3': 'value3' }
-        result = vpp._remove_none_from_param_dict(params)
-        self.assertDictEqual(result, expected)
-
-
-    def test_cascading_branch_removal(self):
-        params   = {'param1': 'value1',
-                    'param2': None,
-                    'param3': 'value3',
-                    'param4': {'n1': {'inner': None}}}
-        expected = {'param1': 'value1',
-                    'param3': 'value3' }
-        result = vpp._remove_none_from_param_dict(params)
-        self.assertDictEqual(result, expected)
-
-
-    def test_list_unchanged(self):
-        params   = {'param1': 'value1',
-                    'param2': None,
-                    'param3': 'value3',
-                    'param4': ['a', None, 'b']}
-        expected = {'param1': 'value1',
-                    'param3': 'value3',
-                    'param4': ['a', None, 'b']}
-        result = vpp._remove_none_from_param_dict(params)
-        self.assertDictEqual(result, expected)
-
-
-    def test_primitive_returns_unchanged(self):
-        self.assertEqual(vpp._remove_none_from_param_dict(42), 42)
-        self.assertEqual(vpp._remove_none_from_param_dict("string"), "string")
-        self.assertEqual(vpp._remove_none_from_param_dict(3.14), 3.14)
-        self.assertEqual(vpp._remove_none_from_param_dict(True), True)
 
 
 class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBase):

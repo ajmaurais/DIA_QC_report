@@ -1,7 +1,9 @@
 
-import ast, pathlib, re
-from typing import Any, Dict, List
+import ast
+import re
+from typing import Any, List
 from types import SimpleNamespace
+import copy
 
 from groovy_parser.parser import parse_and_digest_groovy_content
 
@@ -316,93 +318,56 @@ def _dict_to_ns(obj):
     return obj
 
 
-def parse_params(file=None, text=None) -> Dict[str, Any]:
-    '''
-    Parses a Nextflow pipeline configuration file and extracts parameters from the 'params' block.
-
-    Parameters
-    ----------
-    file : str, optional
-        The path to the Nextflow configuration file. If not provided, *text* must be given.
-    text : str, optional
-        The content of the Nextflow configuration file as a string. If not provided, *file* must be given.
-
-    Returns:
-        Dict[str, Any]: A dictionary containing parameter names and their corresponding values extracted from the 'params' block.
-
-    Raises:
-        FileNotFoundError: If the specified configuration file does not exist.
-        ValueError: If the 'params' block cannot be found or parsed in the configuration file.
-    '''
-    if file is not None:
-        text = pathlib.Path(file).read_text()
-    if text is None:
-        raise ValueError('Either `file` or `text` must be provided.')
-
-    tree = parse_and_digest_groovy_content(text)
-    params_block = _find_params_block(tree)
-    out: Dict[str, Any] = {}
-    _collect(params_block, out)
-    return SimpleNamespace(**_dict_to_ns(out))
-
-
-def param_to_list(param_variable):
-    """
-    Convert *param_variable* to a list.
-
-    If it is already a list, return it unchanged.
-    If it is a string, split on new-lines, strip whitespace, and drop blank lines.
-    Otherwise, wrap it in a one-element list.
-
-    This is the python translation of the function the pipeline uses to process list parameters.
-
-    Parameters
-    ----------
-    param_variable : Any
-        A single value, a multi-line string, or a list.
-
-    Returns
-    -------
-    list
-        The parameter represented as a list.
-    """
-    if isinstance(param_variable, list):
-        return param_variable
-
-    if isinstance(param_variable, str):
-        return [line.strip() for line in param_variable.split('\n') if line.strip()]
-
-    return [param_variable]
-
-
-def namespace_to_dict(obj):
-    '''
-    Recursively convert a params namespace tree back into the original
-    nested-dictionary structure.
-
-    Parameters
-    ----------
-    obj : Any
-        A SimpleNamespace returned by parse_params, or any nested value
-        within it (dict, list, scalar).
-
-    Returns
-    -------
-    Any
-        The same data represented entirely with builtin container types
-    '''
+def _namespace_to_dict(obj: Any) -> Any:
     if isinstance(obj, SimpleNamespace):
         obj = vars(obj)
 
     if isinstance(obj, dict):
-        return {k: namespace_to_dict(v) for k, v in obj.items()}
+        return {k: _namespace_to_dict(v) for k, v in obj.items()}
 
     if isinstance(obj, list):
-        return [namespace_to_dict(v) for v in obj]
+        return [_namespace_to_dict(v) for v in obj]
     if isinstance(obj, tuple):
-        return tuple(namespace_to_dict(v) for v in obj)
+        return tuple(_namespace_to_dict(v) for v in obj)
 
     return obj
+
+
+def _remove_none_from_param_dict(data):
+    ''' Recursively remove any keys in dictionaries whose value is None.  '''
+    if isinstance(data, dict):
+        cleaned = {}
+        for key, value in data.items():
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                nested = _remove_none_from_param_dict(value)
+                if nested:
+                    cleaned[key] = nested
+            else:
+                cleaned[key] = value
+        return cleaned
+    return data
+
+
+def _merge_params(lhs, rhs):
+    ''' Recursive merge of two params trees (dicts / SimpleNamespaces). '''
+    def _to_map(x):
+        return vars(x) if isinstance(x, SimpleNamespace) else x
+
+    def _wrap(template, mapping):
+        return SimpleNamespace(**mapping) if isinstance(template, SimpleNamespace) else mapping
+
+    def _merge(a, b):
+        if isinstance(a, (dict, SimpleNamespace)) and isinstance(b, (dict, SimpleNamespace)):
+            ma, mb = _to_map(a), _to_map(b)
+            merged = {k: _merge(ma[k], mb[k]) if k in ma and k in mb
+                      else copy.deepcopy(ma.get(k, mb.get(k)))
+                      for k in ma.keys() | mb.keys()}
+            return _wrap(a if isinstance(a, SimpleNamespace) or isinstance(b, SimpleNamespace) else ma, merged)
+        return copy.deepcopy(b)
+
+    return _merge(lhs, rhs)
 
 
 def _quote_str(s: str) -> str:
@@ -410,7 +375,6 @@ def _quote_str(s: str) -> str:
     if '\n' in s:
         return f"'''{s}'''"
     return f"'{s}'"
-
 
 def _render_value(val, indent: str, lvl: int) -> str:
     """
@@ -440,7 +404,6 @@ def _render_value(val, indent: str, lvl: int) -> str:
     # numbers or anything else repr-able
     return str(val)
 
-
 def _dump_ns(ns: SimpleNamespace, fh, indent: str, lvl: int):
     """
     Recursively write *ns* to *fh* as Groovy config with indentation.
@@ -456,15 +419,165 @@ def _dump_ns(ns: SimpleNamespace, fh, indent: str, lvl: int):
             fh.write(f'{pad}{key} = {groovy_val}\n')
 
 
-def write_params_namespace(obj: SimpleNamespace, file: str, indent: str = '  '):
-    '''
-    '''
+class PipelineConfig:
+    def __init__(self, file=None, text=None):
+        '''
+        Initialize the PipelineConfig object by parsing a Nextflow pipeline configuration file.
+        Parameters
+        ----------
+        file : str, optional
+            The path to the Nextflow configuration file. If not provided, *text* must be given.
+        text : str, optional
+            The content of the Nextflow configuration file as a string. If not provided, *file* must be given.
+        Raises
+        ------
+        ValueError: If neither *file* nor *text* is provided, or if the 'params' block cannot be found.
+        FileNotFoundError: If the specified configuration file does not exist.
+        Usage
+        -----
+        >>> config = PipelineConfig(file='path/to/config.nf')
+        >>> config = PipelineConfig(text='params {\n  foo = "bar"\n}')
+        >>> print(config.params.foo)  # Accessing a parameter
+        '''
+        self.params = SimpleNamespace()
+        if file is not None or text is not None:
+            self.read(file, text)
 
-    _needs_close = isinstance(file, str)
-    fh = open(file, 'w', encoding='utf-8') if _needs_close else file
 
-    try:
-        _dump_ns(obj, fh, indent, 0)
-    finally:
-        if _needs_close:
-            fh.close()
+    def read(self, file: str, text: str = None):
+        if file is not None:
+            with open(file, 'r', encoding='utf-8') as f:
+                text = f.read()
+        if text is None:
+            raise ValueError('Either `file` or `text` must be provided.')
+
+        tree = parse_and_digest_groovy_content(text)
+        params_block = _find_params_block(tree)
+        data = {}
+        _collect(params_block, data)
+        self.params = SimpleNamespace(**_dict_to_ns(data))
+
+
+    def __add__(self, rhs):
+        if not isinstance(rhs, PipelineConfig):
+            return NotImplemented
+
+        merged = _merge_params(self.params, rhs.params)
+        result = PipelineConfig()           # empty instance
+        result.params = merged
+        return result
+
+
+    def __iadd__(self, rhs):
+        if not isinstance(rhs, PipelineConfig):
+            raise TypeError('rhs must be a PipelineConfig')
+
+        self.params = _merge_params(self.params, rhs.params)
+        return self
+
+
+    def __eq__(self, other):
+        if not isinstance(other, PipelineConfig):
+            return NotImplemented
+        return self.params == other.params
+
+
+    def __ne__(self, other):
+        if not isinstance(other, PipelineConfig):
+            return NotImplemented
+        return self.params != other.params
+
+
+    def get(self, key: str | List, default=None):
+        '''
+        Get a parameter value by its dotted key path.
+        Parameters
+        ----------
+        key : str or List
+            The path to the parameter, e.g. 'qc_report.color_vars' or ['qc_report', 'color_vars'].
+        default : Any, optional
+            The value to return if the key does not exist. Default is None.
+        Returns
+        -------
+        Any
+            The value of the parameter or *default* if not found.
+        '''
+        parts = key.split('.') if isinstance(key, str) else key
+        current = self.params
+        for part in parts:
+            if isinstance(current, SimpleNamespace):
+                current = getattr(current, part, default)
+            elif isinstance(current, dict):
+                current = current.get(part, default)
+            else:
+                return default
+        return current
+
+
+    def to_dict(self, remove_none=False):
+        '''
+        Recursively convert a params namespace tree into a nested-dictionary structure.
+
+        Returns
+        -------
+        Any
+            The same data represented entirely with builtin container types
+        '''
+        d = _namespace_to_dict(self.params)
+        if remove_none:
+            return _remove_none_from_param_dict(d)
+        return d
+
+
+    def write(self, file: str, indent: str = '  '):
+        '''
+        Write parameters to a file or output stream in Groovy syntax.
+        Parameters
+        ----------
+        file : str or file-like object
+            The path to the output file or a writable file-like object.
+            If a string is provided, the file will be opened in write mode.
+        indent : str, optional
+            The string used for indentation in the output file. Default is two spaces.
+        Raises
+        ------
+        ValueError: If *file* is not a string or a writable file-like object.
+        IOError: If there is an error writing to the file.
+        '''
+        _needs_close = isinstance(file, str)
+        fh = open(file, 'w', encoding='utf-8') if _needs_close else file
+
+        try:
+            _dump_ns(SimpleNamespace(params=self.params), fh, indent, 0)
+        finally:
+            if _needs_close:
+                fh.close()
+
+
+def param_to_list(param_variable):
+    """
+    Convert *param_variable* to a list.
+
+    If it is already a list, return it unchanged.
+    If it is a string, split on new-lines, strip whitespace, and drop blank lines.
+    Otherwise, wrap it in a one-element list.
+
+    This is the python translation of the function the pipeline uses to process list parameters.
+
+    Parameters
+    ----------
+    param_variable : Any
+        A single value, a multi-line string, or a list.
+
+    Returns
+    -------
+    list
+        The parameter represented as a list.
+    """
+    if isinstance(param_variable, list):
+        return param_variable
+
+    if isinstance(param_variable, str):
+        return [line.strip() for line in param_variable.split('\n') if line.strip()]
+
+    return [param_variable]
