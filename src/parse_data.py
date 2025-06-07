@@ -130,8 +130,9 @@ def write_db(fname, replicates, precursors, protein_quants=None,
     append = False
     if os.path.isfile(fname):
         if overwrite_mode == 'error':
-            LOGGER.error('%s already exists. Use the --overwriteMode option to append or overwrite',
-                         fname)
+            LOGGER.error(
+                '%s already exists. Use the --overwriteMode option to append or overwrite', fname
+            )
             return False
 
         if overwrite_mode == 'overwrite':

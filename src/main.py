@@ -79,7 +79,7 @@ Available commands:
 
         if not hasattr(self, args.command):
             sys.stderr.write(f"dia_qc: '{args.command}' is not a valid command!\n")
-            sys.exit(1)
+            sys.exit(2)
 
         getattr(self, args.command)(argv)
 
