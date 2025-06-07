@@ -13,6 +13,7 @@ from DIA_QC_report import validate_pipeline_params as vpp
 from DIA_QC_report.submodules.panorama import url_exists, have_internet
 from DIA_QC_report.submodules.panorama import PANORA_PUBLIC_KEY
 from DIA_QC_report.submodules.read_metadata import Metadata
+from DIA_QC_report.submodules.logger import LOGGER
 
 import setup_functions
 from test_panorama_functions import PUBLIC_FILE
@@ -92,7 +93,7 @@ class TestGetApiKeyFromNextflow(unittest.TestCase, setup_functions.AbstractTests
 
 
     def test_no_key_in_secrets_manager(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             with mock.patch('DIA_QC_report.validate_pipeline_params.subprocess.run',
                             return_value=self._mock_process_run('null')), \
                 mock.patch('DIA_QC_report.validate_pipeline_params.which', return_value='nextflow'):
@@ -127,7 +128,7 @@ class TestParseInputFiles(unittest.TestCase):
 
 
     def do_test(self, input_files, target_files, **kwargs):
-        with self.assertNoLogs(vpp.LOGGER, 'ERROR'):
+        with self.assertNoLogs(LOGGER, 'ERROR'):
             multi_batch_mode, files = vpp.parse_input_files(
                 input_files=input_files,
                 **kwargs
@@ -288,7 +289,7 @@ class TestParseInputFiles(unittest.TestCase):
         }
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
-            with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+            with self.assertLogs(LOGGER, 'WARNING') as cm:
                 use_multi_batch_mode, files = vpp.parse_input_files(
                     input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=False
                 )
@@ -317,7 +318,7 @@ class TestParseInputFiles(unittest.TestCase):
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
             with self.assertRaises(SystemExit):
-                with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+                with self.assertLogs(LOGGER, 'ERROR') as cm:
                     vpp.parse_input_files(
                         input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=True,
                     )
@@ -330,7 +331,7 @@ class TestParseInputFiles(unittest.TestCase):
 
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
-            with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+            with self.assertLogs(LOGGER, 'WARNING') as cm:
                 use_batch_mode, files = vpp.parse_input_files(
                     input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=False
                 )
@@ -352,7 +353,7 @@ class TestParseInputFiles(unittest.TestCase):
         with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
                         side_effect=partial(self._target_files_from_url, ext=ext)):
             with self.assertRaises(SystemExit):
-                with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+                with self.assertLogs(LOGGER, 'WARNING') as cm:
                     vpp.parse_input_files(
                         input_files, file_glob=f'*-8mz-ovlp-400to1000-*.{ext}', strict=True
                     )
@@ -381,7 +382,7 @@ class TestValidateMetadataParams(ValidateMetadata):
     def test_missing_metadata_file(self):
         color_vars=['cellLine', 'experiment']
 
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, None, None, color_vars=color_vars
             )
@@ -398,7 +399,7 @@ class TestValidateMetadataParams(ValidateMetadata):
                         'Failed to read metadata file')
         reps = {None: self.project_replicates['Strap']}
 
-        with self.assertLogs(vpp.LOGGER, 'WARN') as cm:
+        with self.assertLogs(LOGGER, 'WARN') as cm:
             success = vpp.validate_metadata(
                 reps, reader.df, reader.types, color_vars=['na_var']
             )
@@ -407,7 +408,7 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_color_var(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['missing_color_var']
@@ -418,7 +419,7 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_batch_var(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 batch1='notABatch'
@@ -429,7 +430,7 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_only_control_key(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='cellLine'
@@ -439,7 +440,7 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_control_key(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='notAVar', control_values=['T47D', 'HeLa']
@@ -449,7 +450,7 @@ class TestValidateMetadataParams(ValidateMetadata):
 
 
     def test_missing_control_values(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 control_key='cellLine', control_values=['notACellLine']
@@ -464,7 +465,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         duplicate_rep = random.choice(self.project_replicates['Sp3'])
         self.project_replicates['Strap'].append(duplicate_rep)
 
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types
             )
@@ -481,7 +482,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         for _ in range(n_duplicates):
             project_reps_flat[None].append(duplicate_rep)
 
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 project_reps_flat, self.combined_metadata, self.metadata_types
             )
@@ -492,7 +493,7 @@ class TestValidateMetadataReps(ValidateMetadata):
     def test_extra_metadata_reps(self):
         project_reps_flat = {None: self.project_replicates['Strap']}
 
-        with self.assertLogs(vpp.LOGGER, 'WARN') as cm:
+        with self.assertLogs(LOGGER, 'WARN') as cm:
             success = vpp.validate_metadata(
                 project_reps_flat, self.combined_metadata, self.metadata_types
             )
@@ -507,7 +508,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         metadata_df = metadata_df.reset_index(drop=True)
 
         # test with strict=True
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 strict=True
@@ -517,7 +518,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         self.assertFalse(success)
 
         # test with strict=False
-        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+        with self.assertLogs(LOGGER, 'WARNING') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 strict=False
@@ -536,20 +537,20 @@ class TestValidateMetadataReps(ValidateMetadata):
         metadata_df.loc[len(metadata_df.index)] = new_row
 
         # test with strict=True
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
-                strict=True
+                color_vars=new_row[1], strict=True
             )
         self.assertInLog(f"Replicate '{new_row[0]}' already has metadata key '{new_row[1]}'. Overwriting with value '{new_row[2]}'.", cm)
         self.assertInLog('Duplicate metadata keys found in replicates.', cm)
         self.assertFalse(success)
 
         # test with strict=False
-        with self.assertLogs(vpp.LOGGER, 'WARN') as cm:
+        with self.assertLogs(LOGGER, 'WARN') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
-                strict=False
+                color_vars=new_row[1], strict=False
             )
         self.assertInLog(f"Replicate '{new_row[0]}' already has metadata key '{new_row[1]}'. Overwriting with value '{new_row[2]}'.", cm)
         self.assertNotInLog('Duplicate metadata keys found in replicates.', cm)
@@ -569,7 +570,7 @@ class TestValidateMetadataReps(ValidateMetadata):
         metadata_df = metadata_df.drop(remove_index).reset_index(drop=True)
 
         # test with strict=True
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 color_vars=color_vars, strict=True
@@ -584,7 +585,7 @@ class TestValidateMetadataReps(ValidateMetadata):
             )
 
         # test with strict=False
-        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+        with self.assertLogs(LOGGER, 'WARNING') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, metadata_df, self.metadata_types,
                 color_vars=color_vars, strict=False
@@ -611,7 +612,7 @@ class TestValidateMetadataReps(ValidateMetadata):
                 lambda x: pd.isna(x) or x is None or x == ''
             ))
 
-        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+        with self.assertLogs(LOGGER, 'WARNING') as cm:
             success = vpp.validate_metadata(
                 reps, reader.df, reader.types, color_vars=color_vars
             )
@@ -635,7 +636,7 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_json_metadata_report(self):
-        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+        with self.assertLogs(LOGGER, 'INFO') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
@@ -674,7 +675,7 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_tsv_metadata_report(self):
-        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+        with self.assertLogs(LOGGER, 'INFO') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
@@ -695,7 +696,7 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_json_replicate_report(self):
-        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+        with self.assertLogs(LOGGER, 'INFO') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
@@ -710,7 +711,7 @@ class TestWriteReorts(ValidateMetadata):
 
 
     def test_write_tsv_replicate_report(self):
-        with self.assertLogs(vpp.LOGGER, 'INFO') as cm:
+        with self.assertLogs(LOGGER, 'INFO') as cm:
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
@@ -736,7 +737,7 @@ class TestWriteReorts(ValidateMetadata):
             replicates[rep].metadata['ParameterBatch'] = batch
             replicates[rep].metadata['ParameterBatch_1'] = batch
 
-        with self.assertLogs(vpp.LOGGER, 'WARNING') as cm:
+        with self.assertLogs(LOGGER, 'WARNING') as cm:
             vpp._write_replicate_report(
                 replicates, output_path=f'{self.work_dir}/test_reserved_report_header_report.tsv',
             )
@@ -751,7 +752,7 @@ class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBa
 
 
     def test_bad_config_url(self):
-        with self.assertLogs(vpp.LOGGER, 'ERROR') as cm:
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
             successs, data = vpp.validate_config_files(
                 'https://example.com/bad_config.config', self.local_schema_path
             )

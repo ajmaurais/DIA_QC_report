@@ -144,7 +144,7 @@ class TestFilterReplicates(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
             self.do_command_log_test(command)
-            self.assertTrue(f'Excluding {len(skip_reps)} replicates.' in result.stderr)
+            self.assertTrue(f'Excluding {len(skip_reps)} replicates.' in result.stdout)
 
             cur.execute('SELECT replicate, includeRep FROM replicates;')
             db_skip_reps = cur.fetchall()
@@ -179,7 +179,7 @@ class TestFilterReplicates(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
             self.do_command_log_test(command)
-            self.assertTrue(f'Excluding {len(project_replicates)} replicates.' in result.stderr)
+            self.assertTrue(f'Excluding {len(project_replicates)} replicates.' in result.stdout)
 
             cur.execute('SELECT replicate, includeRep FROM replicates;')
             db_skip_reps = cur.fetchall()

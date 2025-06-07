@@ -105,9 +105,9 @@ class TestConvertToParquet(unittest.TestCase):
         command = ['dia_qc', 'report_convert',
                    f'{self.metadata_dir}/{report_base}.{report_ext}']
         result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(0, result.returncode, result.stdout)
 
-        self.assertRegex(result.stderr, fr'WARNING: Reading .*?{report_base}\.{report_ext} as a generic Skyline report')
+        self.assertRegex(result.stdout, fr'Reading .*?{report_base}\.{report_ext} as a generic Skyline report')
 
         target_path = f'{self.work_dir}/{report_base}.parquet'
         self.assertIsParquet(target_path)

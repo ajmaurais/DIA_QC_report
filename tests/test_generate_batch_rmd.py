@@ -25,13 +25,13 @@ class TestMainFxns(unittest.TestCase):
             for direction in test_directions:
                 self.assertTrue(tables[direction]['batch_corrected'])
 
-            with self.assertLogs(generate_batch_rmd.LOGGER) as cm:
+            with self.assertLogs(generate_batch_rmd.LOGGER, level='WARNING') as cm:
                 tables = generate_batch_rmd.remove_bc_tables(tables)
 
             self.assertTrue(len(test_directions) == len(cm.output))
 
             for direction, out in zip(test_directions, cm.output):
-                self.assertEqual(out, f'WARNING:root:Batch corrected {direction} table not available when batch correction is skipped!')
+                self.assertIn(f'Batch corrected {direction} table not available when batch correction is skipped!', out)
 
 
     def test_remove_bc_tables_no_bc_options(self):
@@ -202,7 +202,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
-            self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
+            self.assertIn('Only 1 project in replicates! Skipping batch correction.', result.stdout)
 
             for flag in ['precursorTables', 'proteinTables']:
                 command = ['dia_qc', 'batch_rmd', f'--{flag}=44', self.db_path]
@@ -212,7 +212,7 @@ class TestMakeBatchRmd(unittest.TestCase):
 
                 name = re.sub('^p', 'P', flag.replace('Tables', ''))
                 for d in ('long', 'wide'):
-                    self.assertTrue(f'WARNING: {name} batch corrected {d} table not available when batch correction is skipped!' in result.stderr)
+                    self.assertIn(f'{name} batch corrected {d} table not available when batch correction is skipped!', result.stdout)
 
             if self.render_rmd:
                 render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
@@ -488,7 +488,7 @@ class TestMissingMetadata(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
-        self.assertTrue('WARNING: Only 1 project in replicates! Skipping batch correction.' in result.stderr)
+        self.assertIn('Only 1 project in replicates! Skipping batch correction.', result.stdout)
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]

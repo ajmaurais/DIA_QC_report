@@ -74,7 +74,7 @@ class TestMakeQCqmd(unittest.TestCase):
         result = setup_functions.run_command(command, self.work_dir)
 
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('ERROR: Missing standard protein: "NOT_A_PROTEIN"' in result.stderr)
+        self.assertTrue('Missing standard protein: "NOT_A_PROTEIN"' in result.stderr, result.stderr)
         self.assertFalse(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
 

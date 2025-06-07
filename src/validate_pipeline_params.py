@@ -21,7 +21,8 @@ from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file
 from .submodules.read_metadata import Metadata
 from .submodules.dtype import Dtype
-from .submodules.logger import LOGGER
+from .submodules.logger import LOGGER, DEBUG
+
 
 COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-ms pipeline.'
 
@@ -519,6 +520,8 @@ def validate_metadata(
     # Check that metadata parameters match in replicate metadata
     meta_params = []
     if color_vars is not None:
+        if isinstance(color_vars, str):
+            color_vars = [color_vars]
         for var in color_vars:
             meta_params.append((var, 'color_vars'))
     other_vars = {batch1: 'batch1', batch2: 'batch2', control_key: 'control_key'}
@@ -691,6 +694,10 @@ def parse_args(argv, prog=None):
         '--metadata-output-path', dest='metadata_output_path', default=None,
         help='Path to write replicate metadata file if it is downloaded.'
     )
+    common_subcommand_args.add_argument(
+        '--debug', action='store_true', default=False,
+        help='Print function names and line numbers in log messages.'
+    )
 
     ####### Top level parser #######
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
@@ -853,6 +860,14 @@ def _main(argv, prog=None):
         sys.argv[1:] if argv is None else argv,
         prog=prog
     )
+
+    # Set up logging
+    if args.debug:
+        LOGGER.setLevel(DEBUG)
+        LOGGER.show_date = True
+        LOGGER.set_debug(True)
+
+    LOGGER.info('Starting nf-skyline-dia-ms validation script.')
 
     # Determine API key
     api_key = None

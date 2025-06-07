@@ -14,7 +14,7 @@ from setup_functions import TEST_DIR
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 
 
-MISSING_FILENAME_WARNING = 'WARNING: "FileName" column not found in replciate report, could not check that replicate names match!'
+MISSING_FILENAME_WARNING = '"FileName" column not found in replciate report, could not check that replicate names match!'
 
 def get_db_metadata(conn):
     # get replicates
@@ -252,7 +252,7 @@ class TestReplicateFileName(unittest.TestCase):
         self.assertEqual(0, result.returncode)
 
         # test FileName missing
-        self.assertTrue(MISSING_FILENAME_WARNING in result.stderr)
+        self.assertIn(MISSING_FILENAME_WARNING, result.stdout)
 
 
     def test_modified_Replicate(self):
@@ -267,8 +267,8 @@ class TestReplicateFileName(unittest.TestCase):
         self.assertEqual(0, result.returncode)
 
         # test FileName not missing
-        self.assertTrue('WARNING: Not all file names match replicate names, using FileName instead.' in result.stderr)
-        self.assertFalse(MISSING_FILENAME_WARNING in result.stderr)
+        self.assertIn('Not all file names match replicate names, using FileName instead.', result.stdout)
+        self.assertNotIn(MISSING_FILENAME_WARNING, result.stdout)
 
 
     def test_modified_Replicate_missing_FileName(self):
@@ -279,9 +279,9 @@ class TestReplicateFileName(unittest.TestCase):
         self.assertEqual(1, result.returncode)
 
         # test FileName missing
-        self.assertTrue(MISSING_FILENAME_WARNING in result.stderr)
-        self.assertTrue(re.search(r'ERROR: Missing required value: [\w\-]+ for protein_quants in repIndex!',
-                                  result.stderr))
+        self.assertIn(MISSING_FILENAME_WARNING, result.stdout)
+        self.assertTrue(re.search(r'Missing required value: [\w\-]+ for protein_quants in repIndex!',
+                                  result.stderr), result.stderr)
 
 
 class TestMultiProject(unittest.TestCase):
@@ -586,7 +586,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'e', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(1, result.returncode)
-        self.assertTrue(re.search(r'ERROR: There are [0-9]+ non-unique precursor areas!',
+        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!',
                                   result.stderr))
 
 
@@ -594,7 +594,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_no_user_set')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(1, result.returncode)
-        self.assertTrue(re.search(r'ERROR: [0-9]+ precursor groups have no user set peak boundaries!',
+        self.assertTrue(re.search(r'[0-9]+ precursor groups have no user set peak boundaries!',
                                   result.stderr))
 
 
@@ -602,7 +602,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_other_diff')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(1, result.returncode)
-        self.assertTrue(re.search(r'ERROR: There are [0-9]+ precursor rows which are not unique!',
+        self.assertTrue(re.search(r'There are [0-9]+ precursor rows which are not unique!',
                                   result.stderr))
 
 
@@ -610,11 +610,11 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue(re.search(r'WARNING: There are [0-9]+ non-unique precursor areas!',
-                                  result.stderr))
+        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!',
+                                  result.stdout))
         self.assertTrue(re.search(r'After selecting precursors with user set peak boundaries, [0-9]+',
-                                  result.stderr))
-        self.assertTrue('Found "UserSetTotal" column.' in result.stderr)
+                                  result.stdout))
+        self.assertIn('Found "UserSetTotal" column.', result.stdout)
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, True)
 
@@ -635,7 +635,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'invalid_no_user_set')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stderr))
+        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stdout))
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
 
@@ -656,7 +656,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'duplicate')
         result = setup_functions.run_command(command, self.WORK_DIR)
         self.assertEqual(0, result.returncode)
-        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stderr))
+        self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stdout))
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
 

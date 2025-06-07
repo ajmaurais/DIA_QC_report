@@ -77,7 +77,7 @@ class TestConfig(unittest.TestCase):
             }
         )
         result = setup_functions.run_main(
-            vpp._main, ['config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config],
+            vpp._main, ['config', '--debug', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config],
             self.work_dir, prog=self.prog
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)

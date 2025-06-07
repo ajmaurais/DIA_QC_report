@@ -498,4 +498,4 @@ class TestAllPrecursorsMissing(unittest.TestCase):
                                                        prefix='normalize_db_DirectLFQ')
 
         self.assertEqual(normalize_result.returncode, 1)
-        self.assertTrue('ERROR: Can not perform DirectLFQ normalization with 0 precursors!' in normalize_result.stderr)
+        self.assertTrue('Can not perform DirectLFQ normalization with 0 precursors!' in normalize_result.stderr)
