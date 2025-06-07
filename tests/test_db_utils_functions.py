@@ -19,6 +19,8 @@ from DIA_QC_report.submodules.dtype import Dtype
 from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report.submodules.skyline_reports import ReplicateReport
 from DIA_QC_report import __version__ as PROGRAM_VERSION
+from DIA_QC_report import normalize_db
+from DIA_QC_report import export_gene_matrix
 
 
 class TestDBFunctionsBase(setup_functions.AbstractTestsBase):
@@ -193,12 +195,11 @@ class TestDBHelperFunctions(unittest.TestCase, TestDBFunctionsBase):
         self.assertTrue(self.conn is not None)
 
         self.assertFalse(db_utils.is_normalized(self.conn))
-        normalize_command = ['dia_qc', 'normalize', self.db_path]
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       self.work_dir,
-                                                       prefix='normalize_single_proj')
-
-        self.assertEqual(normalize_result.returncode, 0)
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, [self.db_path], self.work_dir,
+            prefix='normalize_single_proj', prog='dia_qc normalize'
+        )
+        self.assertEqual(normalize_result.returncode, 0, normalize_result.stderr)
         self.assertTrue(db_utils.is_normalized(self.conn))
 
 
@@ -249,8 +250,10 @@ class TestDBHelperFunctions(unittest.TestCase, TestDBFunctionsBase):
         self.assertEqual('protein', db_utils.get_meta_value(self.conn, 'group_precursors_by'))
 
         gene_id_path = f'{self.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
-        command = ['dia_qc', 'export_gene_matrix', gene_id_path, self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            export_gene_matrix._main, [gene_id_path, self.db_path], self.work_dir,
+            prog='dia_qc export_gene_matrix'
+        )
         self.assertEqual(result.returncode, 1)
         self.assertTrue('Precursors in database must be grouped by gene!' in result.stderr)
 

@@ -177,7 +177,7 @@ class AbstractTestsBase(ABC):
 
 
 def remove_test_dir(test_dir, recursive=False):
-    """Remove test directory if it exists. If recursive=True, delete all nested files/dirs."""
+    ''' Remove test directory if it exists. If recursive=True, delete all nested files/dirs. '''
     if not os.path.isdir(test_dir):
         return
 
@@ -233,9 +233,11 @@ def run_command(command, wd, prefix=None):
         A prefix to add to stdout, stderr, rc and command files.
         If None, the name of the calling function is used as the prefix.
     '''
-    result = subprocess.run(command, cwd=wd,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            shell=False, check=False)
+    result = subprocess.run(
+        command, cwd=wd,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        shell=False, check=False
+    )
 
     prefix_path = f'{wd}/{prefix if prefix else inspect.stack()[1][3]}'
 
@@ -316,7 +318,7 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
     err_str = stderr_buf.getvalue()
 
     # write files
-    command = f'{main_fxn.__module__}.{main_fxn.__name__}' if prog is None else re.split(r'\s+', prog)
+    command = [f'{main_fxn.__module__}.{main_fxn.__name__}'] if prog is None else re.split(r'\s+', prog)
     with open(f"{prefix_path}.command.txt", "w") as outF:
         outF.write(f"{join_shell(command + argv)}\n")
     with open(f"{prefix_path}.stdout.txt", "w") as outF:

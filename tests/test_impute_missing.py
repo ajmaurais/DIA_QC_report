@@ -13,6 +13,8 @@ import setup_functions
 
 from DIA_QC_report.submodules import dia_db_utils as db_utils
 from DIA_QC_report.submodules import imputation
+from DIA_QC_report import parse_data
+from DIA_QC_report import normalize_db
 from DIA_QC_report import impute_missing
 
 
@@ -271,12 +273,14 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.conn = None
 
-        parse_command = ['dia_qc', 'parse', '-n=Sp3',
+        parse_command = ['-n=Sp3',
                          f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                          f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
-        parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
-
+        parse_result = setup_functions.run_main(
+            parse_data._main, parse_command, cls.work_dir,
+            prefix='parse', prog='dia_qc parse'
+        )
         if parse_result.returncode != 0:
             raise RuntimeError('Error creating test DB!')
 
@@ -317,10 +321,12 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         prec_lhs, prot_lhs = self.get_not_imputed()
         prec_quant_lhs, prot_quant_lhs = self.get_quant_level(normalized=level==0)
 
-        impute_result = setup_functions.run_command(command, self.work_dir)
+        impute_result = setup_functions.run_main(
+            impute_missing._main, command, self.work_dir, prog='dia_qc impute'
+        )
 
         # test that imputation was successful and there are now 1 or more imputed values
-        self.assertEqual(impute_result.returncode, 0)
+        self.assertEqual(impute_result.returncode, 0, impute_result.stderr)
         self.do_imputed_value_count_test(expect_prot=impute_proteins,
                                          expect_prec=impute_precursors)
 
@@ -372,51 +378,56 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
 
 
     def test_weights(self):
-        impute_command = ['dia_qc', 'impute', '-t=0.5', '-s', 'weights=weighted', self.db_path]
+        impute_command = ['-t=0.5', '-s', 'weights=weighted', self.db_path]
         self.do_imputation_test(impute_command, weights='weighted')
 
 
     def test_normalized(self):
-        normalize_command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', self.db_path]
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       self.work_dir,
-                                                       prefix='normalize')
-        self.assertEqual(normalize_result.returncode, 0)
+        normalize_command = ['-m=median', '--keepMissing', self.db_path]
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, normalize_command, self.work_dir,
+            prefix='normalize', prog='dia_qc normalize'
+        )
+        self.assertEqual(normalize_result.returncode, 0, msg=normalize_result.stderr)
         self.assertTrue(db_utils.is_normalized(self.conn))
 
-        impute_command = ['dia_qc', 'impute', '-t=0.5', '-l=1', self.db_path]
+        impute_command = ['-t=0.5', '-l=1', self.db_path]
         self.do_imputation_test(impute_command, level=1)
 
 
     def test_na_threshold(self):
-        impute_command = ['dia_qc', 'impute', '-t=1', self.db_path]
+        impute_command = ['-t=1', self.db_path]
         self.do_imputation_test(impute_command, missing_threshold=1)
 
 
     def test_protein_only(self):
-        impute_command = ['dia_qc', 'impute', '-i=2', self.db_path]
-        self.do_imputation_test(impute_command,
-                                impute_precursors=False,
-                                impute_proteins=True)
+        impute_command = ['-i=2', self.db_path]
+        self.do_imputation_test(
+            impute_command, impute_precursors=False, impute_proteins=True
+        )
 
 
     def test_precursor_only(self):
-        impute_command = ['dia_qc', 'impute', '-i=1', self.db_path]
-        self.do_imputation_test(impute_command,
-                                impute_precursors=True,
-                                impute_proteins=False)
+        impute_command = ['-i=1', self.db_path]
+        self.do_imputation_test(
+            impute_command, impute_precursors=True, impute_proteins=False
+        )
 
 
     def test_method_help(self):
-        command = ['dia_qc', 'impute', '-m=KNN', '--methodHelp']
-        help_result = setup_functions.run_command(command, self.work_dir)
+        command = ['-m=KNN', '--methodHelp']
+        help_result = setup_functions.run_main(
+            impute_missing._main, command, self.work_dir, prog='dia_qc impute'
+        )
         self.assertEqual(help_result.returncode, 0)
         self.assertIn('Options for KNNImputer', help_result.stdout)
 
 
     def test_invalid_method(self):
-        command = ['dia_qc', 'impute', '-m=dummy', self.db_path]
-        error_result = setup_functions.run_command(command, self.work_dir)
+        command = ['-m=dummy', self.db_path]
+        error_result = setup_functions.run_main(
+            impute_missing._main, command, self.work_dir, prog='dia_qc impute'
+        )
         self.assertEqual(error_result.returncode, 2)
         message = r"invalid choice: 'dummy' \(choose from ('{}'|{})\)".format("', '".join(imputation.IMPUTATION_METHODS),
                                                                               ", '".join(imputation.IMPUTATION_METHODS))

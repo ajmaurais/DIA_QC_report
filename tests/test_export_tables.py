@@ -4,6 +4,8 @@ import os
 
 import setup_functions
 
+from DIA_QC_report import normalize_db
+from DIA_QC_report import export_tables
 
 class TestExportTables(unittest.TestCase):
     TEST_PROJECT = 'Strap'
@@ -35,11 +37,14 @@ class TestExportTables(unittest.TestCase):
     def test_valid_table_options(self):
         self.assertEqual(self.parse_result.returncode, 0)
 
-        export_command = ['dia_qc', 'db_export', '--outputDir=no_norm_tables',
+        export_command = ['--outputDir=no_norm_tables',
                           '--precursorTables=33', '--proteinTables=33',
                           '--metadataTables=11', self.db_path]
-        result = setup_functions.run_command(export_command, self.work_dir)
-        self.assertEqual(result.returncode, 0)
+        result = setup_functions.run_main(
+            export_tables._main, export_command, self.work_dir,
+            prefix='export_no_norm_tables', prog='dia_qc db_export'
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         table_names = ['proteins_long.tsv', 'precursors_long.tsv',
                        'proteins_wide_unnormalized.tsv', 'precursors_wide_unnormalized.tsv',
@@ -48,13 +53,18 @@ class TestExportTables(unittest.TestCase):
             test_path = f'{self.work_dir}/no_norm_tables/{table}'
             self.assertTrue(os.path.isfile(test_path), test_path)
 
-        normalize_command = ['dia_qc', 'normalize', self.db_path]
-        norm_result = setup_functions.run_command(normalize_command, self.work_dir)
-        self.assertEqual(norm_result.returncode, 0)
+        norm_result = setup_functions.run_main(
+            normalize_db._main, [self.db_path], self.work_dir,
+            prefix='normalize_db', prog='dia_qc normalize'
+        )
+        self.assertEqual(norm_result.returncode, 0, result.stderr)
 
-        export_command[2] = '--outputDir=norm_tables'
-        result = setup_functions.run_command(export_command, self.work_dir)
-        self.assertEqual(result.returncode, 0)
+        export_command[0] = '--outputDir=norm_tables'
+        result = setup_functions.run_main(
+            export_tables._main, export_command, self.work_dir,
+            prefix='export_norm_tables', prog='dia_qc db_export'
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         table_names += ['proteins_wide_normalized.tsv', 'proteins_wide_normalized.tsv']
         for table in table_names:

@@ -10,6 +10,7 @@ import setup_functions
 import DIA_QC_report.submodules.normalization as normalization
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 from DIA_QC_report.submodules.skyline_reports import PrecursorReport
+from DIA_QC_report import parse_data
 
 
 class TestNormalizationBase(setup_functions.AbstractTestsBase):
@@ -169,11 +170,12 @@ class TestMedianDiaNN(unittest.TestCase, TestNormalizationBase):
 
         # set up test db
         setup_functions.make_work_dir(cls.work_dir, True)
-        parse_command = ['dia_qc', 'parse', '--projectName=Sp3',
-                         '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
+        parse_command = ['--projectName=Sp3', '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
                          f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                          f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
-        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
+        cls.parse_result = setup_functions.run_main(
+            parse_data._main, parse_command, cls.work_dir, prefix='parse', prog='dia_qc parse'
+        )
 
         cls.conn = None
         if cls.parse_result.returncode == 0:
@@ -224,13 +226,14 @@ class TestAllPrecursorsMissing(unittest.TestCase, TestNormalizationBase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        command = ['dia_qc', 'parse', f'--projectName={cls.TEST_PROJECT}',
+        command = [f'--projectName={cls.TEST_PROJECT}',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
                    f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
 
         setup_functions.make_work_dir(cls.work_dir, True)
-        cls.parse_result = setup_functions.run_command(command, cls.work_dir,
-                                                       prefix='parse_missing_precursors')
+        cls.parse_result = setup_functions.run_main(
+            parse_data._main, command, cls.work_dir, prefix='parse_missing_precursors', prog='dia_qc parse'
+        )
 
         cls.conn = None
         if cls.parse_result.returncode == 0:

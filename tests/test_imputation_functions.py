@@ -10,6 +10,7 @@ import setup_functions
 import DIA_QC_report.submodules.imputation as imputation
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 from DIA_QC_report.submodules.skyline_reports import PrecursorReport
+from DIA_QC_report import normalize_db
 
 
 def create_missing_values(df, key_cols,
@@ -416,13 +417,11 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions_single/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
-
-        parse_result = setup_functions.setup_single_db(cls.data_dir,
-                                                       cls.work_dir,
-                                                       cls.TEST_PROJECT,
-                                                       clear_dir=True)
-
         cls.conn = None
+
+        parse_result = setup_functions.setup_single_db(
+            cls.data_dir, cls.work_dir, cls.TEST_PROJECT, clear_dir=True
+        )
         if parse_result.returncode == 0:
             if os.path.isfile(cls.db_path):
                 conn = sqlite3.connect(cls.db_path)
@@ -438,11 +437,10 @@ class TestSingleImputation(unittest.TestCase, TestImputationBase):
         else:
             return
 
-        normalize_command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       cls.work_dir,
-                                                       prefix='normalize')
-
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, ['-m=median', '--keepMissing', cls.db_path], cls.work_dir,
+            prefix='normalize', prog='dia_qc normalize'
+        )
         if normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
                 cls.conn = sqlite3.connect(cls.db_path)
@@ -528,12 +526,11 @@ class TestMultiImputation(unittest.TestCase, TestImputationBase):
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_imputation_functions_multi/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
-
-        parse_result = setup_functions.setup_multi_db(cls.data_dir,
-                                                      cls.work_dir,
-                                                      clear_dir=True)
-
         cls.conn = None
+
+        parse_result = setup_functions.setup_multi_db(
+            cls.data_dir, cls.work_dir, clear_dir=True
+        )
         if all(r.returncode == 0 for r in parse_result):
             if os.path.isfile(cls.db_path):
                 conn = sqlite3.connect(cls.db_path)
@@ -543,19 +540,19 @@ class TestMultiImputation(unittest.TestCase, TestImputationBase):
                 n_reps = {row[0]: row[1] for row in cur.fetchall()}
 
                 # set db quantities randomly to NULL
-                TestImputationBase.set_random_nulls(conn, min_missing=0,
-                                                    max_missing=min(n_reps.values()),
-                                                    seed=2)
+                TestImputationBase.set_random_nulls(
+                    conn, min_missing=0, max_missing=min(n_reps.values()), seed=2
+                )
                 conn.close()
 
         else:
             return
 
-        normalize_command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       cls.work_dir,
-                                                       prefix='normalize')
-
+        normalize_command = ['-m=median', '--keepMissing', cls.db_path]
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, normalize_command, cls.work_dir,
+            prefix='normalize', prog='dia_qc normalize'
+        )
         if normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
                 cls.conn = sqlite3.connect(cls.db_path)

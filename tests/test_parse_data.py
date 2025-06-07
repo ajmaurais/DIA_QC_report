@@ -11,6 +11,8 @@ import pandas as pd
 import setup_functions
 from setup_functions import TEST_DIR
 
+from DIA_QC_report import parse_data
+from DIA_QC_report import export_gene_matrix
 import DIA_QC_report.submodules.dia_db_utils as db_utils
 
 
@@ -106,8 +108,7 @@ class TestMetadata(unittest.TestCase):
     @staticmethod
     def setup_command(project, ext, meta_suffix='_metadata'):
         db_path = f'test_{ext}{meta_suffix}.db3'
-        command = ['dia_qc', 'parse',
-                   f'--projectName={project}', '--overwriteMode=overwrite',
+        command = [f'--projectName={project}', '--overwriteMode=overwrite',
                    '-m', f'{TEST_DIR}/data/metadata/{project}{meta_suffix}.{ext}',
                    '-o', db_path,
                    f'{TEST_DIR}/data/skyline_reports/{project}_replicate_quality.tsv',
@@ -128,7 +129,10 @@ class TestMetadata(unittest.TestCase):
         '''
 
         command, db_path = self.setup_command(self.TEST_PROJECT, ext, **kwargs)
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            parse_data._main, command,
+            self.work_dir, prog='dia_qc parse'
+        )
 
         # test command was successful
         self.assertEqual(0, result.returncode)
@@ -139,11 +143,6 @@ class TestMetadata(unittest.TestCase):
         # open connection to db
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{db_path}'))
         conn = sqlite3.connect(f'{self.work_dir}/{db_path}')
-
-        # make sure command was added to commandLog
-        last_command = db_utils.get_last_command(conn)
-        last_command[0] = os.path.basename(last_command[0])
-        self.assertEqual(last_command, command)
 
         # get metadata from test db
         db_metadata, db_metadata_types = get_db_metadata(conn)
@@ -193,13 +192,13 @@ class TestInferDtypes(unittest.TestCase):
     def setUpClass(cls):
         cls.work_dir = f'{TEST_DIR}/work/test_infer_types'
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+        cls.prog = 'dia_qc parse'
 
 
     @staticmethod
     def setup_command(project, ext, meta_suffix='_multi_var_metadata'):
         db_path = f'test_{ext}{meta_suffix}.db3'
-        command = ['dia_qc', 'parse',
-                   f'--projectName={project}', '--overwriteMode=overwrite',
+        command = [f'--projectName={project}', '--overwriteMode=overwrite',
                    '-m', f'{TEST_DIR}/data/metadata/{project}{meta_suffix}.{ext}',
                    '-o', db_path,
                    f'{TEST_DIR}/data/skyline_reports/{project}_replicate_quality.tsv',
@@ -210,7 +209,7 @@ class TestInferDtypes(unittest.TestCase):
 
     def test_infer_dtypes(self):
         command, db_path = self.setup_command(self.TEST_PROJECT, 'tsv')
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(parse_data._main, command, self.work_dir, prog=self.prog)
 
         # test command was successful
         self.assertEqual(0, result.returncode)
@@ -232,13 +231,14 @@ class TestReplicateFileName(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.work_dir = f'{TEST_DIR}/work/test_replicate_FileName'
+        cls.prog = 'dia_qc parse'
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
     @staticmethod
     def setup_command(project, replicate_suffix):
         db_path = f'test_{replicate_suffix}.db3'
-        command = ['dia_qc', 'parse', '--overwriteMode=overwrite', '-o', db_path,
+        command = ['--overwriteMode=overwrite', '-o', db_path,
                    f'{TEST_DIR}/data/invalid_reports/{project}_replicate_quality_{replicate_suffix}.tsv',
                    f'{TEST_DIR}/data/skyline_reports/{project}_by_protein_precursor_quality.tsv']
         return command
@@ -246,7 +246,7 @@ class TestReplicateFileName(unittest.TestCase):
 
     def test_missing_FileName(self):
         command = self.setup_command(self.TEST_PROJECT, 'missing_FileName')
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(parse_data._main, command, self.work_dir, prog=self.prog)
 
         # test command was successful
         self.assertEqual(0, result.returncode)
@@ -258,10 +258,10 @@ class TestReplicateFileName(unittest.TestCase):
     def test_modified_Replicate(self):
         replicate_suffix = 'modified_Replicate'
         db_path = f'test_{replicate_suffix}.db3'
-        command = ['dia_qc', 'parse', '--overwriteMode=overwrite', '-o', db_path,
+        command = ['--overwriteMode=overwrite', '-o', db_path,
                    f'{TEST_DIR}/data/invalid_reports/{self.TEST_PROJECT}_replicate_quality_{replicate_suffix}.tsv',
                    f'{TEST_DIR}/data/invalid_reports/{self.TEST_PROJECT}_by_protein_precursor_quality_{replicate_suffix}.tsv']
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(parse_data._main, command, self.work_dir, prog=self.prog)
 
         # test command was successful
         self.assertEqual(0, result.returncode)
@@ -273,7 +273,7 @@ class TestReplicateFileName(unittest.TestCase):
 
     def test_modified_Replicate_missing_FileName(self):
         command = self.setup_command(self.TEST_PROJECT, 'modified_Replicate_missing_FileName')
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(parse_data._main, command, self.work_dir, prog=self.prog)
 
         # test command was successful
         self.assertEqual(1, result.returncode)
@@ -290,7 +290,7 @@ class TestMultiProject(unittest.TestCase):
         cls.work_dir = f'{TEST_DIR}/work/test_multi_project/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{TEST_DIR}/data/'
-        cls.results = setup_functions.setup_multi_db(cls.data_dir, cls.work_dir)
+        cls.results = setup_functions.setup_multi_db(cls.data_dir, cls.work_dir, subprocess=False)
 
         cls.conn = None
         if any(result.returncode == 0 for result in cls.results):
@@ -306,7 +306,7 @@ class TestMultiProject(unittest.TestCase):
 
     def test_is_successful(self):
         for result in self.results:
-            self.assertEqual(0, result.returncode)
+            self.assertEqual(0, result.returncode, result.stderr)
 
 
     @mock.patch('DIA_QC_report.submodules.dia_db_utils.LOGGER', mock.Mock())
@@ -396,11 +396,13 @@ class TestMultiProjectStepped(unittest.TestCase):
                                           '_by_protein_not_minimal_precursor_quality.tsv')
 
         # add PROJECT_1
-        first_result = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_1,
-                                                       clear_dir=True, output_prefix='add_project_1')
+        first_result = setup_functions.setup_single_db(
+            self.DATA_DIR, work_dir, self.PROJECT_1,
+            clear_dir=True, output_prefix='add_project_1', subprocess=False
+        )
 
         # get initial peptide to protein mappings for Strap project
-        self.assertEqual(first_result.returncode, 0)
+        self.assertEqual(first_result.returncode, 0, first_result.stderr)
         self.assertTrue(os.path.isfile(db_path))
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
@@ -413,13 +415,16 @@ class TestMultiProjectStepped(unittest.TestCase):
         db_proj_1_map = {(x[0], x[1]) for x in cur.fetchall()}
         self.assertTrue(db_proj_1_map == proj_1_map)
 
-        command = ['dia_qc', 'parse', '--overwriteMode=append', f'--projectName={self.PROJECT_2}',
+        command = ['--overwriteMode=append', f'--projectName={self.PROJECT_2}',
                    '-m', f'{self.DATA_DIR}/metadata/{self.PROJECT_2}_metadata.tsv',
                    f'{self.DATA_DIR}/skyline_reports/{self.PROJECT_2}_replicate_quality.tsv',
                    f'{self.DATA_DIR}/invalid_reports/{self.PROJECT_2}_by_protein_not_minimal_precursor_quality.tsv']
         # add PROJECT_2
-        second_result = setup_functions.run_command(command, work_dir, prefix='add_project_2')
-        self.assertEqual(second_result.returncode, 0)
+        second_result = setup_functions.run_main(
+            parse_data._main, command, work_dir,
+            prefix='add_project_2', prog='dia_qc parse'
+        )
+        self.assertEqual(second_result.returncode, 0, second_result.stderr)
 
         cur = conn.cursor()
         cur.execute(query, (self.PROJECT_1,))
@@ -457,9 +462,11 @@ class TestMultiProjectStepped(unittest.TestCase):
             gene_groups[project] = Counter(gene_groups[project])
 
         # add PROJECT_1
-        first_result = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_1,
-                                                       output_prefix='add_project_1',
-                                                       clear_dir=True, group_by_gene=True)
+        first_result = setup_functions.setup_single_db(
+            self.DATA_DIR, work_dir, self.PROJECT_1,
+            output_prefix='add_project_1', subprocess=False,
+            clear_dir=True, group_by_gene=True
+        )
         self.assertEqual(first_result.returncode, 0)
 
         # initialize db connection
@@ -468,17 +475,19 @@ class TestMultiProjectStepped(unittest.TestCase):
         self.assertEqual('gene', db_utils.get_meta_value(conn, 'group_precursors_by'))
 
         # Test adding PROJECT_2 with by_protein grouping fails
-        second_result_by_protein = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_2,
-                                                                   output_prefix='add_project_2_by_protein',
-                                                                   overwrite_mode='append',
-                                                                   clear_dir=False, group_by_gene=False)
+        second_result_by_protein = setup_functions.setup_single_db(
+            self.DATA_DIR, work_dir, self.PROJECT_2,
+            output_prefix='add_project_2_by_protein', overwrite_mode='append',
+            clear_dir=False, group_by_gene=False, subprocess=False
+        )
         self.assertEqual(second_result_by_protein.returncode, 1)
 
         # add PROJECT_2
-        second_result = setup_functions.setup_single_db(self.DATA_DIR, work_dir, self.PROJECT_2,
-                                                        output_prefix='add_project_2',
-                                                        overwrite_mode='append',
-                                                        clear_dir=False, group_by_gene=True)
+        second_result = setup_functions.setup_single_db(
+            self.DATA_DIR, work_dir, self.PROJECT_2,
+            output_prefix='add_project_2', overwrite_mode='append',
+            clear_dir=False, group_by_gene=True, subprocess=False
+        )
         self.assertEqual(second_result.returncode, 0)
 
         # check that gene groups in reports match groups in database
@@ -496,8 +505,10 @@ class TestMultiProjectStepped(unittest.TestCase):
         # make sure make_gene_matrix fails if grouped by protein
         try:
             db_utils.update_meta_value(conn, 'group_precursors_by', 'protein')
-            bad_matrix_result = setup_functions.run_command(['dia_qc', 'export_gene_matrix', gene_id_path, db_path],
-                                                            work_dir, prefix='failed_matrix')
+            bad_matrix_result = setup_functions.run_main(
+                export_gene_matrix._main, [gene_id_path, db_path], work_dir,
+                prefix='failed_matrix', prog='dia_qc make_gene_matrix'
+            )
             self.assertEqual(bad_matrix_result.returncode, 1)
             self.assertTrue('Precursors in database must be grouped by gene!' in bad_matrix_result.stderr)
         finally:
@@ -520,13 +531,13 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.prog = 'dia_qc parse'
         setup_functions.make_work_dir(cls.WORK_DIR, clear_dir=True)
 
     @staticmethod
     def setup_command(project, option, precursor_rep):
         db_name = f'test_{option}_option.db3'
-        command = ['dia_qc', 'parse',
-                   f'--projectName={project}', '--overwriteMode=overwrite',
+        command = [f'--projectName={project}', '--overwriteMode=overwrite',
                    '-m', f'{TEST_DIR}/data/metadata/{project}_metadata.tsv',
                    '-o', db_name,
                    '--duplicatePrecursors', option,
@@ -584,7 +595,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     def test_error_option_fails(self):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'e', 'duplicate')
-        result = setup_functions.run_command(command, self.WORK_DIR)
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
         self.assertEqual(1, result.returncode)
         self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!',
                                   result.stderr))
@@ -592,7 +603,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     def test_invalid_no_user_set_report_fails(self):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_no_user_set')
-        result = setup_functions.run_command(command, self.WORK_DIR)
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
         self.assertEqual(1, result.returncode)
         self.assertTrue(re.search(r'[0-9]+ precursor groups have no user set peak boundaries!',
                                   result.stderr))
@@ -600,7 +611,7 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     def test_invalid_other_diff_report_fails(self):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'invalid_other_diff')
-        result = setup_functions.run_command(command, self.WORK_DIR)
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
         self.assertEqual(1, result.returncode)
         self.assertTrue(re.search(r'There are [0-9]+ precursor rows which are not unique!',
                                   result.stderr))
@@ -608,8 +619,8 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     def test_use_user_set_total_option(self):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'm', 'duplicate')
-        result = setup_functions.run_command(command, self.WORK_DIR)
-        self.assertEqual(0, result.returncode)
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
+        self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!',
                                   result.stdout))
         self.assertTrue(re.search(r'After selecting precursors with user set peak boundaries, [0-9]+',
@@ -633,8 +644,8 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     def test_first_option_no_user_set(self):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'invalid_no_user_set')
-        result = setup_functions.run_command(command, self.WORK_DIR)
-        self.assertEqual(0, result.returncode)
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
+        self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stdout))
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
@@ -654,8 +665,8 @@ class TestDuplicatePrecursorsOption(unittest.TestCase):
 
     def test_first_option(self):
         command, db_name = self.setup_command(self.TEST_PROJECT, 'f', 'duplicate')
-        result = setup_functions.run_command(command, self.WORK_DIR)
-        self.assertEqual(0, result.returncode)
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
+        self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(re.search(r'There are [0-9]+ non-unique precursor areas!', result.stdout))
 
         data = self.read_precursor_report(self.PRECURSOR_REPPRT, False)
@@ -682,12 +693,14 @@ class TestDiaNN(unittest.TestCase, setup_functions.AbstractTestsBase):
 
         # set up test db
         setup_functions.make_work_dir(cls.work_dir, True)
-        parse_command = ['dia_qc', 'parse', '--projectName=Sp3',
+        parse_command = ['--projectName=Sp3',
                          '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
                          f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                          f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
-        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
-
+        cls.parse_result = setup_functions.run_main(
+            parse_data._main, parse_command, cls.work_dir,
+            prefix='parse', prog='dia_qc parse'
+        )
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 

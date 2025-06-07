@@ -5,6 +5,8 @@ import pandas as pd
 
 import setup_functions
 
+from DIA_QC_report import export_gene_matrix
+
 class TestExportGeneMatrix(unittest.TestCase):
     TEST_PROJECT = 'Strap'
 
@@ -14,13 +16,11 @@ class TestExportGeneMatrix(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.gene_id_path = f'{cls.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
+        cls.prog = 'dia_qc export_gene_matrix'
 
-        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
-                                                           cls.work_dir,
-                                                           cls.TEST_PROJECT,
-                                                           clear_dir=True,
-                                                           group_by_gene=True)
-
+        cls.parse_result = setup_functions.setup_single_db(
+            cls.data_dir, cls.work_dir, cls.TEST_PROJECT, clear_dir=True, group_by_gene=True
+        )
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
@@ -32,10 +32,11 @@ class TestExportGeneMatrix(unittest.TestCase):
 
     def test_is_successful(self):
         prefix='test_is_sucessful'
-        command = ['dia_qc', 'export_gene_matrix', f'--prefix={prefix}',
-                    self.gene_id_path, self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(result.returncode, 0)
+        command = [f'--prefix={prefix}', self.gene_id_path, self.db_path]
+        result = setup_functions.run_main(
+            export_gene_matrix._main, command, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         # make sure expected reports are generated
         for file in ('precursors', 'proteins'):
@@ -44,12 +45,13 @@ class TestExportGeneMatrix(unittest.TestCase):
 
     def test_gene_table_tsv(self):
         prefix='test_tsv'
-        command = ['dia_qc', 'export_gene_matrix',
-                   f'--prefix={prefix}',
+        command = [f'--prefix={prefix}',
                    f'{self.data_dir}/metadata/prhuman2gene_2023_05_24_subset.tsv',
                    self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(result.returncode, 0)
+        result = setup_functions.run_main(
+            export_gene_matrix._main, command, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         # make sure expected reports are generated
         for file in ('precursors', 'proteins'):
@@ -58,18 +60,21 @@ class TestExportGeneMatrix(unittest.TestCase):
 
     def test_use_gene_hash_option(self):
         # make sure id table without hash fails
-        command = ['dia_qc', 'export_gene_matrix', '--addGeneUuid', self.gene_id_path, self.db_path]
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='failed_gene_id_hash_table')
+        command = ['--addGeneUuid', self.gene_id_path, self.db_path]
+        result = setup_functions.run_main(
+            export_gene_matrix._main, command, self.work_dir,
+            prefix='failed_gene_id_hash_table', prog=self.prog
+        )
         self.assertEqual(result.returncode, 1)
 
         # make sure correct table succeeds
         prefix='test_uuid'
         gene_id_hash_path = f'{self.data_dir}/metadata/prhuman2gene_gene_uuid_2023_05_24_subset.csv'
-        command = ['dia_qc', 'export_gene_matrix', f'--prefix={prefix}', '--addGeneUuid',
-                   gene_id_hash_path, self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(result.returncode, 0)
+        command = [f'--prefix={prefix}', '--addGeneUuid', gene_id_hash_path, self.db_path]
+        result = setup_functions.run_main(
+            export_gene_matrix._main, command, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         # make sure expected reports are generated
         for file in ('precursors', 'proteins'):

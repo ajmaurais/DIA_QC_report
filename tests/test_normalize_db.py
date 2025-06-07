@@ -10,6 +10,8 @@ from numpy import log2
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
+from DIA_QC_report import parse_data
+from DIA_QC_report import normalize_db
 
 
 def precursor_medians_equal(conn, epislon=1e-6):
@@ -73,32 +75,21 @@ class CommonTests(setup_functions.AbstractTestsBase):
         self.assertTrue(precursor_medians_equal(self.conn))
 
 
-    def test_command_log_updated(self):
-        self.assertIsNotNone(self.conn)
-
-        last_command = db_utils.get_last_command(self.conn)
-        last_command[0] = os.path.basename(last_command[0])
-
-        self.assertEqual(last_command, self.command)
-
-
 class TestSingleProject(CommonTests):
     TEST_PROJECT = 'Sp3'
 
     @classmethod
     def run_commands(cls):
-        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
-                                                           cls.work_dir,
-                                                           cls.TEST_PROJECT,
-                                                           clear_dir=True)
-
+        cls.parse_result = setup_functions.setup_single_db(
+            cls.data_dir, cls.work_dir, cls.TEST_PROJECT, clear_dir=True
+        )
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-        cls.normalize_result = setup_functions.run_command(cls.command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_single_proj')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, cls.command, cls.work_dir,
+            prefix='normalize_single_proj', prog='dia_qc normalize'
+        )
         cls.conn = None
         if cls.normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
@@ -120,7 +111,7 @@ class TestMedianSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        cls.command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
+        cls.command = ['-m=median', cls.db_path]
         cls.run_commands()
 
 
@@ -139,15 +130,17 @@ class TestDirectLFQSingle(unittest.TestCase, TestSingleProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        cls.command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
+        cls.command = ['-m=DirectLFQ', cls.db_path]
         cls.run_commands()
 
 
     def test_keep_missing_fails(self):
-        command = ['dia_qc', 'normalize', '-m=DirectLFQ', '--keepMissing', self.db_path]
+        command = ['-m=DirectLFQ', '--keepMissing', self.db_path]
 
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='test_keepMissing')
+        result = setup_functions.run_main(
+            normalize_db._main, command, self.work_dir,
+            prefix='test_keepMissing', prog='dia_qc normalize'
+        )
         self.assertEqual(result.returncode, 1)
         self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
 
@@ -164,19 +157,20 @@ class TestMedianDiaNN(unittest.TestCase, CommonTests):
 
         # set up test db
         setup_functions.make_work_dir(cls.work_dir, True)
-        parse_command = ['dia_qc', 'parse', '--projectName=Sp3',
+        parse_command = ['--projectName=Sp3',
                          '-m', f'{cls.data_dir}/metadata/Sp3_metadata.json',
                          f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                          f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
-        cls.parse_result = setup_functions.run_command(parse_command, cls.work_dir, prefix='parse')
-
+        cls.parse_result = setup_functions.run_main(
+            parse_data._main, parse_command, cls.work_dir, prefix='parse', prog='dia_qc parse'
+        )
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-        cls.command = ['dia_qc', 'normalize', '-m=median', '--keepMissing', cls.db_path]
-        cls.normalize_result = setup_functions.run_command(cls.command, cls.work_dir,
-                                                           prefix='normalize')
-
+        cls.command = ['-m=median', '--keepMissing', cls.db_path]
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, cls.command, cls.work_dir, prefix='normalize', prog='dia_qc normalize'
+        )
         cls.conn = None
         if cls.normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
@@ -226,10 +220,9 @@ class TestMultiProject(CommonTests):
         if any(result.returncode != 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        cls.normalize_result = setup_functions.run_command(cls.command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_multi_proj')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, cls.command, cls.work_dir, prefix='normalize_multi_proj', prog='dia_qc normalize'
+        )
         cls.conn = None
         if cls.normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
@@ -351,7 +344,7 @@ class TestMedianMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'median'
 
-        cls.command = ['dia_qc', 'normalize', '-m=median', cls.db_path]
+        cls.command = ['-m=median', cls.db_path]
         cls.run_commands()
 
 
@@ -366,15 +359,15 @@ class TestDirectLFQMulti(unittest.TestCase, TestMultiProject):
         cls.precursor_method = 'median'
         cls.protein_method = 'DirectLFQ'
 
-        cls.command = ['dia_qc', 'normalize', '-m=DirectLFQ', cls.db_path]
+        cls.command = ['-m=DirectLFQ', cls.db_path]
         cls.run_commands()
 
 
     def test_keep_missing_fails(self):
-        command = ['dia_qc', 'normalize', '-m=DirectLFQ', '--keepMissing', self.db_path]
-
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='test_keepMissing')
+        command = ['-m=DirectLFQ', '--keepMissing', self.db_path]
+        result = setup_functions.run_main(
+            normalize_db._main, command, self.work_dir, prefix='test_keepMissing', prog='dia_qc normalize'
+        )
         self.assertEqual(result.returncode, 1)
         self.assertTrue('--keepMissing option not compatible with DirectLFQ' in result.stderr)
 
@@ -388,14 +381,16 @@ class TestAllPrecursorsMissing(unittest.TestCase):
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
 
-        command = ['dia_qc', 'parse', f'--projectName={cls.TEST_PROJECT}',
-                   f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
-                   f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv']
-
+        command = [
+            f'--projectName={cls.TEST_PROJECT}',
+            f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_replicate_quality.tsv',
+            f'{cls.data_dir}/skyline_reports/{cls.TEST_PROJECT}_precursor_quality.tsv'
+        ]
         setup_functions.make_work_dir(cls.work_dir, True)
-        cls.parse_result = setup_functions.run_command(command, cls.work_dir,
-                                                       prefix='parse_missing_precursors')
-
+        cls.parse_result = setup_functions.run_main(
+            parse_data._main, command, cls.work_dir,
+            prefix='parse_missing_precursors', prog='dia_qc parse'
+        )
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
@@ -408,6 +403,15 @@ class TestAllPrecursorsMissing(unittest.TestCase):
     def tearDownClass(cls):
         if cls.conn is not None:
             cls.conn.close()
+
+
+    def assert_command_log_updated(self, command):
+        self.assertIsNotNone(self.conn)
+
+        last_command = db_utils.get_last_command(self.conn)
+        last_command[0] = os.path.basename(last_command[0])
+
+        self.assertEqual(last_command, command)
 
 
     def test_median_normalization_na_rm(self):
@@ -426,14 +430,16 @@ class TestAllPrecursorsMissing(unittest.TestCase):
                 self.assertIsNone(db_utils.get_meta_value(self.conn, level))
 
         normalize_command = ['dia_qc', 'normalize', '-m=median', self.db_path]
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       self.work_dir,
-                                                       prefix='normalize_db_median_na_rm')
-
-        self.assertEqual(normalize_result.returncode, 0)
+        normalize_result = setup_functions.run_command(
+            normalize_command, self.work_dir, prefix='normalize_db_median_na_rm'
+        )
+        self.assertEqual(normalize_result.returncode, 0, normalize_result.stderr)
         self.assertTrue(db_utils.is_normalized(self.conn))
         for level in norm_levels:
             self.assertEqual(db_utils.get_meta_value(self.conn, level), 'median')
+
+        with self.subTest('Check that command log was updated'):
+            self.assert_command_log_updated(normalize_command)
 
         # make sure all normalized precursor areas are NULL
         cur = self.conn.cursor()
@@ -461,12 +467,12 @@ class TestAllPrecursorsMissing(unittest.TestCase):
             for level in norm_levels:
                 self.assertIsNone(db_utils.get_meta_value(self.conn, level))
 
-        normalize_command = ['dia_qc', 'normalize', '--keepMissing', '-m=median', self.db_path]
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       self.work_dir,
-                                                       prefix='normalize_db_median_keep_na')
-
-        self.assertEqual(normalize_result.returncode, 0)
+        normalize_command = ['--keepMissing', '-m=median', self.db_path]
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, normalize_command, self.work_dir,
+            prefix='normalize_db_median_keep_na', prog='dia_qc normalize'
+        )
+        self.assertEqual(normalize_result.returncode, 0, normalize_result.stderr)
         self.assertTrue(db_utils.is_normalized(self.conn))
         for level in norm_levels:
             self.assertEqual(db_utils.get_meta_value(self.conn, level), 'median')
@@ -491,11 +497,10 @@ class TestAllPrecursorsMissing(unittest.TestCase):
 
 
     def test_DirectLFQ_normalization(self):
-        normalize_command = ['dia_qc', 'normalize', '-m=DirectLFQ', self.db_path]
-
-        normalize_result = setup_functions.run_command(normalize_command,
-                                                       self.work_dir,
-                                                       prefix='normalize_db_DirectLFQ')
-
+        normalize_command = ['-m=DirectLFQ', self.db_path]
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, normalize_command, self.work_dir,
+            prefix='normalize_db_DirectLFQ', prog='dia_qc normalize'
+        )
         self.assertEqual(normalize_result.returncode, 1)
-        self.assertTrue('Can not perform DirectLFQ normalization with 0 precursors!' in normalize_result.stderr)
+        self.assertIn('Can not perform DirectLFQ normalization with 0 precursors!', normalize_result.stderr)

@@ -7,6 +7,7 @@ import re
 import setup_functions
 
 import DIA_QC_report.submodules.dia_db_utils as db_utils
+from DIA_QC_report import normalize_db
 from DIA_QC_report import generate_batch_rmd
 from DIA_QC_report.submodules.normalization import NORMALIZATION_METHODS
 
@@ -68,23 +69,23 @@ class TestMakeBatchRmd(unittest.TestCase):
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_generate_batch_rmd/'
         cls.db_path = f'{cls.work_dir}/data.db3'
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+        cls.prog = 'dia_qc batch_rmd'
 
         # remove html artifact subdirectory in work_dir if necissary
         for d in ('basic_test_files', 'single_batch_files'):
             setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
-        cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
-                                                           cls.work_dir,
-                                                           clear_dir=True)
+        cls.parse_results = setup_functions.setup_multi_db(
+            cls.data_dir, cls.work_dir, clear_dir=True
+        )
 
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['dia_qc', 'normalize', cls.db_path]
-        cls.normalize_result = setup_functions.run_command(normalize_command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_db')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, [cls.db_path], cls.work_dir,
+            prefix='normalize_db', prog='dia_qc normalize'
+        )
         cls.conn = None
         if cls.normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
@@ -102,18 +103,19 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'basic_test'
-        command = ['dia_qc', 'batch_rmd',
-                   '-o', f'{rmd_name}.rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-
+        command = ['-o', f'{rmd_name}.rmd', self.db_path]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-            render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix=f'render_{rmd_name}')
-            self.assertEqual(render_result.returncode, 0)
+            render_result = setup_functions.run_command(
+                render_command, self.work_dir, prefix=f'render_{rmd_name}'
+            )
+            self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             self.assertFalse(os.path.isdir(f'{self.work_dir}/plots'))
             for file in [f'{rmd_name}.html',
@@ -132,8 +134,9 @@ class TestMakeBatchRmd(unittest.TestCase):
             db_utils.update_meta_value(self.conn, db_utils.IS_NORMALIZED, 'False')
 
             # make sure generate_batch_rmd fails
-            command = ['dia_qc', 'batch_rmd', self.db_path]
-            result = setup_functions.run_command(command, self.work_dir)
+            result = setup_functions.run_main(
+                generate_batch_rmd._main, [self.db_path], self.work_dir, prog=self.prog
+            )
             self.assertEqual(result.returncode, 1)
             self.assertTrue('Database file it not normalized!' in result.stderr)
 
@@ -151,8 +154,9 @@ class TestMakeBatchRmd(unittest.TestCase):
             db_utils.update_meta_value(self.conn, db_utils.PROTEIN_NORM_METHOD, 'Nothing')
 
             # make sure generate_batch_rmd fails
-            command = ['dia_qc', 'batch_rmd', self.db_path]
-            result = setup_functions.run_command(command, self.work_dir)
+            result = setup_functions.run_main(
+                generate_batch_rmd._main, [self.db_path], self.work_dir, prog=self.prog
+            )
             self.assertEqual(result.returncode, 1)
             self.assertTrue("Unknown normalization method: 'Nothing'" in result.stderr)
 
@@ -175,8 +179,9 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.conn.commit()
 
             # make sure generate_batch_rmd fails
-            command = ['dia_qc', 'batch_rmd', self.db_path]
-            result = setup_functions.run_command(command, self.work_dir)
+            result = setup_functions.run_main(
+                generate_batch_rmd._main, [self.db_path], self.work_dir, prog=self.prog
+            )
             self.assertEqual(result.returncode, 1)
             self.assertTrue('Missing normalization methods in metadata table!' in result.stderr)
 
@@ -195,19 +200,22 @@ class TestMakeBatchRmd(unittest.TestCase):
             self.assertTrue(db_utils.mark_reps_skipped(self.conn, projects=('Strap',), quiet=True))
 
             rmd_name = 'single_batch'
-            command = ['dia_qc', 'batch_rmd',
-                       '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
+            command = ['--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
                        '-o', f'{rmd_name}.rmd', self.db_path]
-            result = setup_functions.run_command(command, self.work_dir)
+            result = setup_functions.run_main(
+                generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+            )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
             self.assertIn('Only 1 project in replicates! Skipping batch correction.', result.stdout)
 
             for flag in ['precursorTables', 'proteinTables']:
-                command = ['dia_qc', 'batch_rmd', f'--{flag}=44', self.db_path]
-                result = setup_functions.run_command(command, self.work_dir,
-                                                     prefix='invalid_table_options')
+                command = [f'--{flag}=44', self.db_path]
+                result = setup_functions.run_main(
+                    generate_batch_rmd._main, command, self.work_dir,
+                    prefix='invalid_table_options', prog=self.prog
+                )
                 self.assertEqual(result.returncode, 0, result.stderr)
 
                 name = re.sub('^p', 'P', flag.replace('Tables', ''))
@@ -216,9 +224,10 @@ class TestMakeBatchRmd(unittest.TestCase):
 
             if self.render_rmd:
                 render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-                render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                            prefix=f'render_{rmd_name}')
-                self.assertEqual(render_result.returncode, 0)
+                render_result = setup_functions.run_command(
+                    render_command, self.work_dir, prefix=f'render_{rmd_name}'
+                )
+                self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
         finally:
             # Set all replicates to be included
@@ -228,30 +237,38 @@ class TestMakeBatchRmd(unittest.TestCase):
     def test_controlKey_check(self):
         self.assertTrue(self.conn is not None)
 
-        command = ['dia_qc', 'batch_rmd', '--addControlValue=A549', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        command = ['--addControlValue=A549', self.db_path]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+        )
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('No control key specified!' in result.stderr)
+        self.assertIn('No control key specified!', result.stderr)
 
         # make sure --skipTests option works
         command.insert(2, '--skipTests')
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='test_controlKey_check_skipTests')
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir,
+            prefix='test_controlKey_check_skipTests', prog=self.prog
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
     def test_addControlValue_check(self):
         self.assertTrue(self.conn is not None)
 
-        command = ['dia_qc', 'batch_rmd', '--controlKey=cellLine', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        command = ['--controlKey=cellLine', self.db_path]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+        )
         self.assertEqual(result.returncode, 1)
         self.assertTrue('No control value(s) specified!' in result.stderr)
 
         # make sure --skipTests option works
         command.insert(2, '--skipTests')
-        result = setup_functions.run_command(command, self.work_dir,
-                                             prefix='test_addControlValue_check_skipTests')
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir,
+            prefix='test_addControlValue_check_skipTests', prog=self.prog
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
@@ -272,11 +289,10 @@ class TestPDFReport(unittest.TestCase):
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['dia_qc', 'normalize', cls.db_path]
-        cls.normalize_result = setup_functions.run_command(normalize_command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_db')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, [cls.db_path], cls.work_dir,
+            prefix='normalize_db', prog='dia_qc normalize'
+        )
         if cls.normalize_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
@@ -286,19 +302,21 @@ class TestPDFReport(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.db_path))
 
         rmd_name = 'pdf_test'
-        command = ['dia_qc', 'batch_rmd', '--savePlots=pdf',
+        command = ['--savePlots=pdf',
                    '--proteinTables=77', '--precursorTables=77', '--metadataTables=11',
                    '-o', f'{rmd_name}.rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
-
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog='dia_qc batch_rmd'
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e',
                               f"rmarkdown::render('{rmd_name}.rmd', output_format='pdf_document', params=list(save_plots=FALSE, write_tables=FALSE))"]
-            render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix=f'render_{rmd_name}')
+            render_result = setup_functions.run_command(
+                render_command, self.work_dir, prefix=f'render_{rmd_name}'
+            )
             self.assertEqual(render_result.returncode, 0, render_result.stderr)
             self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.pdf'))
             self.assertFalse(os.path.isdir(f'{self.work_dir}/plots'))
@@ -328,11 +346,10 @@ class TestInteractive(unittest.TestCase):
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['dia_qc', 'normalize', cls.db_path]
-        cls.normalize_result = setup_functions.run_command(normalize_command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_db')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, [cls.db_path], cls.work_dir,
+            prefix='normalize_db', prog='dia_qc normalize'
+        )
         cls.conn = None
         if cls.normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
@@ -350,18 +367,21 @@ class TestInteractive(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'savePlots'
-        command = ['dia_qc', 'batch_rmd', '--savePlots=pdf',
+        command = ['--savePlots=pdf',
                    '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
                    '-o', f'{rmd_name}.rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog='dia_qc batch_rmd'
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-            render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix=f'render_{rmd_name}')
+            render_result = setup_functions.run_command(
+                render_command, self.work_dir, prefix=f'render_{rmd_name}'
+            )
             self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             self.assertTrue(os.path.isdir(f'{self.work_dir}/plots'))
@@ -419,10 +439,12 @@ class TestInteractive(unittest.TestCase):
 
         for option in ('0', '1', '2', '3'):
             rmd_name = f'test_interactive_{option}.rmd'
-            command = ['dia_qc', 'batch_rmd', f'--interactive={option}',
+            command = ['--interactive', option,
                        '--proteinTables=00', '--precursorTables=00', '--metadataTables=00',
                        '-o', rmd_name, self.db_path]
-            result = setup_functions.run_command(command, self.work_dir)
+            result = setup_functions.run_main(
+                generate_batch_rmd._main, command, self.work_dir, prog='dia_qc batch_rmd'
+            )
             self.assertEqual(result.returncode, 0, result.stderr)
 
             plots = db_utils.parse_bitmask_options(option, ('plots',), ('area_dist', 'pca'))
@@ -448,20 +470,17 @@ class TestMissingMetadata(unittest.TestCase):
         for d in ('tables', 'basic_test_files'):
             setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
-        cls.parse_result = setup_functions.setup_single_db(cls.data_dir,
-                                                           cls.work_dir,
-                                                           cls.TEST_PROJECT,
-                                                           metadata_suffix='_missing_multi_var_metadata.tsv',
-                                                           clear_dir=True)
-
+        cls.parse_result = setup_functions.setup_single_db(
+            cls.data_dir, cls.work_dir, cls.TEST_PROJECT,
+            metadata_suffix='_missing_multi_var_metadata.tsv', clear_dir=True
+        )
         if cls.parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['dia_qc', 'normalize', cls.db_path]
-        cls.normalize_result = setup_functions.run_command(normalize_command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_db')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, [cls.db_path], cls.work_dir,
+            prefix='normalize_db', prog='dia_qc normalize'
+        )
         if cls.normalize_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
 
@@ -481,10 +500,11 @@ class TestMissingMetadata(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'basic_test'
-        command = ['dia_qc', 'batch_rmd',
-                   '-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
+        command = ['-c=string_var', '-c=bool_var', '-c=int_var', '-c=float_var',
                    '-o', f'{rmd_name}.rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog='dia_qc batch_rmd'
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
@@ -492,8 +512,9 @@ class TestMissingMetadata(unittest.TestCase):
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-            render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix=f'render_{rmd_name}')
+            render_result = setup_functions.run_command(
+                render_command, self.work_dir, prefix=f'render_{rmd_name}'
+            )
             self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             for file in [f'{rmd_name}.html', 'metadata_wide.tsv']:
@@ -517,19 +538,17 @@ class TestBadMetadataHeaders(unittest.TestCase):
             setup_functions.remove_test_dir(f'{cls.work_dir}/{d}', recursive=True)
 
         setup_functions.remove_test_dir(cls.work_dir, recursive=True)
-        cls.parse_results = setup_functions.setup_multi_db(cls.data_dir,
-                                                           cls.work_dir,
-                                                           clear_dir=True,
-                                                           metadata_suffix='_bad_headers_metadata.tsv')
-
+        cls.parse_results = setup_functions.setup_multi_db(
+            cls.data_dir, cls.work_dir, clear_dir=True,
+            metadata_suffix='_bad_headers_metadata.tsv'
+        )
         if not all(result.returncode == 0 for result in cls.parse_results):
             raise RuntimeError('Setup of test db failed!')
 
-        normalize_command = ['dia_qc', 'normalize', cls.db_path]
-        cls.normalize_result = setup_functions.run_command(normalize_command,
-                                                           cls.work_dir,
-                                                           prefix='normalize_db')
-
+        cls.normalize_result = setup_functions.run_main(
+            normalize_db._main, [cls.db_path], cls.work_dir,
+            prefix='normalize_db', prog='dia_qc normalize'
+        )
         cls.conn = None
         if cls.normalize_result.returncode == 0:
             if os.path.isfile(cls.db_path):
@@ -547,20 +566,22 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'space_header_test'
-        command = ['dia_qc', 'batch_rmd',
-                   '-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
+        command = ['-c', 'string var', '-c', 'bool var', '-c', 'int var', '-c', 'float var',
                    '--controlKey', 'string var',
                    '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
                    '-o', f'{rmd_name}.rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog='dia_qc batch_rmd'
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-            render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix=f'render_{rmd_name}')
+            render_result = setup_functions.run_command(
+                render_command, self.work_dir, prefix=f'render_{rmd_name}'
+            )
             self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             for file in [f'{rmd_name}.html',
@@ -575,20 +596,25 @@ class TestBadMetadataHeaders(unittest.TestCase):
         self.assertTrue(db_utils.is_normalized(self.conn))
 
         rmd_name = 'symbol_header_test'
-        command = ['dia_qc', 'batch_rmd',
-                   '-c', 'string var', '-c', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
-                   '--controlKey', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
-                   '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
-                   '-o', f'{rmd_name}.rmd', self.db_path]
-        result = setup_functions.run_command(command, self.work_dir)
+        command = [
+            '-c', 'string var',
+            '-c', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
+            '--controlKey', 'This_is-a@bad~header$ (alphanumeric ONLY please!)',
+            '--addControlValue', 'NCI7 7-pool', '--addControlValue', 'NCI7 4-pool',
+            '-o', f'{rmd_name}.rmd', self.db_path
+        ]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog='dia_qc batch_rmd'
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{rmd_name}.rmd'))
 
         if self.render_rmd:
             render_command = ['Rscript', '-e', f"rmarkdown::render('{rmd_name}.rmd')"]
-            render_result = setup_functions.run_command(render_command, self.work_dir,
-                                                        prefix=f'render_{rmd_name}')
+            render_result = setup_functions.run_command(
+                render_command, self.work_dir, prefix=f'render_{rmd_name}'
+            )
             self.assertEqual(render_result.returncode, 0, render_result.stderr)
 
             for file in [f'{rmd_name}.html',

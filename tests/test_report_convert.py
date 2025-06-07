@@ -8,9 +8,10 @@ from pyarrow.lib import ArrowInvalid
 import setup_functions
 from setup_functions import TEST_DIR
 
-from DIA_QC_report import skyline_report_convert
+from DIA_QC_report import skyline_report_convert as report_convert
 from DIA_QC_report.submodules import skyline_reports
 
+PROG = 'dia_qc report_convert'
 
 class TestConvertToParquet(unittest.TestCase):
     @classmethod
@@ -35,9 +36,10 @@ class TestConvertToParquet(unittest.TestCase):
         report_base = 'Sp3_replicate_quality'
         report_ext = 'tsv'
 
-        command = ['dia_qc', 'report_convert',
-                   f'{self.skyline_report_dir}/{report_base}.{report_ext}']
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            report_convert._main, [f'{self.skyline_report_dir}/{report_base}.{report_ext}'],
+            self.work_dir, prog=PROG
+        )
         self.assertEqual(0, result.returncode, result.stderr)
 
         target_path = f'{self.work_dir}/{report_base}.parquet'
@@ -52,9 +54,10 @@ class TestConvertToParquet(unittest.TestCase):
         report_base = 'Sp3_DiaNN_precursor_quality'
         report_ext = 'tsv'
 
-        command = ['dia_qc', 'report_convert', '--remove-unknown-cols',
-                   f'{self.skyline_report_dir}/{report_base}.{report_ext}']
-        result = setup_functions.run_command(command, self.work_dir)
+        command = ['--remove-unknown-cols', f'{self.skyline_report_dir}/{report_base}.{report_ext}']
+        result = setup_functions.run_main(
+            report_convert._main, command, self.work_dir, prog=PROG
+        )
         self.assertEqual(0, result.returncode, result.stderr)
 
         target_path = f'{self.work_dir}/{report_base}.parquet'
@@ -85,9 +88,10 @@ class TestConvertToParquet(unittest.TestCase):
         report_base = 'Sp3_by_protein_precursor_quality'
         report_ext = 'tsv'
 
-        command = ['dia_qc', 'report_convert',
-                   f'{self.skyline_report_dir}/{report_base}.{report_ext}']
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            report_convert._main, [f'{self.skyline_report_dir}/{report_base}.{report_ext}'],
+            self.work_dir, prog=PROG
+        )
         self.assertEqual(0, result.returncode, result.stderr)
 
         target_path = f'{self.work_dir}/{report_base}.parquet'
@@ -102,9 +106,10 @@ class TestConvertToParquet(unittest.TestCase):
         report_base = 'acquired_ranks'
         report_ext = 'tsv'
 
-        command = ['dia_qc', 'report_convert',
-                   f'{self.metadata_dir}/{report_base}.{report_ext}']
-        result = setup_functions.run_command(command, self.work_dir)
+        result = setup_functions.run_main(
+            report_convert._main, [f'{self.metadata_dir}/{report_base}.{report_ext}'],
+            self.work_dir, prog=PROG
+        )
         self.assertEqual(0, result.returncode, result.stdout)
 
         self.assertRegex(result.stdout, fr'Reading .*?{report_base}\.{report_ext} as a generic Skyline report')

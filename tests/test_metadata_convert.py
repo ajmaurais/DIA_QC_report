@@ -9,7 +9,9 @@ from setup_functions import TEST_DIR
 
 from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report.submodules.dtype import Dtype
+from DIA_QC_report import metadata_convert
 
+PROG = 'dia_qc metadata_convert'
 
 class TestOptions(unittest.TestCase):
     @classmethod
@@ -21,10 +23,11 @@ class TestOptions(unittest.TestCase):
 
     def test_prefix_option(self):
         prefix = 'prefix'
-        command = ['dia_qc', 'metadata_convert',
-                   f'--prefix={prefix}', f'{self.metadata_dir}/HeLa_metadata.json']
-        result = setup_functions.run_command(command, self.work_dir)
-        self.assertEqual(0, result.returncode)
+        command = [f'--prefix={prefix}', f'{self.metadata_dir}/HeLa_metadata.json']
+        result = setup_functions.run_main(
+            metadata_convert._main, command, self.work_dir, prog=PROG
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
 
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{prefix}.annotations.csv'))
         self.assertTrue(os.path.isfile(f'{self.work_dir}/{prefix}.definitions.bat'))
@@ -47,7 +50,7 @@ class TestToFileBase(setup_functions.AbstractTestsBase):
 
 
     def test_is_sucessful(self):
-        self.assertEqual(0, self.result.returncode)
+        self.assertEqual(0, self.result.returncode, self.result.stderr)
 
 
     @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
@@ -79,8 +82,10 @@ class TestToCsv(unittest.TestCase, TestToFileBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
         cls.out_ext = 'csv'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=csv', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=csv', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
 
 
 class TestToTsv(unittest.TestCase, TestToFileBase):
@@ -91,8 +96,10 @@ class TestToTsv(unittest.TestCase, TestToFileBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_missing_multi_var_metadata.json'
         cls.out_ext = 'tsv'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=tsv', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=tsv', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
 
 
 class TestToJson(unittest.TestCase, TestToFileBase):
@@ -103,8 +110,10 @@ class TestToJson(unittest.TestCase, TestToFileBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
         cls.out_ext = 'json'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=json', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=json', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
 
 
 class TestToSkylineBase(TestToFileBase):
@@ -138,8 +147,10 @@ class TestTsvToSkylineCsv(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Strap_multi_var_metadata.tsv'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=skyline', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
 
 
 class TestCsvToSkylineCsv(unittest.TestCase, TestToSkylineBase):
@@ -150,8 +161,10 @@ class TestCsvToSkylineCsv(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.csv'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=skyline', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
 
 
 class TestJsonToSkylineCsv(unittest.TestCase, TestToSkylineBase):
@@ -162,8 +175,10 @@ class TestJsonToSkylineCsv(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/HeLa_metadata.json'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=skyline', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
 
 
 class TestProblamaticHeaders(unittest.TestCase, TestToSkylineBase):
@@ -184,5 +199,7 @@ class TestProblamaticHeaders(unittest.TestCase, TestToSkylineBase):
         cls.metadata_file = f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
         cls.out_ext = 'annotations.csv'
 
-        commands = ['dia_qc', 'metadata_convert', '--out=skyline', cls.metadata_file]
-        cls.result = setup_functions.run_command(commands, cls.work_dir, prefix=__name__)
+        commands = ['--out=skyline', cls.metadata_file]
+        cls.result = setup_functions.run_main(
+            metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
+        )
