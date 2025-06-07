@@ -10,6 +10,8 @@ import contextlib
 import traceback
 import logging
 
+from DIA_QC_report import parse_data
+from DIA_QC_report import normalize_db
 from pandas import testing as pd_testing
 from numpy import isnan
 
@@ -259,6 +261,10 @@ class ProcessResult:
         self.returncode = returncode
 
 
+    def __str__(self):
+        return f"ProcessResult(stdout={self.stdout!r}, stderr={self.stderr!r}, returncode={self.returncode})"
+
+
 def run_main(main_fxn, argv, wd, prog=None, prefix=None):
     '''
     Run a module main function and capture its output.
@@ -295,6 +301,8 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
             if hasattr(handler, 'stream'):
                 handler.stream = stderr_buf
         try:
+            curwd = os.getcwd()
+            os.chdir(wd)
             main_fxn(argv, prog=prog)
             rc = 0
         except SystemExit as e:
@@ -302,6 +310,7 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
         except Exception:
             traceback.print_exc(file=stderr_buf)
             rc = 1
+            os.chdir(curwd)
 
     out_str = stdout_buf.getvalue()
     err_str = stderr_buf.getvalue()
@@ -321,12 +330,12 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
 
 
 def setup_single_db(data_dir, output_dir, project,
-                    metadata_suffix='_metadata.tsv', output_prefix=None,
+                    metadata_suffix='_metadata.tsv', output_prefix=None, subprocess=False,
                     overwrite_mode='error', group_by_gene=False, clear_dir=False):
     make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
 
-    command = ['dia_qc', 'parse', f'--projectName={project}',
+    command = [f'--projectName={project}',
                f'--overwriteMode={overwrite_mode}',
                '-m', f'{data_dir}/metadata/{project}{metadata_suffix}',
                f'{data_dir}/skyline_reports/{project}_replicate_quality.tsv',
@@ -335,40 +344,60 @@ def setup_single_db(data_dir, output_dir, project,
     if group_by_gene:
         command.insert(2, '--groupBy=gene')
 
-    return run_command(command, output_dir, prefix=output_prefix)
+    if subprocess:
+        command = ['dia_qc', 'parse'] + command
+        return run_command(command, output_dir, prefix=output_prefix)
+
+    return run_main(parse_data._main, command, output_dir, prog='dia_qc parse', prefix=output_prefix)
 
 
 def setup_multi_db(data_dir, output_dir,
                    group_by_gene=False, clear_dir=False,
-                   normalize=False,
+                   normalize=False, subprocess=False,
                    metadata_suffix='_metadata.tsv'):
     make_work_dir(output_dir, clear_dir)
     grouping = 'by_gene' if group_by_gene else 'by_protein'
 
     db_path = f'{output_dir}/data.db3'
 
-    commands = [['dia_qc', 'parse', '--projectName=Sp3',
+    commands = [['--projectName=Sp3',
                  '-m', f'{data_dir}/metadata/Sp3{metadata_suffix}',
                  f'{data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Sp3_{grouping}_precursor_quality.tsv'],
-                ['dia_qc', 'parse', '--overwriteMode=append', '--projectName=Strap',
+                ['--overwriteMode=append', '--projectName=Strap',
                  '-m', f'{data_dir}/metadata/Strap{metadata_suffix}',
                  f'{data_dir}/skyline_reports/Strap_replicate_quality.tsv',
                  f'{data_dir}/skyline_reports/Strap_{grouping}_precursor_quality.tsv']]
 
     if os.path.isfile(db_path):
-        commands[0].insert(2, '--overwriteMode=overwrite')
+        commands[0].insert(0, '--overwriteMode=overwrite')
 
     if group_by_gene:
         for i in range(len(commands)):
-            commands[i].insert(2, '--groupBy=gene')
+            commands[i].insert(0, '--groupBy=gene')
 
     results = list()
     for i, command in enumerate(commands):
-        results.append(run_command(command, output_dir, prefix=f'add_project_{i}'))
+        if subprocess:
+            command = ['dia_qc', 'parse'] + command
+            results.append(run_command(command, output_dir, prefix=f'add_project_{i}'))
+
+        else:
+            results.append(run_main(
+                parse_data._main, command, output_dir,
+                prefix=f'add_project_{i}', prog='dia_qc parse'
+            ))
 
     if normalize:
-        normalize_command = ['dia_qc', 'normalize', '-m=median', db_path]
-        results.append(run_command(normalize_command, output_dir, prefix='normalize_db'))
+        normalize_command = ['-m=median', db_path]
+        if subprocess:
+            results.append(run_command(
+                ['dia_qc', 'normalize'] + normalize_command, output_dir, prefix='normalize_db'
+            ))
+        else:
+            results.append(run_main(
+                normalize_db._main, normalize_command, output_dir,
+                prefix='normalize_db', prog='dia_qc normalize'
+            ))
 
     return results
