@@ -85,18 +85,15 @@ Available commands:
 
 
     def parse(self, argv):
-        args = parse_data.parse_args(argv, prog='dia_qc parse')
-        parse_data._main(args)
+        parse_data._main(argv, prog='dia_qc parse')
 
 
     def report_convert(self, argv):
-        args = skyline_report_convert.parse_args(argv, prog='dia_qc report_convert')
-        skyline_report_convert._main(args)
+        skyline_report_convert._main(argv, prog='dia_qc report_convert')
 
 
     def metadata_convert(self, argv):
-        args = metadata_convert.parse_args(argv, prog='dia_qc metadata_convert')
-        metadata_convert._main(args)
+        metadata_convert._main(argv, prog='dia_qc metadata_convert')
 
 
     def validate(self, argv):
@@ -104,38 +101,31 @@ Available commands:
 
 
     def filter(self, argv):
-        args = filter_replicates.parse_args(argv, prog='dia_qc filter')
-        filter_replicates._main(args)
+        filter_replicates._main(argv, prog='dia_qc filter')
 
 
     def impute(self, argv):
-        args = impute_missing.parse_args(argv, prog='dia_qc impute')
-        impute_missing._main(args)
+        impute_missing._main(argv, prog='dia_qc impute')
 
 
     def normalize(self, argv):
-        args = normalize_db.parse_args(argv, prog='dia_qc normalize')
-        normalize_db._main(args)
+        normalize_db._main(argv, prog='dia_qc normalize')
 
 
     def qc_qmd(self, argv):
-        args = generate_qc_qmd.parse_args(argv, prog='dia_qc qc_qmd')
-        generate_qc_qmd._main(args)
+        generate_qc_qmd._main(argv, prog='dia_qc qc_qmd')
 
 
     def batch_rmd(self, argv):
-        args = generate_batch_rmd.parse_args(argv, prog='dia_qc batch_rmd')
-        generate_batch_rmd._main(args)
+        generate_batch_rmd._main(argv, prog='dia_qc batch_rmd')
 
 
     def export_gene_matrix(self, argv):
-        args = export_gene_matrix.parse_args(argv, prog='dia_qc export_gene_matrix')
-        export_gene_matrix._main(args)
+        export_gene_matrix._main(argv, prog='dia_qc export_gene_matrix')
 
 
     def db_export(self, argv):
-        args = export_tables.parse_args(argv, prog='dia_qc db_export')
-        export_tables._main(args)
+        export_tables._main(argv, prog='dia_qc db_export')
 
 
 def main():

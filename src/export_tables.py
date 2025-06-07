@@ -148,10 +148,9 @@ def parse_args(argv, prog=None):
     return parser.parse_args(argv)
 
 
-def _main(args):
-    '''
-    Actual main method. `args` Should be initialized argparse namespace.
-    '''
+def _main(argv, prog=None):
+    ''' Actual main method. '''
+    args = parse_args(argv, prog=prog)
 
     # check args
     if not validate_bit_mask(args.precursorTables, 2, 2):

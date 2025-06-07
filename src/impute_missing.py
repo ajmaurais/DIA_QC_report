@@ -180,10 +180,9 @@ def parse_args(argv, prog=None):
     return args
 
 
-def _main(args):
-    '''
-    Actual main method. `args` Should be an initialized argparse namespace.
-    '''
+def _main(argv, prog=None):
+    ''' Actual main method. '''
+    args = parse_args(argv, prog=prog)
 
     if not validate_bit_mask(args.impute_data, 2, 1):
         LOGGER.error('Error parsing --imputeData')

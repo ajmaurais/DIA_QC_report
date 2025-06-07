@@ -36,10 +36,9 @@ will not be deleted from the database.''')
     return parser.parse_args(argv)
 
 
-def _main(args):
-    '''
-    Actual main method. `args` Should be an initialized argparse namespace.
-    '''
+def _main(argv, prog=None):
+    ''' Actual main method. '''
+    args = parse_args(argv, prog=prog)
 
     exclude_reps = sum([len(args.excludeRep), len(args.excludeProject)]) > 0
     if exclude_reps and args.include_all:

@@ -236,10 +236,9 @@ def parse_args(argv, prog=None):
     return parser.parse_args(argv)
 
 
-def _main(args):
-    '''
-    Actual main method. `args` Should be initialized argparse namespace.
-    '''
+def _main(argv, prog=None):
+    ''' Actual main method.  '''
+    args = parse_args(argv, prog=prog)
 
     if (gene_group_method := unambigious_match(TABLE_TYPES, args.group_method)) is None:
         LOGGER.error(f"Could not unambiguously determine protein table type: '{args.group_method}'\n")
