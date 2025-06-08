@@ -157,12 +157,12 @@ class SkylineReport(ABC):
         if self.quiet:
             self.RuntimeError(message)
         else:
-            LOGGER.error(message)
+            LOGGER.error(message, stacklevel=2)
 
 
     def _info(self, message):
         if not self.quiet:
-            LOGGER.info(message)
+            LOGGER.info(message, stacklevel=2)
 
 
     @staticmethod

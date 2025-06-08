@@ -11,7 +11,7 @@ import pandas as pd
 
 from DIA_QC_report import validate_pipeline_params as vpp
 from DIA_QC_report.submodules.panorama import url_exists, have_internet
-from DIA_QC_report.submodules.panorama import PANORA_PUBLIC_KEY
+from DIA_QC_report.submodules.panorama import PANORAMA_PUBLIC_KEY
 from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report.submodules.logger import LOGGER
 
@@ -63,7 +63,7 @@ class TestGetInputFileText(unittest.TestCase):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
 
-        text = vpp.get_file(PUBLIC_FILE, api_key=PANORA_PUBLIC_KEY, return_text=True)
+        text = vpp.get_file(PUBLIC_FILE, api_key=PANORAMA_PUBLIC_KEY, return_text=True)
         with open(f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/panorama/Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv', 'r') as f:
             target_text = f.read()
 
@@ -80,12 +80,12 @@ class TestGetApiKeyFromNextflow(unittest.TestCase, setup_functions.AbstractTests
 
     def test_get_api_key_from_nextflow_secrets(self):
         with mock.patch('DIA_QC_report.validate_pipeline_params.subprocess.run',
-                        return_value=self._mock_process_run(PANORA_PUBLIC_KEY)) as mock_run, \
+                        return_value=self._mock_process_run(PANORAMA_PUBLIC_KEY)) as mock_run, \
              mock.patch('DIA_QC_report.validate_pipeline_params.which',
                         return_value='nextflow') as mock_which:
             api_key = vpp.get_api_key_from_nextflow_secrets()
 
-        self.assertEqual(api_key, PANORA_PUBLIC_KEY)
+        self.assertEqual(api_key, PANORAMA_PUBLIC_KEY)
         mock_run.assert_called_once_with(
             ['nextflow', 'secrets', 'get', 'PANORAMA_API_KEY'],
             capture_output=True, text=True
@@ -248,11 +248,11 @@ class TestParseInputFiles(unittest.TestCase):
                         side_effect=partial(self._target_files_from_url, ext=ext)) as mock_list_panorama:
             self.do_test(
                 input_files, target_files,
-                api_key=PANORA_PUBLIC_KEY,
+                api_key=PANORAMA_PUBLIC_KEY,
                 file_glob=f'*-8mz-ovlp-400to1000-*.{ext}'
             )
 
-        mock_list_panorama.assert_called_once_with(input_files['Strap'], api_key=PANORA_PUBLIC_KEY)
+        mock_list_panorama.assert_called_once_with(input_files['Strap'], api_key=PANORAMA_PUBLIC_KEY)
 
 
     def test_multi_batch_mixed_list(self):

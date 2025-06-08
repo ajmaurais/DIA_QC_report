@@ -13,6 +13,7 @@ from . import generate_qc_qmd
 from . import generate_batch_rmd
 from . import export_gene_matrix
 from . import export_tables
+from .submodules.logger import LOGGER, DEBUG
 
 from . import __version__ as PACKAGE_VERSION
 
@@ -71,11 +72,21 @@ Available commands:
         parser.add_argument('-h', '--help', action='help',
                             help='Show this help message and exit.')
         parser.add_argument('-v', '--version', action=VersionAction)
+        parser.add_argument(
+            '--debug', action='store_true', default=False,
+            help='Print function names and line numbers in log messages.'
+        )
         parser.add_argument('command', help='Subcommand to run.')
 
         subcommand_start = _first_subcommand(sys.argv)
         args = parser.parse_args(sys.argv[1:(subcommand_start + 1)])
         argv = sys.argv[subcommand_start + 1:]
+
+        # Set up logging
+        if args.debug:
+            LOGGER.setLevel(DEBUG)
+            LOGGER.show_date = True
+            LOGGER.set_debug(True)
 
         if not hasattr(self, args.command):
             sys.stderr.write(f"dia_qc: '{args.command}' is not a valid command!\n")

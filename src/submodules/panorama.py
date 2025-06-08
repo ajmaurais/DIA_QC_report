@@ -9,7 +9,8 @@ from contextlib import closing
 
 import requests
 
-PANORA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c510d10'
+PANORAMA_URL = 'https://panoramaweb.org'
+PANORAMA_PUBLIC_KEY = '7d503a4147133c448c6eaf83bc9b8bc22ace4b7f6d36ca61c9d1ca836c510d10'
 
 _LIST_BODY = (
     '<?xml version="1.0" encoding="utf-8"?>'

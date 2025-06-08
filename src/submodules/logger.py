@@ -4,6 +4,8 @@ import logging
 from typing import Any
 from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL
 
+_FORMATING_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
+
 
 class _SplitStreamHandler(logging.Handler):
     '''
@@ -22,15 +24,17 @@ class _SplitStreamHandler(logging.Handler):
 
         parts: list[str] = []
         if self._parent.show_date:
-            parts.append(
-                datetime.fromtimestamp(record.created).strftime(
-                    self._parent.dateformat
-                )
-            )
-        if self._parent.show_level:
-            parts.append(f"[{record.levelname}]")
+            parts.append(datetime.fromtimestamp(record.created).strftime(self._parent.dateformat))
+            parts.append('-')
+
         if self._parent.debug_mode:
-            parts.append(f"{record.filename}:{record.lineno} in {record.funcName}")
+            parts.append(f"{record.filename} {record.funcName}:{record.lineno} ")
+
+        if self._parent.show_level:
+            if len(parts) > 0:
+                parts.append(f'[{record.levelname}]')
+            else:
+                parts.append(f'[{record.levelname}]'.ljust(max(len(level) for level in _FORMATING_LEVELS)))
 
         parts.append(record.getMessage())
 

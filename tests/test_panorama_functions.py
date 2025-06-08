@@ -67,10 +67,10 @@ class TestListPanoramaFiles(unittest.TestCase):
         if MOCK_PANORAMA:
             with mock.patch('DIA_QC_report.submodules.panorama.requests.Session.request',
                             return_value=self._make_mock_response(self.flat_response)) as mock_request:
-                files = panorama.list_panorama_files(PUBLIC_URL, api_key=panorama.PANORA_PUBLIC_KEY)
+                files = panorama.list_panorama_files(PUBLIC_URL, api_key=panorama.PANORAMA_PUBLIC_KEY)
 
             headers={'Depth': '1', 'Content-Type': 'text/xml; charset=utf-8'}
-            token = panorama.b64encode(f'apikey:{panorama.PANORA_PUBLIC_KEY}'.encode()).decode()
+            token = panorama.b64encode(f'apikey:{panorama.PANORAMA_PUBLIC_KEY}'.encode()).decode()
             headers['Authorization'] = f'Basic {token}'
 
             call_args = ('PROPFIND', PUBLIC_URL)
@@ -85,7 +85,7 @@ class TestListPanoramaFiles(unittest.TestCase):
                 self.skipTest("Internet connection is required for this test.")
 
             files = panorama.list_panorama_files(
-                url=PUBLIC_URL, api_key=panorama.PANORA_PUBLIC_KEY
+                url=PUBLIC_URL, api_key=panorama.PANORAMA_PUBLIC_KEY
             )
 
         self.assertIsInstance(files, list)
@@ -135,13 +135,13 @@ class TestDownloadWebDAVFile(unittest.TestCase):
                 out_path = panorama.get_webdav_file(
                     PUBLIC_FILE,
                     dest_path=f'{self.work_dir}/{test_file}',
-                    api_key=panorama.PANORA_PUBLIC_KEY
+                    api_key=panorama.PANORAMA_PUBLIC_KEY
                 )
 
             # verify the URL passed to get()
             mock_get.assert_called_once_with(
                 PUBLIC_FILE,
-                headers={'Authorization': f'Basic {panorama._encode_api_key(panorama.PANORA_PUBLIC_KEY)}'},
+                headers={'Authorization': f'Basic {panorama._encode_api_key(panorama.PANORAMA_PUBLIC_KEY)}'},
                 stream=True, verify=True
             )
 
@@ -152,7 +152,7 @@ class TestDownloadWebDAVFile(unittest.TestCase):
             out_path = panorama.get_webdav_file(
                 PUBLIC_FILE,
                 dest_path=f'{self.work_dir}/{test_file}',
-                api_key=panorama.PANORA_PUBLIC_KEY
+                api_key=panorama.PANORAMA_PUBLIC_KEY
             )
 
         # ensure file is written

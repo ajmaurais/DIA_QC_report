@@ -16,7 +16,7 @@ from requests import HTTPError
 from pandas import isna as pd_isna
 
 from .submodules.pipeline_config import PipelineConfig
-from .submodules.panorama import PANORA_PUBLIC_KEY
+from .submodules.panorama import PANORAMA_PUBLIC_KEY, PANORAMA_URL
 from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file
 from .submodules.read_metadata import Metadata
@@ -140,7 +140,7 @@ def get_file(file_path, log_name='file', api_key=None,
     str or None
         Text content of the file if it exists, None otherwise.
     '''
-    if file_path.startswith('https://panoramaweb.org'):
+    if file_path.startswith(PANORAMA_URL):
         try:
             text = get_webdav_file(file_path, api_key=api_key, dest_path=dest_path, return_text=return_text)
         except HTTPError as e:
@@ -172,7 +172,7 @@ def get_file(file_path, log_name='file', api_key=None,
 
 
 def _process_directorty(directory, file_regex, api_key=None):
-    if directory.startswith('https://panoramaweb.org'):
+    if directory.startswith(PANORAMA_URL):
         files = list_panorama_files(directory, api_key=api_key)
     else:
         files = os.listdir(directory)
@@ -512,7 +512,7 @@ def validate_metadata(
     '''
 
     if (control_key is None) != (control_values is None):
-        LOGGER.error("Both 'control_key' and 'color_vars' must be specified or both omitted.")
+        LOGGER.error("Both 'control_key' and 'control_values' must be specified or both omitted.")
         return False
 
     ###### Validate metadata_df ######
@@ -695,8 +695,8 @@ def parse_args(argv, prog=None):
         help='Path to write replicate metadata file if it is downloaded.'
     )
     common_subcommand_args.add_argument(
-        '--debug', action='store_true', default=False,
-        help='Print function names and line numbers in log messages.'
+        '--verbose', action='store_true', default=False,
+        help='Print verbose log messages.'
     )
 
     ####### Top level parser #######
@@ -861,14 +861,6 @@ def _main(argv, prog=None):
         prog=prog
     )
 
-    # Set up logging
-    if args.debug:
-        LOGGER.setLevel(DEBUG)
-        LOGGER.show_date = True
-        LOGGER.set_debug(True)
-
-    LOGGER.info('Starting nf-skyline-dia-ms validation script.')
-
     # Determine API key
     api_key = None
     if args.nextflow_key:
@@ -878,7 +870,7 @@ def _main(argv, prog=None):
     elif args.api_key:
         api_key = args.api_key
     elif args.panorama_public:
-        api_key = PANORA_PUBLIC_KEY
+        api_key = PANORAMA_PUBLIC_KEY
 
     write_reports = False
     report_format = None
@@ -907,12 +899,12 @@ def _main(argv, prog=None):
 
     if args.subcommand == 'config':
         # Read and validate pipeline config file(s)
-        LOGGER.info('Reading pipeline config files...')
+        LOGGER.info('Reading pipeline config and validating against schema...')
         success, config_data = validate_config_files(args.pipeline_config, args.schema)
         if not success:
             LOGGER.error('Pipeline config validation failed.')
             sys.exit(1)
-        LOGGER.info('Pipeline config validation succeeded.')
+        LOGGER.info('Pipeline config read and validated successfully.')
 
         color_vars = config_data.get('qc_report.color_vars')
         batch1 = config_data.get('batch_report.batch1')
