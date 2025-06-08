@@ -58,6 +58,28 @@ class TestGenerateSchemaUrl(unittest.TestCase):
         self.assertTrue(url_exists(url))
 
 
+class TestClosestMatch(unittest.TestCase):
+    def test_close_matches(self):
+        target_strings = ['Sp3', 'Strap', 'cellLine', 'NCI7std', 'batch']
+        test_strings = [
+            ('Sp3', 'Sp3'), ('SP3', 'Sp3'), ('SP-3', 'Sp3'), ('sp-3', 'Sp3'),
+            ('Strap', 'Strap'), ('strap', 'Strap'), ('S-Trap', 'Strap'),
+            ('cellLine', 'cellLine'), ('CellLine', 'cellLine'), ('Cell Line', 'cellLine'),
+            ('cell_line', 'cellLine'), ('Cell_Line', 'cellLine'),
+            ('NCI7std', 'NCI7std'), ('NCI-7std', 'NCI7std'), ('NCI-7-std', 'NCI7std'), ('NCI7.std', 'NCI7std'),
+            ('batch', 'batch'), ('Batch', 'batch'),
+            ('Not a var', None), ('Special', None)
+        ]
+
+        for test_str, expected in test_strings:
+            with self.subTest(test_str=test_str):
+                result = vpp.closest_match(test_str, target_strings)
+                self.assertEqual(
+                    result, expected,
+                    f"Expected '{expected}' for '{test_str}', got '{result}'"
+                )
+
+
 class TestGetInputFileText(unittest.TestCase):
     def test_get_input_file_text(self):
         if not have_internet():

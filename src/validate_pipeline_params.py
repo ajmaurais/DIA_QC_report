@@ -10,6 +10,7 @@ from shutil import which
 import subprocess
 from io import StringIO
 from collections import Counter
+import difflib
 
 from jsonschema import validate, ValidationError
 from requests import HTTPError
@@ -467,6 +468,25 @@ def _log_warn_error(message, *args, warning=True):
         LOGGER.error(message, *args)
 
 
+def closest_match(var: str, candidates: list[str]) -> str:
+    '''
+    Return closets string match to *var* from *candidates*.
+
+    Returns
+    -------
+    str or None
+        Closest match if found, None otherwise.
+    '''
+    if var in candidates:
+        return var
+
+    # Try to find a close match (diff ratio >= 0.6)
+    close = difflib.get_close_matches(var, candidates, n=1, cutoff=0.5)
+    if close is None or len(close) == 0:
+        return None
+    return close[0]
+
+
 def validate_metadata(
     ms_files, metadata_df, metadata_types, *,
     color_vars=None, batch1=None, batch2=None,
@@ -543,8 +563,10 @@ def validate_metadata(
 
         all_meta_vars_good = True
         for var, name in meta_params:
-            if var not in metadata_types:
-                LOGGER.error("Metadata variable '%s' from '%s' parameter not found in metadata.", var, name)
+            if (match := closest_match(var, metadata_types.keys())) != var:
+                did_you_mean = f" Did you mean '{match}'?" if match else ''
+                LOGGER.error("Metadata variable '%s' from '%s' parameter not found in metadata.%s",
+                             var, name, did_you_mean)
                 all_meta_vars_good = False
                 continue
             if metadata_types[var] is Dtype.NULL:
