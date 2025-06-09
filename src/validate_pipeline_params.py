@@ -22,7 +22,7 @@ from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file
 from .submodules.read_metadata import Metadata
 from .submodules.dtype import Dtype
-from .submodules.logger import LOGGER, DEBUG
+from .submodules.logger import LOGGER
 
 
 COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-ms pipeline.'
@@ -386,7 +386,6 @@ def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
     '''
     if len(meta_params) == 0:
         LOGGER.warning('No metadata parameters to report.')
-        return
 
     report_data = []
     for var, name in meta_params:
@@ -442,7 +441,7 @@ def _write_replicate_report(replicates, output_path='replicate_validation_report
 
     report_data = []
     for rep_name, rep in replicates.items():
-        report_data.append({'ParameterBatch': rep.batch, 'Replicate': rep_name})
+        report_data.append({'ParameterBatch': rep.batch, 'Replicate': rep_name, 'FileName': rep.name})
         for key, value in rep.metadata.items():
             report_data[-1][key] = value
 
@@ -492,7 +491,7 @@ def validate_metadata(
     color_vars=None, batch1=None, batch2=None,
     control_key=None, control_values=None,
     write_replicate_report=False, write_metadata_report=False,
-    report_format='json', report_dir=None, strict=True
+    report_format='json', report_prefix=None, strict=True
 ):
     '''
     Validate metadata against the provided parameters.
@@ -521,6 +520,8 @@ def validate_metadata(
         Write a summary of metadata parameters to a file.
     report_format : str, optional
         Format of the report files. Either 'tsv', or 'json'. Default is 'json'.
+    report_prefix: str, optional
+        File prefix for the report files. If None, the default names will be used.
     strict : bool, optional
         If True, any validation problems which will not cause the pipeline to fail,
         but are likely to result in unintended behavior, will be logged as errors.
@@ -672,8 +673,8 @@ def validate_metadata(
                         metadata_types[var].name, var, len(replicates))
 
     # Write metadata report
-    if write_metadata_report and len(meta_params) > 0:
-        output_path = f'{report_dir + '/' if report_dir else ''}metadata_validation_report.{report_format}'
+    if write_metadata_report:
+        output_path = f'{report_prefix}metadata_validation_report.{report_format}'
         _write_metadata_report(
             meta_params, metadata_types, rep_na_counts,
             len(replicates), output_path=output_path
@@ -682,7 +683,7 @@ def validate_metadata(
 
     # Write replicate report
     if write_replicate_report:
-        output_path = f'{report_dir + '/' if report_dir else ''}replicate_validation_report.{report_format}'
+        output_path = f'{report_prefix}replicate_validation_report.{report_format}'
         _write_replicate_report(replicates, output_path=output_path)
         LOGGER.info(f'Replicate report written to {output_path}')
 
@@ -713,8 +714,8 @@ def parse_args(argv, prog=None):
              'By default no reports are written.'
     )
     common_subcommand_args.add_argument(
-        '--metadata-output-path', dest='metadata_output_path', default=None,
-        help='Path to write replicate metadata file if it is downloaded.'
+        '--report-prefix', dest='report_prefix', default=None,
+        help='File prefix for metadata and MS file validation reports. '
     )
     common_subcommand_args.add_argument(
         '--verbose', action='store_true', default=False,
@@ -800,6 +801,10 @@ def parse_args(argv, prog=None):
     input_args = params_command_args.add_argument_group('Input files options')
     input_args.add_argument(
         '-m', '--metadata', help='Replicate metadata file. Can be a local file or Panorama URL.'
+    )
+    input_args.add_argument(
+        '--metadata-output-path', dest='metadata_output_path', default=None,
+        help='Path to write replicate metadata file if it is downloaded.'
     )
     input_args.add_argument(
         '--chrom-lib-dir', dest='chrom_lib_spectra_dir', action='append', default=None,
@@ -899,6 +904,10 @@ def _main(argv, prog=None):
     if hasattr(args, 'report_format'):
         write_reports = True
         report_format = args.report_format
+
+    metadata_output_path = None
+    if hasattr(args, 'metadata_output_path'):
+        metadata_output_path = args.metadata_output_path
 
     # Input files
     quant_spectra_dir = None
@@ -1004,24 +1013,25 @@ def _main(argv, prog=None):
             chrom_reps = {os.path.splitext(file_name)[0]: Replicate(file_name)
                           for file_name in chromatogram_library_spectra_dir}
             _write_replicate_report(
-                chrom_reps, output_path=f'chromatogram_library_replicate_report.{report_format}'
+                chrom_reps,
+                output_path=f'{args.report_prefix}chromatogram_library_replicate_report.{report_format}'
             )
 
     # read metadata
     replicate_metadata = None
     metadata_types = None
     if metadata_path:
-        download_metadata = args.metadata_output_path is not None
+        download_metadata = metadata_output_path is not None
         metadata = get_file(
             metadata_path, log_name='replicate metadata', api_key=api_key,
-            dest_path=args.metadata_output_path, return_text=not download_metadata
+            dest_path=metadata_output_path, return_text=not download_metadata
         )
         if metadata is None:
             sys.exit(1)
 
         metadata_reader = Metadata()
         if download_metadata:
-            with open(args.metadata_output_path, 'r') as inF:
+            with open(metadata_output_path, 'r') as inF:
                 if not metadata_reader.read(inF):
                     sys.exit(1)
         else:
@@ -1040,7 +1050,7 @@ def _main(argv, prog=None):
         color_vars=color_vars, batch1=batch1, batch2=batch2,
         control_key=control_key, control_values=control_values,
         write_replicate_report=write_reports, write_metadata_report=write_reports,
-        report_format=report_format
+        report_format=report_format, report_prefix=args.report_prefix
     )
     if not success:
         LOGGER.error('Metadata validation failed.')
