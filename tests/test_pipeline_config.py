@@ -264,19 +264,19 @@ class TestParseParams(unittest.TestCase):
 
 
     def test_complex_config(self):
-        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/multi_batch.config'
+        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/template.config'
 
         target = SimpleNamespace(
             carafe=SimpleNamespace(
-                spectra_file = "<path>",
+                spectra_file = None,
                 peptide_results_file = None,
                 carafe_fasta = None,
                 diann_fasta = None
             ),
-            quant_spectra_dir = {'SP3': '<path>', 'Strap': '<path>'},
+            quant_spectra_dir = '<path>',
             quant_spectra_glob = '<glob>',
             quant_spectra_regex = None,
-            chromatogram_library_spectra_dir = ['<path>', '<path>'],
+            chromatogram_library_spectra_dir = None,
             chromatogram_library_spectra_glob = '<glob>',
             chromatogram_library_spectra_regex = None,
             images = SimpleNamespace(
@@ -295,7 +295,6 @@ class TestParseParams(unittest.TestCase):
             replicate_metadata = '<path>',
             qc_report = SimpleNamespace(
                 skip = False,
-                color_vars = ['cellLine'],
                 export_tables = False
             ),
             batch_report = SimpleNamespace(skip=False),
@@ -316,7 +315,7 @@ class TestParseParams(unittest.TestCase):
 
 
     def test_write_params(self):
-        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/multi_batch.config'
+        config_file = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/config_files/template.config'
         config_data = pipeline_config.PipelineConfig(config_file)
 
         out = io.StringIO()
