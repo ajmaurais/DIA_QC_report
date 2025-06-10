@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 from types import SimpleNamespace
 import os
+import re
 import json
 
 import pandas as pd
@@ -22,7 +23,8 @@ SP3_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20
 PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/'
 
 METADATA_CONFIG_TO_ARG_PARAMS = {
-    'qc_report.color_vars': 'color_vars', 'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
+    'qc_report.color_vars': 'color_vars', 'batch_report.covariate_vars': 'covariate_vars',
+    'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
     'qc_report.control_key': 'control_key', 'qc_report.control_values': 'control_values'
 }
 METADATA_CMD_ARG_TO_ARG_PARAMS = {
@@ -103,7 +105,8 @@ class TestValidateSetup(unittest.TestCase):
 
     def check_metadata_report(
         self, report_path, metadata_types=None, metadata_df=None, total_reps=None,
-        color_vars=None, control_key=None, control_values=None, batch1=None, batch2=None
+        color_vars=None, control_key=None, control_values=None,
+        batch1=None, batch2=None, covariate_vars=None
     ):
         if metadata_types is None:
             metadata_types = self.metadata_types
@@ -119,7 +122,13 @@ class TestValidateSetup(unittest.TestCase):
 
         meta_params = []
         if color_vars:
+            if isinstance(color_vars, str):
+                color_vars = [color_vars]
             meta_params = [(var, 'color_vars') for var in color_vars]
+        if covariate_vars:
+            if isinstance(covariate_vars, str):
+                covariate_vars = [covariate_vars]
+            meta_params += [(var, 'covariate_vars') for var in covariate_vars]
         if control_key:
             meta_params.append((control_key, 'control_key'))
         if batch1:
@@ -313,7 +322,8 @@ class TestConfig(TestValidateSetup):
     def test_all_remote_batched(self):
         projects = ['Strap', 'Sp3']
         meta_params = {
-            'qc_report.color_vars': ['experiment', 'cellLine', 'NCI7std']
+            'qc_report.color_vars': 'cellLine',
+            'batch_report.covariate_vars': ['experiment', 'cellLine']
         }
         test_prefix = 'test_all_remote_batched'
         test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
@@ -367,7 +377,8 @@ class TestConfig(TestValidateSetup):
     def test_mixed_batched(self):
         projects = ['Strap', 'Sp3']
         meta_params = {
-            'qc_report.color_vars': ['experiment', 'cellLine', 'NCI7std']
+            'qc_report.color_vars': ['experiment', 'cellLine', 'NCI7std'],
+            'batch_report.covariate_vars': 'cellLine'
         }
         test_prefix = 'test_all_remote_batched'
         test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
@@ -680,14 +691,68 @@ class TestParams(TestValidateSetup):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
+    def write_ms_file_json(self, projects, output_path, file_regex=None):
+        if isinstance(projects, str):
+            projects = [projects]
+
+        if len(projects) > 1:
+            files = {}
+            for project in projects:
+                files[project] = [
+                    f for f in os.listdir(f'{self.local_ms_files}/{project}')
+                    if re.search(file_regex, f)
+                ]
+        else:
+            files = [
+                f for f in os.listdir(f'{self.local_ms_files}/{projects[0]}')
+                if re.search(file_regex, f)
+            ]
+
+        with open(output_path, 'w') as f:
+            json.dump(files, f, indent=4)
+
+
     def test_flat(self):
         project = 'Strap'
         color_vars = ['experiment', 'cellLine']
         test_prefix = 'test_flat'
+        quant_file_args = [
+            f'-q={f}' for f in os.listdir(f'{self.local_ms_files}/{project}')
+            if re.search(r'400to1000.+?.raw$', f)
+        ]
         args = [
             'params', '--report-prefix', f'{test_prefix}_',
-            '--quant-spectra-dir', f'{self.local_ms_files}/{project}',
-            '--quant-spectra-glob', '*400to1000*.raw',
+            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
+        ] + self.common_test_args + [f'--addColorVar={var}' for var in color_vars] + quant_file_args
+
+        restult = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog='dia_qc validate'
+        )
+        self.assertEqual(restult.returncode, 0, restult.stderr)
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                color_vars=color_vars
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', project
+            )
+
+
+    def test_flat_json(self):
+        project = 'Strap'
+        color_vars = ['experiment', 'cellLine']
+        test_prefix = 'test_flat'
+        quant_files_path = f'{self.work_dir}/{test_prefix}_quant_files.json'
+        chrom_files_path = f'{self.work_dir}/{test_prefix}_lib_files.json'
+        self.write_ms_file_json(project, quant_files_path, file_regex=r'400to1000.+?.raw$')
+        self.write_ms_file_json(project, chrom_files_path, file_regex=r'-Lib\.raw$')
+        args = [
+            'params', '--report-prefix', f'{test_prefix}_',
+            '--quant-spectra-json', quant_files_path, '--chrom-lib-spectra-json', chrom_files_path,
             '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
         ] + self.common_test_args + [f'--addColorVar={var}' for var in color_vars]
 
@@ -709,4 +774,32 @@ class TestParams(TestValidateSetup):
 
 
     def test_batched(self):
-        pass
+        projects = ['Strap', 'Sp3']
+        color_vars = ['experiment', 'cellLine']
+
+        test_prefix = 'test_batched'
+        quant_files_path = f'{self.work_dir}/{test_prefix}_quant_files.json'
+        chrom_files_path = f'{self.work_dir}/{test_prefix}_lib_files.json'
+        self.write_ms_file_json(projects, quant_files_path, file_regex=r'400to1000.+?.raw$')
+        self.write_ms_file_json(projects, chrom_files_path, file_regex=r'-Lib\.raw$')
+        args = [
+            'params', '--report-prefix', f'{test_prefix}_',
+            '--quant-spectra-json', quant_files_path, '--chrom-lib-spectra-json', chrom_files_path,
+            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
+        ] + self.common_test_args + [f'--addColorVar={var}' for var in color_vars]
+
+        restult = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog='dia_qc validate'
+        )
+        self.assertEqual(restult.returncode, 0, restult.stderr)
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                color_vars=color_vars
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+            )

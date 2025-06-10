@@ -32,10 +32,6 @@ DEFAULT_PIPELINE_REVISION = 'main'
 QUANT_SPECTRA_SCHEMA = {
     "oneOf": [
         {
-            "type": "string",
-            'minProperties': 1
-        },
-        {
             "type": "array",
             "items": {"type": "string"},
             'minProperties': 1
@@ -267,6 +263,45 @@ def parse_input_files(input_files, file_glob=None, file_regex=None, api_key=None
     return multi_batch_mode, files
 
 
+def parse_input_file_json(file):
+    '''
+    Parse a JSON file containing quantative or chromatogram library spectra files.
+
+    Parameters
+    ----------
+    file : str or file
+        Path or file object of the JSON file containing the spectra files.
+
+    Returns
+    -------
+    multi_batch_mode : bool
+        True if the JSON file contains multiple batches, False otherwise.
+    files: list or dict
+        List of files or a dict mapping batch names to lists of files.
+    '''
+
+    try:
+        if isinstance(file, str):
+            with open(file, 'r') as inF:
+                data = json.load(inF)
+        else:
+            data = json.load(file)
+    except FileNotFoundError as e:
+        LOGGER.error(f"Error reading MS file JSON: {e}")
+        return False, None
+    except json.JSONDecodeError as e:
+        LOGGER.error(f"Failed to parse MS file JSON: {e}")
+        return False, None
+
+    try:
+        validate(data, QUANT_SPECTRA_SCHEMA)
+    except ValidationError as e:
+        LOGGER.error(f"MS file JSON does not match the expected schema: {e.message}")
+        return False, None
+
+    return isinstance(data, dict), data
+
+
 def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') -> str:
     '''
     Build the permanent raw-file download URL for filename hosted on GitHub.
@@ -468,7 +503,7 @@ def _log_warn_error(message, *args, warning=True):
 
 def validate_metadata(
     ms_files, metadata_df, metadata_types, *,
-    color_vars=None, batch1=None, batch2=None,
+    color_vars=None, batch1=None, batch2=None, covariate_vars=None,
     control_key=None, control_values=None,
     write_replicate_report=False, write_metadata_report=False,
     report_format='json', report_prefix=None, strict=True
@@ -490,6 +525,8 @@ def validate_metadata(
         Metadata variable to use for batch 1.
     batch2 : str, optional
         Metadata variable to use for batch 2.
+    covariate_vars : list of str, optional
+        List of metadata variables to use as covariates for batch correction.
     control_key : str, optional
         Metadata key indicating control samples.
     control_values : list of str, optional
@@ -525,6 +562,11 @@ def validate_metadata(
             color_vars = [color_vars]
         for var in color_vars:
             meta_params.append((var, 'color_vars'))
+    if covariate_vars is not None:
+        if isinstance(covariate_vars, str):
+            covariate_vars = [covariate_vars]
+        for var in covariate_vars:
+            meta_params.append((var, 'covariate_vars'))
     other_vars = {batch1: 'batch1', batch2: 'batch2', control_key: 'control_key'}
     for var, name in other_vars.items():
         if var is not None:
@@ -786,36 +828,23 @@ def parse_args(argv, prog=None):
         '--metadata-output-path', dest='metadata_output_path', default=None,
         help='Path to write replicate metadata file if it is downloaded.'
     )
-    input_args.add_argument(
-        '--chrom-lib-dir', dest='chrom_lib_spectra_dir', action='append', default=None,
-        help='Add chromatogram library spectra directory.'
-    )
     quant_dir_args = input_args.add_mutually_exclusive_group(required=True)
     quant_dir_args.add_argument(
-        '-q', '--quant-spectra-dir', dest='quant_spectra_dir', action='append', default=None,
+        '-q', '--add-quant-file', dest='quant_spectra_dir', action='append', default=None,
         help='Add quantative spectra directory.'
     )
     quant_dir_args.add_argument(
-        '--quant-spectra-param', dest='quant_spectra_param',
+        '--quant-spectra-json', dest='quant_spectra_param',
         help='JSON file with quant_spectra_dir parameter'
     )
-    quant_spectra_patterns = input_args.add_mutually_exclusive_group(required=True)
-    quant_spectra_patterns.add_argument(
-        '--quant-spectra-glob', dest='quant_spectra_glob',
-        help='Glob pattern to match quant_spectra_dir files.'
+    chrom_dir_args = input_args.add_mutually_exclusive_group(required=False)
+    chrom_dir_args.add_argument(
+        '-l', '--add-chrom-file', dest='chrom_lib_spectra_dir', action='append', default=None,
+        help='Add chromatogram library spectra directory.'
     )
-    quant_spectra_patterns.add_argument(
-        '--quant-spectra-regex', dest='quant_spectra_regex',
-        help='Regex pattern to match quant_spectra_dir files.'
-    )
-    chrom_spectra_patterns = input_args.add_mutually_exclusive_group(required=False)
-    chrom_spectra_patterns.add_argument(
-        '--chromatogram-library-spectra-glob', dest='chrom_lib_spectra_glob',
-        help='Glob pattern to match chromatogram_library_spectra_dir files.'
-    )
-    chrom_spectra_patterns.add_argument(
-        '--chromatogram-library-spectra-regex', dest='chrom_lib_spectra_regex',
-        help='Regex pattern to match chromatogram_library_spectra_dir files.'
+    chrom_dir_args.add_argument(
+        '--chrom-lib-spectra-json', dest='chrom_lib_spectra_param',
+        help='JSON file with chromatogram_library_spectra_dir parameter'
     )
 
     ###### Argument validation ######
@@ -841,12 +870,6 @@ def parse_args(argv, prog=None):
             args.schema = generate_git_url(
                 args.pipeline, revision, filename='nextflow_schema.json'
             ) if not hasattr(args, 'schema') else args.schema
-
-    if args.subcommand == 'params':
-        have_pattern = args.chrom_lib_spectra_glob is not None or args.chrom_lib_spectra_regex is not None
-        if args.chrom_lib_spectra_dir is not None and not have_pattern:
-            sys.stderr.write('Chromatogram library spectra glob or regex pattern must be provided.\n')
-            sys.exit(2)
 
     return args
 
@@ -891,18 +914,15 @@ def _main(argv, prog=None):
 
     # Input files
     quant_spectra_dir = None
-    quant_spectra_param = None
-    quant_spectra_glob = None
-    quant_spectra_regex = None
-    chromatogram_library_spectra_param = None
+    multi_batch = False
     chromatogram_library_spectra_dir = None
-    chromatogram_library_spectra_glob = None
-    chromatogram_library_spectra_regex = None
+    chrom_multi_batch = False
 
     # Metadata settings
     color_vars = None
     batch1 = None
     batch2 = None
+    covariate_vars = None
     control_key = None
     control_values = None
     metadata_path = None
@@ -920,6 +940,7 @@ def _main(argv, prog=None):
         color_vars = config_data.get('qc_report.color_vars')
         batch1 = config_data.get('batch_report.batch1')
         batch2 = config_data.get('batch_report.batch2')
+        covariate_vars = config_data.get('batch_report.covariate_vars')
         control_key = config_data.get('qc_report.control_key')
         control_values = config_data.get('qc_report.control_values')
 
@@ -932,41 +953,45 @@ def _main(argv, prog=None):
         chromatogram_library_spectra_regex = config_data.get('chromatogram_library_spectra_regex')
         chromatogram_library_spectra_glob = config_data.get('chromatogram_library_spectra_glob')
 
+        multi_batch, quant_spectra_dir = parse_input_files(
+            quant_spectra_param, api_key=api_key,
+            file_glob=quant_spectra_glob, file_regex=quant_spectra_regex,
+        )
+
+        if chromatogram_library_spectra_param is not None:
+            chrom_multi_batch, chromatogram_library_spectra_dir = parse_input_files(
+                chromatogram_library_spectra_param, api_key=api_key,
+                file_glob=chromatogram_library_spectra_glob,
+                file_regex=chromatogram_library_spectra_regex,
+            )
+
     elif args.subcommand == 'params':
         color_vars = args.color_vars
         batch1 = args.batch1
         batch2 = args.batch2
+        covariate_vars = args.covariate_vars
         control_key = args.control_key
         control_values = args.control_values
-
-        quant_spectra_glob = args.quant_spectra_glob
-        quant_spectra_regex = args.quant_spectra_regex
-        chromatogram_library_spectra_regex = args.chrom_lib_spectra_regex
-        chromatogram_library_spectra_glob = args.chrom_lib_spectra_glob
         metadata_path = args.metadata
 
         if args.quant_spectra_dir is not None:
-            quant_spectra_param = args.quant_spectra_dir
+            quant_spectra_dir = args.quant_spectra_dir
+            multi_batch = False
         elif args.quant_spectra_param is not None:
-            quant_spectra_param = json.load(args.quant_spectra_dir)
-            try:
-                validate(quant_spectra_param, QUANT_SPECTRA_SCHEMA)
-            except ValidationError as e:
-                LOGGER.error(f'Quant spectra parameter validation failed: {e.message}')
-                sys.exit(1)
+            multi_batch, quant_spectra_dir = parse_input_file_json(args.quant_spectra_param)
         else:
             raise RuntimeError('quant_spectra_dir or quant_spectra_param must be provided.')
 
         if args.chrom_lib_spectra_dir is not None:
-            chromatogram_library_spectra_param = args.chrom_lib_spectra_dir
+            chromatogram_library_spectra_dir = args.chrom_lib_spectra_dir
+        elif args.chrom_lib_spectra_param is not None:
+            chrom_multi_batch, chromatogram_library_spectra_dir = parse_input_file_json(
+                args.chrom_lib_spectra_param
+            )
 
     else:
         raise RuntimeError(f'Unknown subcommand: {args.subcommand}')
 
-    multi_batch, quant_spectra_dir = parse_input_files(
-        quant_spectra_param, api_key=api_key,
-        file_glob=quant_spectra_glob, file_regex=quant_spectra_regex,
-    )
     if multi_batch:
         for batch_name, files in quant_spectra_dir.items():
             LOGGER.info('Batch %s has %d files.', batch_name, len(files))
@@ -974,16 +999,10 @@ def _main(argv, prog=None):
         LOGGER.info('Quantitative spectra directory has %d files.', len(quant_spectra_dir))
         quant_spectra_dir = {None: quant_spectra_dir}
 
-    if chromatogram_library_spectra_param is not None:
-        chrom_multi_batch, chromatogram_library_spectra_dir = parse_input_files(
-            chromatogram_library_spectra_param, api_key=api_key,
-            file_glob=chromatogram_library_spectra_glob,
-            file_regex=chromatogram_library_spectra_regex,
-        )
+    if chromatogram_library_spectra_dir is not None:
         if chrom_multi_batch:
             LOGGER.error('Chromatogram library spectra directories cannot be in multiple batches.')
             sys.exit(1)
-
         LOGGER.info(
             'Chromatogram library spectra directory has %d files.',
             len(chromatogram_library_spectra_dir)
@@ -1027,7 +1046,7 @@ def _main(argv, prog=None):
     LOGGER.info('Validating metadata...')
     success = validate_metadata(
         quant_spectra_dir, replicate_metadata, metadata_types,
-        color_vars=color_vars, batch1=batch1, batch2=batch2,
+        color_vars=color_vars, batch1=batch1, batch2=batch2, covariate_vars=covariate_vars,
         control_key=control_key, control_values=control_values,
         write_replicate_report=write_reports, write_metadata_report=write_reports,
         report_format=report_format, report_prefix=args.report_prefix
