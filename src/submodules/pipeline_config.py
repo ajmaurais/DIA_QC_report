@@ -433,6 +433,7 @@ class PipelineConfig:
         ------
         ValueError: If neither *file* nor *text* is provided, or if the 'params' block cannot be found.
         FileNotFoundError: If the specified configuration file does not exist.
+
         Usage
         -----
         >>> config = PipelineConfig(file='path/to/config.nf')

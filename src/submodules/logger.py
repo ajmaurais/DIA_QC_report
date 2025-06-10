@@ -34,7 +34,7 @@ class _SplitStreamHandler(logging.Handler):
             if len(parts) > 0:
                 parts.append(f'[{record.levelname}]')
             else:
-                parts.append(f'[{record.levelname}]'.ljust(max(len(level) for level in _FORMATING_LEVELS)))
+                parts.append(f'[{record.levelname}]'.ljust(max(len(level)+2 for level in _FORMATING_LEVELS)))
 
         parts.append(record.getMessage())
 

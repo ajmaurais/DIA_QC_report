@@ -458,7 +458,7 @@ class TestValidateMetadataParams(ValidateMetadata):
                 control_key='cellLine'
             )
         self.assertFalse(success)
-        self.assertInLog("Both 'control_key' and 'color_vars' must be specified or both omitted.", cm)
+        self.assertInLog("Both 'control_key' and 'control_values' must be specified or both omitted.", cm)
 
 
     def test_missing_control_key(self):
@@ -663,7 +663,7 @@ class TestWriteReorts(ValidateMetadata):
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
                 control_key='cellLine', control_values=['T47D', 'HeLa'],
-                write_metadata_report=True, report_dir=self.work_dir, report_format='json'
+                write_metadata_report=True, report_prefix=f'{self.work_dir}/', report_format='json'
             )
 
         self.assertTrue(success, cm.output)
@@ -702,7 +702,7 @@ class TestWriteReorts(ValidateMetadata):
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
                 control_key='cellLine', control_values=['T47D', 'HeLa'],
-                write_metadata_report=True, report_dir=self.work_dir, report_format='tsv'
+                write_metadata_report=True, report_prefix=f'{self.work_dir}/', report_format='tsv'
             )
 
         self.assertTrue(success, cm.output)
@@ -722,7 +722,7 @@ class TestWriteReorts(ValidateMetadata):
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
-                write_replicate_report=True, report_dir=self.work_dir, report_format='json'
+                write_replicate_report=True, report_prefix=f'{self.work_dir}/', report_format='json'
             )
 
         self.assertTrue(success, cm.output)
@@ -737,7 +737,7 @@ class TestWriteReorts(ValidateMetadata):
             success = vpp.validate_metadata(
                 self.project_replicates, self.combined_metadata, self.metadata_types,
                 color_vars=['cellLine', 'experiment', 'NCI7std'],
-                write_replicate_report=True, report_dir=self.work_dir, report_format='tsv'
+                write_replicate_report=True, report_prefix=f'{self.work_dir}/', report_format='tsv'
             )
 
         self.assertTrue(success, cm.output)
@@ -775,10 +775,10 @@ class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBa
 
     def test_bad_config_url(self):
         with self.assertLogs(LOGGER, 'ERROR') as cm:
-            successs, data = vpp.validate_config_files(
+            success, data = vpp.validate_config_files(
                 'https://example.com/bad_config.config', self.local_schema_path
             )
-        self.assertFalse(successs, "Config validation should fail for a bad URL.")
+        self.assertFalse(success, "Config validation should fail for a bad URL.")
         self.assertInLog('Failed to download pipeline config file', cm)
 
 
