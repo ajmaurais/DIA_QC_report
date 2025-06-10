@@ -10,6 +10,7 @@ from .submodules.normalization import NORMALIZATION_METHODS
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import validate_bit_mask, parse_bitmask_options
+from .submodules.read_metadata import closest_match
 
 COMMAND_DESCRIPTION = 'Generate batch correction rmd report.'
 
@@ -158,8 +159,12 @@ def test_metadata_variables(conn, batch1=None, batch2=None,
     metadata_variables = set([x[0] for x in cur.fetchall()])
 
     def check_meta_key(color_cov, variable):
-        if variable not in metadata_variables:
-            LOGGER.error(f'Missing {color_cov} variable: "{variable}" in sampleMetadata table!')
+        if (match := closest_match(variable, metadata_variables)) != variable:
+            did_you_mean = f" Did you mean '{match}'?" if match else ''
+            LOGGER.error(
+                "Missing %s variable: '%s' in sampleMetadata table!%s",
+                color_cov, variable, did_you_mean
+            )
             return False
         return True
 
@@ -171,10 +176,10 @@ def test_metadata_variables(conn, batch1=None, batch2=None,
         all_good = check_meta_key('batch2', batch2) and all_good
 
     # Test that covariate variables exist in metadata table
-    all_good = (True if covariate_vars is None else all([check_meta_key('Covariate', v) for v in covariate_vars])) and all_good
+    all_good = (True if covariate_vars is None else all([check_meta_key('covariate', v) for v in covariate_vars])) and all_good
 
     # Test that color variables exist in metadata table
-    all_good = (True if color_vars is None else all([check_meta_key('Color', v) for v in color_vars])) and all_good
+    all_good = (True if color_vars is None else all([check_meta_key('color', v) for v in color_vars])) and all_good
 
     # Test that control_key exists in metadata table
     if control_key is not None:
@@ -815,8 +820,9 @@ def _main(argv, prog=None):
             if args.control_key is not None and args.control_values is None:
                 raise RuntimeError('No control value(s) specified!')
 
-            if not test_metadata_variables(conn, **string_args,
-                                           control_values=args.control_values):
+            if not test_metadata_variables(
+                conn, **string_args, control_values=args.control_values
+            ):
                 raise RuntimeError
 
     except (RuntimeError, FileNotFoundError) as e:

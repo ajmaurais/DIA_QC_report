@@ -272,6 +272,54 @@ class TestMakeBatchRmd(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+    def test_missing_color_var(self):
+        self.assertTrue(self.conn is not None)
+
+        command = ['--addColorVar=missing_var', self.db_path]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Missing color variable: 'missing_var' in sampleMetadata table!", result.stderr)
+        self.assertNotIn("Did you mean '", result.stderr)
+
+        # make sure --skipTests option works
+        command.insert(2, '--skipTests')
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir,
+            prefix='test_missing_color_var_skipTests', prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    def test_missing_close_color_var(self):
+        self.assertTrue(self.conn is not None)
+
+        command = ['--addColorVar=cell_line', self.db_path]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "Missing color variable: 'cell_line' in sampleMetadata table! Did you mean 'cellLine'",
+            result.stderr
+        )
+
+
+    def test_missing_close_covariate_var(self):
+        self.assertTrue(self.conn is not None)
+
+        command = ['--addCovariate', 'CellLine', self.db_path]
+        result = setup_functions.run_main(
+            generate_batch_rmd._main, command, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "Missing covariate variable: 'CellLine' in sampleMetadata table! Did you mean 'cellLine'",
+            result.stderr
+        )
+
+
 class TestPDFReport(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

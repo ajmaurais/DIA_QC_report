@@ -437,7 +437,7 @@ class PipelineConfig:
         Usage
         -----
         >>> config = PipelineConfig(file='path/to/config.nf')
-        >>> config = PipelineConfig(text='params {\n  foo = "bar"\n}')
+        >>> config = PipelineConfig(text='params { foo = "bar" }')
         >>> print(config.params.foo)  # Accessing a parameter
         '''
         self.params = SimpleNamespace()

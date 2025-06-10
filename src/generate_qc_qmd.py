@@ -11,6 +11,7 @@ from .submodules.logger import LOGGER
 from .submodules.dia_db_utils import is_normalized
 from .submodules.dia_db_utils import check_schema_version
 from .submodules.dia_db_utils import project_exists
+from .submodules.read_metadata import closest_match
 
 COMMAND_DESCRIPTION = 'Generate QC qmd report.'
 
@@ -515,9 +516,12 @@ def check_meta_keys_exist(conn, keys):
     metadata_keys = {x[0] for x in cur.fetchall()}
 
     for key in keys:
-        if key not in metadata_keys:
+        if (match := closest_match(key, metadata_keys)) != key:
+            did_you_mean = f" Did you mean '{match}'?" if match else ''
             all_good = False
-            LOGGER.error('Missing annotationKey: "%s"', key)
+            LOGGER.error(
+                "Missing annotationKey: '%s'%s", key, did_you_mean
+            )
 
     return all_good
 
@@ -535,7 +539,7 @@ def check_std_proteins_exist(conn, proteins):
     for protein in proteins:
         if protein not in db_proteins:
             all_good = False
-            LOGGER.error('Missing standard protein: "%s"', protein)
+            LOGGER.error("Missing standard protein: '%s'", protein)
 
     return all_good
 

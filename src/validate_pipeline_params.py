@@ -10,7 +10,6 @@ from shutil import which
 import subprocess
 from io import StringIO
 from collections import Counter
-import difflib
 
 from jsonschema import validate, ValidationError
 from requests import HTTPError
@@ -20,7 +19,7 @@ from .submodules.pipeline_config import PipelineConfig
 from .submodules.panorama import PANORAMA_PUBLIC_KEY, PANORAMA_URL
 from .submodules.panorama import list_panorama_files, get_webdav_file
 from .submodules.panorama import get_http_file
-from .submodules.read_metadata import Metadata
+from .submodules.read_metadata import Metadata, closest_match
 from .submodules.dtype import Dtype
 from .submodules.logger import LOGGER
 
@@ -465,25 +464,6 @@ def _log_warn_error(message, *args, warning=True):
         LOGGER.warning(message, *args)
     else:
         LOGGER.error(message, *args)
-
-
-def closest_match(var: str, candidates: list[str]) -> str:
-    '''
-    Return closets string match to *var* from *candidates*.
-
-    Returns
-    -------
-    str or None
-        Closest match if found, None otherwise.
-    '''
-    if var in candidates:
-        return var
-
-    # Try to find a close match (diff ratio >= 0.6)
-    close = difflib.get_close_matches(var, candidates, n=1, cutoff=0.5)
-    if close is None or len(close) == 0:
-        return None
-    return close[0]
 
 
 def validate_metadata(

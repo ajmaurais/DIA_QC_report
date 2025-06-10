@@ -77,7 +77,7 @@ class TestMakeQCqmd(unittest.TestCase):
             generate_qc_qmd._main, command, self.work_dir, prog='dia_qc qc_qmd'
         )
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('Missing standard protein: "NOT_A_PROTEIN"' in result.stderr, result.stderr)
+        self.assertIn("Missing standard protein: 'NOT_A_PROTEIN'", result.stderr)
         self.assertFalse(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
 
 
@@ -89,8 +89,20 @@ class TestMakeQCqmd(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 1)
-        self.assertTrue('Missing annotationKey: "NOT_A_VAR"' in result.stderr)
+        self.assertIn("Missing annotationKey: 'NOT_A_VAR'", result.stderr)
         self.assertFalse(os.path.isfile(f'{self.work_dir}/{qmd_name}.qmd'))
+
+
+    def test_close_missing_color_var(self):
+        qmd_name = 'failing_test'
+        command = ['--addColorVar', 'Experiment', '-o', f'{qmd_name}.qmd', self.db_path]
+        result = setup_functions.run_main(
+            generate_qc_qmd._main, command, self.work_dir, prog='dia_qc qc_qmd'
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "Missing annotationKey: 'Experiment' Did you mean 'experiment'?", result.stderr
+        )
 
 
 class TestMissingMetadata(unittest.TestCase):
