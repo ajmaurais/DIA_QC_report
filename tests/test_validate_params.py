@@ -149,7 +149,10 @@ class TestValidateSetup(unittest.TestCase):
             )
 
 
-    def check_replicate_report(self, report_path, projects, metadata_df=None):
+    def check_replicate_report(self, report_path, projects, metadata_df=None, multi_batch=False):
+        if isinstance(projects, str):
+            projects = [projects]
+
         if metadata_df is None:
             metadata_df = self.combined_metadata
         metadata_dict = {}
@@ -157,11 +160,6 @@ class TestValidateSetup(unittest.TestCase):
             if row.Replicate not in metadata_dict:
                 metadata_dict[row.Replicate] = {}
             metadata_dict[row.Replicate][row.annotationKey] = row.annotationValue
-
-        single_batch = False
-        if isinstance(projects, str):
-            projects = [projects]
-            single_batch = True
 
         self.assertTrue(os.path.exists(report_path), f'Replicate report does not exist: {report_path}')
         with open(report_path, 'r') as f:
@@ -174,25 +172,34 @@ class TestValidateSetup(unittest.TestCase):
                 report_grouped[batch] = []
             report_grouped[batch].append(row)
 
-        self.assertEqual(len(report_grouped), len(projects), 'Unexpected number of batches in report')
+        target_rept_grouped = {}
         for project in projects:
-            if single_batch:
-                self.assertIn(None, report_grouped, f'Report should have only 1 batch')
+            if multi_batch:
+                target_rept_grouped[project] = self.project_replicates[project]
             else:
+                if None not in target_rept_grouped:
+                    target_rept_grouped[None] = []
+                target_rept_grouped[None].extend(self.project_replicates[project])
+
+        self.assertEqual(len(report_grouped), len(target_rept_grouped), 'Unexpected number of batches in report')
+        for project in target_rept_grouped:
+            if multi_batch:
                 self.assertIn(project, report_grouped, f'Missing batch: {project}')
+            else:
+                self.assertIn(None, report_grouped, f'Report should have only 1 batch')
 
             self.assertEqual(
-                len(report_grouped[None if single_batch else project]), len(self.project_replicates[project]),
+                len(report_grouped[project]), len(target_rept_grouped[project]),
                 f'Unexpected number of replicates for project {project} in report'
             )
-            report_project_reps = {row['Replicate'] for row in report_grouped[None if single_batch else project]}
+            report_project_reps = {row['Replicate'] for row in report_grouped[project]}
             self.assertEqual(
-                report_project_reps, set(self.project_replicates[project]),
+                report_project_reps, set(target_rept_grouped[project]),
                 f'Mismatched replicates for project {project} in report'
             )
 
             # Check replicate metadata
-            for row in report_grouped[None if single_batch else project]:
+            for row in report_grouped[project]:
                 replicate = row['Replicate']
                 self.assertIn(replicate, metadata_dict, f'Missing metadata for replicate {replicate}')
                 meta_keys = set(row.keys()) - {'ParameterBatch', 'Replicate', 'FileName'}
@@ -256,7 +263,8 @@ class TestConfig(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', project
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                project, multi_batch=False
             )
 
 
@@ -292,7 +300,8 @@ class TestConfig(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                projects, multi_batch=True
             )
 
 
@@ -345,7 +354,8 @@ class TestConfig(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                projects, multi_batch=True
             )
 
 
@@ -397,12 +407,13 @@ class TestConfig(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                projects, multi_batch=True
             )
 
 
     def test_all_remote_flat(self):
-        project = 'Strap'
+        project = ['Strap', 'Sp3']
         meta_params = {
             'qc_report.control_key': 'cellLine',
             'qc_report.control_values': ['HeLa', 'H23', 'A549', 'H226'],
@@ -415,7 +426,7 @@ class TestConfig(TestValidateSetup):
         setup_test_config(
             f'{self.config_dir}/template.config', output_path=test_config,
             add_params={
-                'quant_spectra_dir': STRAP_URL,
+                'quant_spectra_dir': [STRAP_URL, SP3_URL],
                 'quant_spectra_glob': None,
                 'quant_spectra_regex': '400to1000.+?.mzML$'
             } | meta_params | self.local_db_files
@@ -428,7 +439,8 @@ class TestConfig(TestValidateSetup):
                     vpp._main, args, self.work_dir, prog=self.prog
                 )
             self.assertEqual(result.returncode, 0, result.stderr)
-            mock_list_files.assert_has_calls([mock.call(STRAP_URL, api_key=PANORAMA_PUBLIC_KEY)])
+            mock_list_files.assert_has_calls([mock.call(STRAP_URL, api_key=PANORAMA_PUBLIC_KEY),
+                                              mock.call(SP3_URL, api_key=PANORAMA_PUBLIC_KEY)])
 
         else:
             if not have_internet():
@@ -447,7 +459,8 @@ class TestConfig(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', project
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                project, multi_batch=False
             )
 
 
@@ -498,7 +511,8 @@ class TestConfig(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                projects, multi_batch=True
             )
 
 
