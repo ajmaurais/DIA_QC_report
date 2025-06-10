@@ -25,6 +25,10 @@ METADATA_CONFIG_TO_ARG_PARAMS = {
     'qc_report.color_vars': 'color_vars', 'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
     'qc_report.control_key': 'control_key', 'qc_report.control_values': 'control_values'
 }
+METADATA_CMD_ARG_TO_ARG_PARAMS = {
+    '': 'color_vars', 'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
+    'qc_report.control_key': 'control_key', 'qc_report.control_values': 'control_values'
+}
 
 def mock_list_list_panorama_files(url, **kwargs):
     if url == STRAP_URL:
@@ -665,11 +669,44 @@ class TestConfigInvalid(unittest.TestCase):
         pass
 
 
-class TestParams(unittest.TestCase):
-
-    def test_batched(self):
-        pass
+class TestParams(TestValidateSetup):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_params'
+        cls.common_test_args = [
+            '--report-format=json'
+        ]
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
     def test_flat(self):
+        project = 'Strap'
+        color_vars = ['experiment', 'cellLine']
+        test_prefix = 'test_flat'
+        args = [
+            'params', '--report-prefix', f'{test_prefix}_',
+            '--quant-spectra-dir', f'{self.local_ms_files}/{project}',
+            '--quant-spectra-glob', '*400to1000*.raw',
+            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
+        ] + self.common_test_args + [f'--addColorVar={var}' for var in color_vars]
+
+        restult = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog='dia_qc validate'
+        )
+        self.assertEqual(restult.returncode, 0, restult.stderr)
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                color_vars=color_vars
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', project
+            )
+
+
+    def test_batched(self):
         pass
