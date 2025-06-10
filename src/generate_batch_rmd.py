@@ -1,4 +1,3 @@
-
 import sys
 import os
 import argparse
@@ -637,70 +636,101 @@ def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
     file_settings = parser.add_argument_group('R markdown file settings')
-    file_settings.add_argument('-o', '--ofname', default=f'{DEFAULT_OFNAME}',
-                               help=f'Output file basename. Default is "{DEFAULT_OFNAME}"')
-    file_settings.add_argument('--title', default=DEFAULT_TITLE,
-                               help=f'Report title. Default is "{DEFAULT_TITLE}"')
-    file_settings.add_argument('-f', '--filterMetadata', default=False,
-                               action='store_true', dest='filter_metadata',
-                               help='Filter metadata table to only include batch, color, and '
-                               'covariate variables.')
-    file_settings.add_argument('-m', '--bcMethod', choices=['limma', 'combat'], default='combat',
-                               help='Batch correction method. Default is "combat".')
-    file_settings.add_argument('--allPrecursors', default=False, action='store_true', dest='all_precursors',
-                               help="Don't remove precursors and proteins with missing values. "
-                                    "Setting this option could cause an error when the rmd renders.")
-    file_settings.add_argument('--savePlots', default=None, dest='plot_ext',
-                               help='Save all plots to file with specified extension.')
-    file_settings.add_argument('--interactive', default='2',
-                               help='One digit bit mask. 0 for all static plots, 1 for interactive '
-                                    'peak areas plot, 2 for interactive PCA plots, '
-                                    '3 for all interactive plots.')
+    file_settings.add_argument(
+        '-o', '--ofname', default=f'{DEFAULT_OFNAME}',
+        help=f'Output file basename. Default is "{DEFAULT_OFNAME}"'
+    )
+    file_settings.add_argument(
+        '--title', default=DEFAULT_TITLE,
+        help=f'Report title. Default is "{DEFAULT_TITLE}"'
+    )
+    file_settings.add_argument(
+        '-f', '--filterMetadata', default=False, action='store_true', dest='filter_metadata',
+        help='Filter metadata table to only include batch, color, and '
+             'covariate variables.'
+    )
+    file_settings.add_argument(
+        '-m', '--bcMethod', choices=['limma', 'combat'], default='combat',
+        help='Batch correction method. Default is "combat".'
+    )
+    file_settings.add_argument(
+        '--allPrecursors', default=False, action='store_true', dest='all_precursors',
+        help="Don't remove precursors and proteins with missing values. "
+             "Setting this option could cause an error when the rmd renders."
+    )
+    file_settings.add_argument(
+        '--savePlots', default=None, dest='plot_ext',
+        help='Save all plots to file with specified extension.'
+    )
+    file_settings.add_argument(
+        '--interactive', default='2',
+        help='One digit bit mask. 0 for all static plots, 1 for interactive '
+             'peak areas plot, 2 for interactive PCA plots, '
+             '3 for all interactive plots.'
+    )
 
-    batch_vars = parser.add_argument_group('Batch variables',
-                     'Batch variables are optional. By default the project column in the replicates '
-                     'table is used as the batch variable. The project column corresponds to the '
-                     'Skyline document which each sample was in. There must be at least 2 different '
-                     'values in the project column to it as the batch variable. '
-                     'If batch variables are specified, they must exist in the sampleMetadata table.')
+    batch_vars = parser.add_argument_group(
+        'Batch variables',
+        'Batch variables are optional. By default the project column in the replicates '
+        'table is used as the batch variable. The project column corresponds to the '
+        'Skyline document which each sample was in. There must be at least 2 different '
+        'values in the project column to it as the batch variable. '
+        'If batch variables are specified, they must exist in the sampleMetadata table.'
+    )
+    batch_vars.add_argument(
+        '-1', '--batch1', default=None,
+        help='sampleMetadata variable to use for batch 1.'
+    )
+    batch_vars.add_argument(
+        '-2', '--batch2', default=None,
+        help='sampleMetadata variable to use for batch 2. Using 2 batch variables '
+             'is only available with limma as the batch correction method. '
+             '--batch1 must be also be specified to use --batch2.'
+    )
 
-    batch_vars.add_argument('-1', '--batch1', default=None,
-                            help='sampleMetadata variable to use for batch 1.')
-    batch_vars.add_argument('-2', '--batch2', default=None,
-                            help='sampleMetadata variable to use for batch 2. Using 2 batch variables '
-                            'is only available with limma as the batch correction method. '
-                            '--batch1 must be also be specified to use --batch2.')
+    color_vars = parser.add_argument_group(
+        'Color and covariate variables',
+        'These options can be specified multiple times to add multiple variables.'
+    )
+    color_vars.add_argument(
+        '--addCovariate', action='append', dest='covariate_vars',
+        help='Add a sampleMetadata annotationKey to use as a covariate for '
+             'batch correction.'
+    )
+    color_vars.add_argument(
+        '-c', '--addColorVar', action='append', dest='color_vars',
+        help='Add a sampleMetadata annotationKey to use to color PCA plots.'
+    )
 
-    color_vars = parser.add_argument_group('Color and covariate variables',
-                    'These options can be specified multiple times to add multiple variables.')
-    color_vars.add_argument('--addCovariate', action='append', dest='covariate_vars',
-                            help='Add a sampleMetadata annotationKey to use as a covariate for '
-                                 'batch correction.')
-    color_vars.add_argument('-c', '--addColorVar', action='append', dest='color_vars',
-                            help='Add a sampleMetadata annotationKey to use to color PCA plots.')
+    control_vars = parser.add_argument_group(
+        'Control sample variables',
+        'Specify a metadata variable to indicate whether a replicate is a control. '
+        'These key, value pairs will be used to separate the panels of the control CV plot. '
+        'If --controlKey is specified, at least one value must be specified with --addControlValue'
+    )
+    control_vars.add_argument(
+        '--controlKey', default=None, dest='control_key',
+        help='sampleMetadata annotationKey that has variable indication whether a '
+             'replicate is a control.'
+    )
+    control_vars.add_argument(
+        '--addControlValue', action='append', dest='control_values',
+        help='Add sampleMetadata annotationValue(s) which indicate whether a replicate is a control.'
+    )
+    parser.add_argument(
+        '-s', '--skipTests', default=False, action='store_true',
+        help='Skip tests that batch, color, and covariate variables exist in '
+             'sampleMetadata table?'
+    )
 
-    control_vars = parser.add_argument_group('Control sample variables',
-                        'Specify a metadata variable to indicate whether a replicate is a control. '
-                        'These key, value pairs will be used to separate the panels of the control CV plot. '
-                        'If --controlKey is specified, at least one value must be specified with --addControlValue')
-
-    control_vars.add_argument('--controlKey', default=None, dest='control_key',
-                              help='sampleMetadata annotationKey that has variable indication whether a '
-                                   'replicate is a control.')
-    control_vars.add_argument('--addControlValue', action='append', dest='control_values',
-                              help='Add sampleMetadata annotationValue(s) which indicate whether '
-                                   'a replicate is a control.')
-
-    parser.add_argument('-s', '--skipTests', default=False, action='store_true',
-                        help='Skip tests that batch, color, and covariate variables exist in '
-                             'sampleMetadata table?')
-
-    table_args = parser.add_argument_group('Output tables',
-                     'The tsv files to write are specified by a 2 digit bit mask. '
-                     'The first digit is for the wide formatted report, and the second digit is for '
-                     'the long formatted report. An integer between 0 and 4 is assigned for each stage in '
-                     'the normalization process. 0 for no report, 1 is for unnormalized, 2 is for '
-                     'normalized, and 4 is for batch corrected.')
+    table_args = parser.add_argument_group(
+        'Output tables',
+        'The tsv files to write are specified by a 2 digit bit mask. '
+        'The first digit is for the wide formatted report, and the second digit is for '
+        'the long formatted report. An integer between 0 and 4 is assigned for each stage in '
+        'the normalization process. 0 for no report, 1 is for unnormalized, 2 is for '
+        'normalized, and 4 is for batch corrected.'
+    )
 
     # Some of these examples might be good to include in the help, but is is already a lot of text.
     # For example, a mask of 42 would produce a wide batch corrected and long normalized tsv file.
@@ -708,15 +738,24 @@ def parse_args(argv, prog=None):
     # A mask of 70 (1+2+4=7) would produce a unnormalized, normalized, and batch
     # corrected wide tsv file.
 
-    table_args.add_argument('-p', '--precursorTables', default='40',
-                        help='Tables to write for precursors. 40 is the default')
-    table_args.add_argument('-r', '--proteinTables', default='40',
-                            help='Tables to write for proteins. 40 is the default')
-    table_args.add_argument('--metadataTables', default='10',
-                            help='Tables to write for metadata. Only 0 or 1 are supported. '
-                                 '0 for false, 1 for true. 10 is the default')
+    table_args.add_argument(
+        '-p', '--precursorTables', default='40',
+        help='Tables to write for precursors. 40 is the default'
+    )
+    table_args.add_argument(
+        '-r', '--proteinTables', default='40',
+        help='Tables to write for proteins. 40 is the default'
+    )
+    table_args.add_argument(
+        '--metadataTables', default='10',
+        help='Tables to write for metadata. Only 0 or 1 are supported. '
+             '0 for false, 1 for true. 10 is the default'
+    )
 
-    parser.add_argument('db', help='Path to sqlite batch database.')
+    parser.add_argument(
+        'db',
+        help='Path to sqlite batch database.'
+    )
     return parser.parse_args(argv)
 
 

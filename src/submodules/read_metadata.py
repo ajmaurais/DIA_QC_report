@@ -328,8 +328,11 @@ class Metadata():
 
             # set values of Dtype.NULL to NA
             self._normalize_nas()
-            self.df['annotationValue'] = self.df.apply(lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
-                                                                       else x.annotationValue, axis=1)
+            self.df['annotationValue'] = self.df.apply(
+                lambda x: pd.NA if self.types[x.annotationKey] is Dtype.NULL
+                                else x.annotationValue,
+                axis=1
+            )
 
         finally:
             if read_from_path:
@@ -339,9 +342,9 @@ class Metadata():
 
 
     def get_wide_data(self):
-        df_wide =  self.df.pivot(index='Replicate',
-                                 columns='annotationKey',
-                                 values='annotationValue').reset_index().rename_axis(None, axis=1)
+        df_wide =  self.df.pivot(
+            index='Replicate', columns='annotationKey', values='annotationValue'
+        ).reset_index().rename_axis(None, axis=1)
 
         for var, dtype in self.types.items():
             if dtype is Dtype.NULL:
@@ -384,9 +387,9 @@ class Metadata():
 
 
     def to_skyline_annotations(self, out):
-        data = self.df.pivot(index='Replicate',
-                             columns='annotationKey',
-                             values='annotationValue').reset_index()
+        data = self.df.pivot(
+            index='Replicate', columns='annotationKey', values='annotationValue'
+        ).reset_index()
 
         def write_csv_row(elems):
             out.write('"{}"\n'.format('","'.join(elems)))
