@@ -17,6 +17,7 @@ from DIA_QC_report.submodules.logger import LOGGER
 
 import setup_functions
 from test_panorama_functions import PUBLIC_FILE
+from test_validate_params import setup_test_config
 
 STRAP_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/S-Trap/'
 SP3_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20Data%20Harmonization/LFQ-Analyses/USA-UW/%40files/RawFiles/SP3/'
@@ -768,14 +769,17 @@ class TestWriteReorts(ValidateMetadata):
 
 
 class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBase):
-    def setUp(self):
-        self.data_dir = f'{setup_functions.TEST_DIR}/data/'
-        self.local_schema_path = f'{self.data_dir}/validate_pipeline_params/config_files/nextflow_schema.json'
+    @classmethod
+    def setUpClass(cls):
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
+        cls.local_schema_path = f'{cls.data_dir}/validate_pipeline_params/config_files/nextflow_schema.json'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_config_files'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
     def test_bad_config_url(self):
         with self.assertLogs(LOGGER, 'ERROR') as cm:
-            success, data = vpp.validate_config_files(
+            success, _ = vpp.validate_config_files(
                 'https://example.com/bad_config.config', self.local_schema_path
             )
         self.assertFalse(success, "Config validation should fail for a bad URL.")
@@ -783,8 +787,93 @@ class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBa
 
 
     def test_valid_config(self):
-        config_path = f'{self.data_dir}/validate_pipeline_params/config_files/pdc_pipeline.config'
-        success, data = vpp.validate_config_files(
-            [config_path], self.local_schema_path
-        )
+        config_path = f'{self.data_dir}/validate_pipeline_params/config_files/template.config'
+        with self.assertNoLogs(LOGGER, 'WARNING'):
+            success, _ = vpp.validate_config_files(
+                [config_path], self.local_schema_path
+            )
         self.assertTrue(success, "Config validation failed for a valid config file.")
+
+
+    def test_invalid_config_type(self):
+        test_config = f'{self.work_dir}/test_invalid_type.config'
+        setup_test_config(
+            f'{self.data_dir}/validate_pipeline_params/config_files/template.config',
+            output_path=test_config,
+            add_params={'qc_report.color_vars': 123}  # Invalid type, should be a list or str
+        )
+
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
+            success, _ = vpp.validate_config_files(
+                test_config, self.local_schema_path, strict=True
+            )
+        self.assertFalse(success)
+        self.assertInLog("Pipeline config validation failed:", cm)
+
+
+    def test_unknown_config_param(self):
+        test_config = f'{self.work_dir}/test_unknown_param.config'
+        setup_test_config(
+            f'{self.data_dir}/validate_pipeline_params/config_files/template.config',
+            output_path=test_config,
+            add_params={'an_unknown_param': 'value'}
+        )
+
+        with self.subTest('strict = True'):
+            with self.assertLogs(LOGGER, 'ERROR') as cm:
+                success, _ = vpp.validate_config_files(
+                    test_config, self.local_schema_path, strict=True
+                )
+            self.assertFalse(success)
+            self.assertInLog("Unknown parameter in config: 'an_unknown_param'", cm)
+
+
+        with self.subTest('strict = False'):
+            with self.assertLogs(LOGGER, 'WARNING') as cm:
+                success, _ = vpp.validate_config_files(
+                    test_config, self.local_schema_path, strict=False
+                )
+            self.assertTrue(success)
+            self.assertInLog("Unknown parameter in config: 'an_unknown_param'", cm)
+
+
+    def test_unknown_config_nested_param(self):
+        test_config = f'{self.work_dir}/test_unknown_config_nested.config'
+        setup_test_config(
+            f'{self.data_dir}/validate_pipeline_params/config_files/template.config',
+            output_path=test_config,
+            add_params={'qc_report.not_a_var': 'value'}
+        )
+
+        with self.subTest('strict = True'):
+            with self.assertLogs(LOGGER, 'ERROR') as cm:
+                success, _ = vpp.validate_config_files(
+                    test_config, self.local_schema_path, strict=True
+                )
+            self.assertFalse(success)
+            self.assertInLog("Unknown parameter in config: 'qc_report.not_a_var'", cm)
+
+
+        with self.subTest('strict = False'):
+            with self.assertLogs(LOGGER, 'WARNING') as cm:
+                success, _ = vpp.validate_config_files(
+                    test_config, self.local_schema_path, strict=False
+                )
+            self.assertTrue(success)
+            self.assertInLog("Unknown parameter in config: 'qc_report.not_a_var'", cm)
+
+
+    def test_unknown_config_top_level_nested_param(self):
+        test_config = f'{self.work_dir}/test_unknown_config_nested.config'
+        setup_test_config(
+            f'{self.data_dir}/validate_pipeline_params/config_files/template.config',
+            output_path=test_config,
+            add_params={'not_a_param.color_vars': 'value'}
+        )
+
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
+            success, _ = vpp.validate_config_files(
+                test_config, self.local_schema_path, strict=True
+            )
+        self.assertFalse(success)
+        self.assertInLog("Unknown parameter in config: 'not_a_param'", cm)

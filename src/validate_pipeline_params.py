@@ -329,7 +329,7 @@ def generate_git_url(repo: str, revision: str, filename='nextflow_schema.json') 
     return f"{base_url}/{quote(repo, safe='')}/{quote(revision, safe='')}/{encoded_path}"
 
 
-def validate_config_files(config_paths, schema_path, api_key=None):
+def validate_config_files(config_paths, schema_path, *, api_key=None, strict=True):
     '''
     Read, merge, and validate Nextflow pipeline config files against the schema.
 
@@ -339,6 +339,10 @@ def validate_config_files(config_paths, schema_path, api_key=None):
         List of local file paths to Nextflow pipeline config files.
     schema_path : str
         URL or local path of the JSON schema to validate the config files against.
+    api_key : str, optional
+        API key for accessing remote files on Panorama.
+    strict : bool, optional
+        If True, exit with error if any unknown parameters are found in config files.
 
     Returns
     -------
@@ -347,39 +351,50 @@ def validate_config_files(config_paths, schema_path, api_key=None):
     dict
         Merged config parameters from all config files.
     '''
-    config_data = PipelineConfig()
-    all_good = True
     if isinstance(config_paths, str):
         config_paths = [config_paths]
 
-    for config_path in config_paths:
-        config_text = get_file(
-            config_path, log_name='pipeline config file', api_key=api_key
-        )
-        if config_text is None:
+    merged = PipelineConfig()
+    all_good = True
+
+    # read and merge
+    for cfg_path in config_paths:
+        cfg_text = get_file(cfg_path, log_name='pipeline config file',
+                            api_key=api_key)
+        if cfg_text is None:
             all_good = False
             continue
-        this_config = PipelineConfig(text=config_text)
-        config_data += this_config
+        merged += PipelineConfig(text=cfg_text)
 
     if not all_good:
-        return False, {}
+        return False, merged
 
-    schema_text = get_file(
-        schema_path, log_name='pipeline config schema file', api_key=api_key
-    )
+    # fetch / parse schema
+    schema_text = get_file(schema_path, log_name='pipeline config schema file',
+                           api_key=api_key)
     if schema_text is None:
-        return False, config_data
+        return False, merged
+
     schema = json.loads(schema_text)
 
-    try:
-        param_dict = config_data.to_dict(remove_none=True)
-        validate(param_dict, schema)
-    except ValidationError as e:
-        LOGGER.error(f'Pipeline config validation failed: {e.message}')
-        return False, config_data
+    # unknown parameter check
+    unknown = merged.unknown_params(schema)
+    param_dict = merged.to_dict(remove_none=True)
 
-    return True, config_data
+    if unknown:
+        for p in unknown:
+            _log_warn_error("Unknown parameter in config: '%s'", p, warning=not strict)
+        if strict:
+            return False, merged     # abort early
+
+    # JSON schema validation
+    try:
+        validate(param_dict, schema)
+    except ValidationError as exc:
+        LOGGER.error(f'Pipeline config validation failed: {exc.message}')
+        return False, merged
+
+    return True, merged
 
 
 class Replicate:
@@ -941,8 +956,8 @@ def _main(argv, prog=None):
         batch1 = config_data.get('batch_report.batch1')
         batch2 = config_data.get('batch_report.batch2')
         covariate_vars = config_data.get('batch_report.covariate_vars')
-        control_key = config_data.get('qc_report.control_key')
-        control_values = config_data.get('qc_report.control_values')
+        control_key = config_data.get('batch_report.control_key')
+        control_values = config_data.get('batch_report.control_values')
 
         quant_spectra_param = config_data.get('quant_spectra_dir')
         chromatogram_library_spectra_param = config_data.get('chromatogram_library_spectra_dir')

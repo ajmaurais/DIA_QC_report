@@ -25,11 +25,7 @@ PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fi
 METADATA_CONFIG_TO_ARG_PARAMS = {
     'qc_report.color_vars': 'color_vars', 'batch_report.covariate_vars': 'covariate_vars',
     'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
-    'qc_report.control_key': 'control_key', 'qc_report.control_values': 'control_values'
-}
-METADATA_CMD_ARG_TO_ARG_PARAMS = {
-    '': 'color_vars', 'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
-    'qc_report.control_key': 'control_key', 'qc_report.control_values': 'control_values'
+    'batch_report.control_key': 'control_key', 'batch_report.control_values': 'control_values'
 }
 
 def mock_list_list_panorama_files(url, **kwargs):
@@ -247,9 +243,9 @@ class TestConfig(TestValidateSetup):
         project = 'Strap'
         meta_params = {
             'qc_report.color_vars': ['experiment', 'cellLine'],
-            'qc_report.control_key': 'cellLine',
-            'qc_report.control_values': ['A549', 'CCRF-CEM', 'COLO-205', 'H226', 'H23', 'HeLa',
-                                         'NCI7 4-pool', 'NCI7 7-pool', 'RPMI-8228', 'T47D']
+            'batch_report.control_key': 'cellLine',
+            'batch_report.control_values': ['A549', 'CCRF-CEM', 'COLO-205', 'H226', 'H23', 'HeLa',
+                                            'NCI7 4-pool', 'NCI7 7-pool', 'RPMI-8228', 'T47D']
         }
         test_config = f'{self.work_dir}/test_all_local_flat.config'
         test_prefix = 'test_all_local_flat'
@@ -431,8 +427,8 @@ class TestConfig(TestValidateSetup):
     def test_all_remote_flat(self):
         project = ['Strap', 'Sp3']
         meta_params = {
-            'qc_report.control_key': 'cellLine',
-            'qc_report.control_values': ['HeLa', 'H23', 'A549', 'H226'],
+            'batch_report.control_key': 'cellLine',
+            'batch_report.control_values': ['HeLa', 'H23', 'A549', 'H226'],
             'batch_report.batch1': 'experiment'
         }
         test_prefix = 'test_all_remote_flat'

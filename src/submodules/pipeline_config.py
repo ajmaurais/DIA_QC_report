@@ -231,15 +231,6 @@ def _collect(node, into, prefix: str = ''):
         i += 1
 
 
-def _node_has_ident(node, name: str) -> bool:
-    '''True if *node* (or any descendant) is IDENTIFIER==name.'''
-    if not isinstance(node, dict):
-        return False
-    if node.get('leaf') == 'IDENTIFIER' and node.get('value') == name:
-        return True
-    return any(_node_has_ident(c, name) for c in node.get('children', []))
-
-
 def _first_identifier(node):
     '''Return the first IDENTIFIER leaf under *node*, or None.'''
     if not isinstance(node, dict):
@@ -376,6 +367,7 @@ def _quote_str(s: str) -> str:
         return f"'''{s}'''"
     return f"'{s}'"
 
+
 def _render_value(val, indent: str, lvl: int) -> str:
     """
     Convert *val* (scalar, list, dict) to Groovy syntax.
@@ -404,6 +396,7 @@ def _render_value(val, indent: str, lvl: int) -> str:
     # numbers or anything else repr-able
     return str(val)
 
+
 def _dump_ns(ns: SimpleNamespace, fh, indent: str, lvl: int):
     """
     Recursively write *ns* to *fh* as Groovy config with indentation.
@@ -417,6 +410,25 @@ def _dump_ns(ns: SimpleNamespace, fh, indent: str, lvl: int):
         else:
             groovy_val = _render_value(val, indent, lvl)
             fh.write(f'{pad}{key} = {groovy_val}\n')
+
+
+def _unknown_params(node, schema, path=''):
+    missing = []
+
+    # Dive only into namespace sections (skip literal values)
+    if isinstance(node, SimpleNamespace):
+        data = vars(node)
+        props = schema.get('properties', {})
+
+        for key, val in data.items():
+            if key not in props:
+                missing.append(f'{path}{key}')
+            else:
+                missing.extend(
+                    _unknown_params(val, props[key], f'{path}{key}.')
+                )
+
+    return missing
 
 
 class PipelineConfig:
@@ -513,6 +525,11 @@ class PipelineConfig:
             else:
                 return default
         return current
+
+
+    def unknown_params(self, schema):
+        ''' Return a list of parameter names that are not defined in the schema. '''
+        return _unknown_params(self.params, schema)
 
 
     def to_dict(self, remove_none=False):
