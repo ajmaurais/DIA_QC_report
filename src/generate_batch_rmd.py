@@ -241,7 +241,7 @@ protein.methods <- c('{"', '".join(PROTEIN_METHOD_NAMES[:2] if skip_bc else PROT
         text += f"\n\n# variables specified by --batch2\nbatch2 = '{batch2}'"
 
     if color_vars:
-        text += '''\n\n# variables specified by --addColor
+        text += '''\n\n# variables specified by --addColorVar
 color.vars <- c('{}')'''.format("', '".join(color_vars))
 
     if covariate_vars:
@@ -676,7 +676,7 @@ def parse_args(argv, prog=None):
     color_vars.add_argument('--addCovariate', action='append', dest='covariate_vars',
                             help='Add a sampleMetadata annotationKey to use as a covariate for '
                                  'batch correction.')
-    color_vars.add_argument('-c', '--addColor', action='append', dest='color_vars',
+    color_vars.add_argument('-c', '--addColorVar', action='append', dest='color_vars',
                             help='Add a sampleMetadata annotationKey to use to color PCA plots.')
 
     control_vars = parser.add_argument_group('Control sample variables',
