@@ -22,7 +22,7 @@ SP3_URL = 'https://panoramaweb.org/_webdav/ICPC/NCI-7%20Joint%20Project/NCI-7%20
 PUBLIC_URL = 'https://panoramaweb.org/_webdav/Panorama%20Public/2024/Thermo%20Fisher%20Research%20and%20Development%20-%202024_Stellar_Instrument_Platform/Label%20Free%20-%20E.%20coli/%40files/RawFiles/ReplicatesSmall/'
 
 METADATE_CONFIG_TO_ARG_PARAMS = {
-    'qc_report.color_vars': 'color_vars', 'qc_report.batch1': 'batch1', 'qc_report.batch2': 'batch2',
+    'qc_report.color_vars': 'color_vars', 'batch_report.batch1': 'batch1', 'batch_report.batch2': 'batch2',
     'qc_report.control_key': 'control_key', 'qc_report.control_values': 'control_values'
 }
 
@@ -71,12 +71,21 @@ def setup_test_config(base_config, output_path=None, add_params=None):
     config.write(output_path)
 
 
+def _is_null(value):
+    return value is None or pd.isna(value) or value == ''
+
+
 class TestValidateSetup(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.data_dir = f'{setup_functions.TEST_DIR}/data'
         cls.local_ms_files = f'{cls.data_dir}/validate_pipeline_params/mock_local_ms_files'
         cls.local_db = f'{cls.data_dir}/validate_pipeline_params/mock_local_db'
+        cls.local_db_files = {
+            'fasta': f'{cls.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+            'spectral_library': f'{cls.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
+            'replicate_metadata': f'{cls.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
+        }
 
         cls.projects = ('Strap', 'Sp3')
         cls.project_replicates = {}
@@ -94,9 +103,21 @@ class TestValidateSetup(unittest.TestCase):
 
 
     def check_metadata_report(
-        self, report_path,
+        self, report_path, metadata_types=None, metadata_df=None, total_reps=None,
         color_vars=None, control_key=None, control_values=None, batch1=None, batch2=None
     ):
+        if metadata_types is None:
+            metadata_types = self.metadata_types
+        if metadata_df is None:
+            metadata_df = self.combined_metadata
+
+        metadata_counts = {}
+        for row in metadata_df.itertuples():
+            if row.annotationKey not in metadata_counts:
+                metadata_counts[row.annotationKey] = 0
+            if not(_is_null(row.annotationValue)):
+                metadata_counts[row.annotationKey] += 1
+
         meta_params = []
         if color_vars:
             meta_params = [(var, 'color_vars') for var in color_vars]
@@ -110,16 +131,33 @@ class TestValidateSetup(unittest.TestCase):
         self.assertTrue(os.path.exists(report_path), f'Metadata report does not exist: {report_path}')
         with open(report_path, 'r') as f:
             report = json.load(f)
+        total_reps = len(metadata_df['Replicate'].drop_duplicates())
 
         self.assertEqual(len(report), len(meta_params))
         for row in report:
-            for key in ['variable', 'parameter', 'type']:
+            for key in ['variable', 'parameter', 'type', 'missing_in_n_replicates', 'found_in_n_replicates']:
                 self.assertIn(key, row, f'Missing key in metadata report row: {key}')
+
             param_key = (row['variable'], row['parameter'])
             self.assertIn(param_key, meta_params, f'Unexpected metadata parameter: {param_key}')
+            self.assertEqual(row['type'], str(metadata_types[row['variable']]),
+                             f'Mismatched type for variable {row["variable"]} in metadata report')
+
+            self.assertEqual(
+                row['missing_in_n_replicates'], total_reps - metadata_counts[row['variable']],
+                f'Mismatched missing count for variable {row["variable"]} in metadata report'
+            )
 
 
-    def check_replicate_report(self, report_path, projects):
+    def check_replicate_report(self, report_path, projects, metadata_df=None):
+        if metadata_df is None:
+            metadata_df = self.combined_metadata
+        metadata_dict = {}
+        for row in metadata_df.itertuples():
+            if row.Replicate not in metadata_dict:
+                metadata_dict[row.Replicate] = {}
+            metadata_dict[row.Replicate][row.annotationKey] = row.annotationValue
+
         single_batch = False
         if isinstance(projects, str):
             projects = [projects]
@@ -152,6 +190,21 @@ class TestValidateSetup(unittest.TestCase):
                 report_project_reps, set(self.project_replicates[project]),
                 f'Mismatched replicates for project {project} in report'
             )
+
+            # Check replicate metadata
+            for row in report_grouped[None if single_batch else project]:
+                replicate = row['Replicate']
+                self.assertIn(replicate, metadata_dict, f'Missing metadata for replicate {replicate}')
+                meta_keys = set(row.keys()) - {'ParameterBatch', 'Replicate', 'FileName'}
+                for key in meta_keys:
+                    self.assertIn(key, row, f'Missing key {key} in replicate report row')
+                    if _is_null(row[key]):
+                        self.assertTrue(_is_null(metadata_dict[replicate][key]))
+                    else:
+                        self.assertEqual(
+                            row[key], metadata_dict[replicate][key],
+                            f'Mismatched value for {key} in replicate report row for {replicate}'
+                        )
 
 
 class TestConfig(TestValidateSetup):
@@ -187,11 +240,8 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_dir': f'{self.local_ms_files}/{project}',
                 'quant_spectra_glob': '*400to1000*.raw',
                 'chromatogram_library_spectra_dir': f'{self.local_ms_files}/{project}',
-                'chromatogram_library_spectra_glob': '*-Lib.raw',
-                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-                'replicate_metadata': f'{self.data_dir}/metadata/Strap_metadata.tsv'
-            } | meta_vars
+                'chromatogram_library_spectra_glob': '*-Lib.raw'
+            } | meta_vars | self.local_db_files
         )
         result = setup_functions.run_main(
             vpp._main, args, self.work_dir, prog=self.prog
@@ -226,11 +276,8 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_glob': '*400to1000*.raw',
                 'chromatogram_library_spectra_dir': [f'{self.local_ms_files}/{project}' for project in projects],
                 'chromatogram_library_spectra_regex': r'-Lib\.raw$',
-                'chromatogram_library_spectra_glob': None,
-                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-                'replicate_metadata': f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv',
-            } | meta_vars
+                'chromatogram_library_spectra_glob': None
+            } | meta_vars | self.local_db_files
         )
         result = setup_functions.run_main(
             vpp._main, args, self.work_dir, prog=self.prog
@@ -266,11 +313,8 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_regex': '400to1000.+?.mzML$',
                 'chromatogram_library_spectra_dir': [STRAP_URL, SP3_URL],
                 'chromatogram_library_spectra_regex': '-Lib.raw$',
-                'chromatogram_library_spectra_glob': None,
-                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-                'replicate_metadata': f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv',
-            } | meta_params
+                'chromatogram_library_spectra_glob': None
+            } | meta_params | self.local_db_files
         )
 
         if MOCK_PANORAMA:
@@ -305,11 +349,64 @@ class TestConfig(TestValidateSetup):
             )
 
 
+    def test_mixed_batched(self):
+        projects = ['Strap', 'Sp3']
+        meta_params = {
+            'qc_report.color_vars': ['experiment', 'cellLine', 'NCI7std']
+        }
+        test_prefix = 'test_all_remote_batched'
+        test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
+        args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
+
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': {'Strap': f'{self.local_ms_files}/Strap', 'Sp3': SP3_URL},
+                'quant_spectra_glob': None,
+                'quant_spectra_regex': '400to1000.+?.raw$',
+                'chromatogram_library_spectra_dir': [f'{self.local_ms_files}/Strap', SP3_URL],
+                'chromatogram_library_spectra_regex': '-Lib.mzML$',
+                'chromatogram_library_spectra_glob': None
+            } | meta_params | self.local_db_files
+        )
+
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
+                            side_effect=mock_list_list_panorama_files) as mock_list_files:
+                result = setup_functions.run_main(
+                    vpp._main, args, self.work_dir, prog=self.prog
+                )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            mock_list_files.assert_has_calls([mock.call(SP3_URL, api_key=PANORAMA_PUBLIC_KEY)])
+
+        else:
+            if not have_internet():
+                self.skipTest('No internet connection available for remote files.')
+
+            result = setup_functions.run_main(
+                vpp._main, args, self.work_dir, prog=self.prog
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                **{METADATE_CONFIG_TO_ARG_PARAMS[k]: v for k, v in meta_params.items()}
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+            )
+
+
     def test_all_remote_flat(self):
         project = 'Strap'
         meta_params = {
             'qc_report.control_key': 'cellLine',
-            'qc_report.control_values': ['HeLa', 'H23']
+            'qc_report.control_values': ['HeLa', 'H23', 'A549', 'H226'],
+            'batch_report.batch1': 'experiment'
         }
         test_prefix = 'test_all_remote_flat'
         test_config = f'{self.work_dir}/{test_prefix}.config'
@@ -320,13 +417,8 @@ class TestConfig(TestValidateSetup):
             add_params={
                 'quant_spectra_dir': STRAP_URL,
                 'quant_spectra_glob': None,
-                'quant_spectra_regex': '400to1000.+?.mzML$',
-                'chromatogram_library_spectra_dir': STRAP_URL,
-                'chromatogram_library_spectra_glob': '*-Lib.raw',
-                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-                'replicate_metadata': f'{self.data_dir}/metadata/Strap_metadata.tsv',
-            } | meta_params
+                'quant_spectra_regex': '400to1000.+?.mzML$'
+            } | meta_params | self.local_db_files
         )
 
         if MOCK_PANORAMA:
@@ -374,11 +466,8 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_regex': '400to1000.+?.mzML$',
                 'chromatogram_library_spectra_dir': [STRAP_URL, SP3_URL],
                 'chromatogram_library_spectra_regex': '-Lib.raw$',
-                'chromatogram_library_spectra_glob': None,
-                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-                'replicate_metadata': f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv',
-            } | meta_params
+                'chromatogram_library_spectra_glob': None
+            } | meta_params | self.local_db_files
         )
 
         if MOCK_PANORAMA:
@@ -418,7 +507,7 @@ class TestConfig(TestValidateSetup):
         meta_vars = {}
         test_config = f'{self.work_dir}/test_all_local_flat.config'
         test_prefix = 'test_all_local_flat'
-        args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
+        args = self.common_test_args + ['--report-prefix', f'{test_prefix}_', test_config]
 
         setup_test_config(
             f'{self.config_dir}/template.config', output_path=test_config,
@@ -426,11 +515,8 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_dir': f'{self.local_ms_files}/{project}',
                 'quant_spectra_glob': '*400to1000*.raw',
                 'chromatogram_library_spectra_dir': f'{self.local_ms_files}/{project}',
-                'chromatogram_library_spectra_glob': '*-Lib.raw',
-                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-                'replicate_metadata': f'{self.data_dir}/metadata/Strap_metadata.tsv'
-            } | meta_vars
+                'chromatogram_library_spectra_glob': '*-Lib.raw'
+            } | meta_vars | self.local_db_files
         )
         result = setup_functions.run_main(
             vpp._main, args, self.work_dir, prog=self.prog
@@ -449,9 +535,111 @@ class TestConfig(TestValidateSetup):
             )
 
 
+    def test_remote_schema(self):
+        project = 'Strap'
+        meta_vars = {}
+        test_config = f'{self.work_dir}/test_all_local_flat.config'
+        test_prefix = 'test_all_local_flat'
+        args = [
+            'config', test_config, '--report-prefix', f'{test_prefix}_',
+            '--pipeline', 'ajmaurais/nf-skyline-dia-ms', '--revision', 'nf-schema'
+        ]
+
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'chromatogram_library_spectra_dir': f'{self.local_ms_files}/{project}',
+                'chromatogram_library_spectra_glob': '*-Lib.raw'
+            } | meta_vars | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    def test_missing_meta_values(self):
+        project = 'Strap'
+        meta_vars = {
+            'qc_report.color_vars': ['string_var', 'bool_var', 'int_var', 'float_var', 'na_var']
+        }
+        test_config = f'{self.work_dir}/test_missing_meta_values.config'
+        test_prefix = 'test_missing_meta_values'
+        args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
+        replicate_metadata = f'{self.data_dir}/metadata/Strap_missing_multi_var_metadata.tsv'
+
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
+                'replicate_metadata': replicate_metadata
+            } | meta_vars
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        meta_reader = Metadata()
+        if not meta_reader.read(replicate_metadata):
+            raise FileNotFoundError(f"Metadata file '{replicate_metadata}' not found or could not be read.")
+
+        for var in meta_vars['qc_report.color_vars']:
+            self.assertRegex(
+                result.stdout,
+                rf"(?m)^\[WARNING\]\s+{str(meta_reader.types[var])} variable '{var}' is missing in [0-9]+ of [0-9]+ replicates\.$",
+            )
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                **{METADATE_CONFIG_TO_ARG_PARAMS[k]: v for k, v in meta_vars.items()},
+                metadata_df=meta_reader.df, metadata_types=meta_reader.types
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', project,
+                metadata_df=meta_reader.df
+            )
+
+
 class TestConfigInvalid(unittest.TestCase):
-    def setUp(self):
-        pass
+    @classmethod
+    def setUpClass(cls):
+        cls.data_dir = f'{setup_functions.TEST_DIR}/data'
+        cls.config_dir = f'{cls.data_dir}/validate_pipeline_params/config_files'
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_pipeline_config_invalid'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
+
+    def test_invalid_pipeline_args(self):
+        test_config = f'{self.config_dir}/template.config'
+
+        with self.subTest('Both --pipeline and --schema'):
+            args = [
+                'config', '--schema', f'{self.config_dir}/nextflow_schema.json',
+                '--pipeline', vpp.DEFAULT_PIPELINE, test_config
+            ]
+            result = setup_functions.run_main(vpp._main, args, self.work_dir, prog='dia_qc validate')
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('--pipeline and --schema options conflict', result.stderr)
+
+
+        with self.subTest('--revision on local pipeline'):
+            args = [
+                'config', '--revision', 'main',
+                '--pipeline', f'{self.config_dir}/template.config',
+                test_config
+            ]
+            result = setup_functions.run_main(vpp._main, args, self.work_dir, prog='dia_qc validate')
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('--revision cannot be used for a local pipeline script.', result.stderr)
 
 
     def test_missing_meta_var(self):

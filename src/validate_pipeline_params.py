@@ -443,7 +443,7 @@ def _write_replicate_report(replicates, output_path='replicate_validation_report
     for rep_name, rep in replicates.items():
         report_data.append({'ParameterBatch': rep.batch, 'Replicate': rep_name, 'FileName': rep.name})
         for key, value in rep.metadata.items():
-            report_data[-1][key] = value
+            report_data[-1][key] = value if not pd_isna(value) and value != '' else None
 
     report_ext = os.path.splitext(output_path)[1].lower()
     if report_ext == '.json':
@@ -657,7 +657,7 @@ def validate_metadata(
                 continue
 
             value_empty = pd_isna(rep.metadata[var]) or rep.metadata[var] is None or rep.metadata[var] == ''
-            if value_empty and metadata_types[var] is not Dtype.NULL:
+            if value_empty or metadata_types[var] is Dtype.NULL:
                 rep_na_counts[var] += 1
 
     if not all_reps_good and strict:
