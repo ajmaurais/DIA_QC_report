@@ -786,7 +786,7 @@ def parse_args(argv, prog=None):
         help='Add a sampleMetadata annotationKey to use as a covariate for batch correction.'
     )
     metadata_args.add_argument(
-        '--addColor', action='append', dest='color_vars',
+        '--addColorVar', action='append', dest='color_vars',
         help='Add a sampleMetadata annotationKey to use to color PCA plots.'
     )
     metadata_args.add_argument(
@@ -812,11 +812,11 @@ def parse_args(argv, prog=None):
     )
     quant_dir_args = input_args.add_mutually_exclusive_group(required=True)
     quant_dir_args.add_argument(
-        '-q', '--quant-file-dir', dest='quant_spectra_dir', action='append', default=None,
+        '-q', '--quant-spectra-dir', dest='quant_spectra_dir', action='append', default=None,
         help='Add quantative spectra directory.'
     )
     quant_dir_args.add_argument(
-        '--quant-file-param', dest='quant_spectra_param',
+        '--quant-spectra-param', dest='quant_spectra_param',
         help='JSON file with quant_spectra_dir parameter'
     )
     quant_spectra_patterns = input_args.add_mutually_exclusive_group(required=True)
