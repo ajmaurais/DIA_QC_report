@@ -687,11 +687,12 @@ class TestParams(TestValidateSetup):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
-    def write_ms_file_json(self, projects, output_path, file_regex=None):
+    def write_ms_file_json(self, projects, output_path,
+                           multi_batch=False, file_regex=None):
         if isinstance(projects, str):
             projects = [projects]
 
-        if len(projects) > 1:
+        if multi_batch:
             files = {}
             for project in projects:
                 files[project] = [
@@ -699,10 +700,12 @@ class TestParams(TestValidateSetup):
                     if re.search(file_regex, f)
                 ]
         else:
-            files = [
-                f for f in os.listdir(f'{self.local_ms_files}/{projects[0]}')
-                if re.search(file_regex, f)
-            ]
+            files = []
+            for project in projects:
+                files.extend([
+                    f for f in os.listdir(f'{self.local_ms_files}/{project}')
+                    if re.search(file_regex, f)
+                ])
 
         with open(output_path, 'w') as f:
             json.dump(files, f, indent=4)
@@ -776,12 +779,14 @@ class TestParams(TestValidateSetup):
         test_prefix = 'test_batched'
         quant_files_path = f'{self.work_dir}/{test_prefix}_quant_files.json'
         chrom_files_path = f'{self.work_dir}/{test_prefix}_lib_files.json'
-        self.write_ms_file_json(projects, quant_files_path, file_regex=r'400to1000.+?.raw$')
+        self.write_ms_file_json(
+            projects, quant_files_path, multi_batch=True, file_regex=r'400to1000.+?.raw$'
+        )
         self.write_ms_file_json(projects, chrom_files_path, file_regex=r'-Lib\.raw$')
         args = [
             'params', '--report-prefix', f'{test_prefix}_',
             '--quant-spectra-json', quant_files_path, '--chrom-lib-spectra-json', chrom_files_path,
-            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
+            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Sp3_Strap_combined_metadata.tsv'
         ] + self.common_test_args + [f'--addColorVar={var}' for var in color_vars]
 
         restult = setup_functions.run_main(
@@ -797,5 +802,6 @@ class TestParams(TestValidateSetup):
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
-                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', projects
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                projects, multi_batch=True
             )

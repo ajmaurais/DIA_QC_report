@@ -105,30 +105,6 @@ class TestFindParamsBlock(unittest.TestCase):
         self.assertEqual(len(vars(data.params)), 2)
 
 
-class TestNodeHasIdentifier(unittest.TestCase):
-    def test_node_has_identifier(self):
-        node = {
-            'leaf': 'ASSIGN',
-            'children': [
-                {'leaf': 'IDENTIFIER', 'value': 'foo'},
-                {'leaf': 'STRING', 'value': 'bar'}
-            ]
-        }
-        self.assertTrue(pipeline_config._node_has_ident(node, 'foo'))
-        self.assertFalse(pipeline_config._node_has_ident(node, 'baz'))
-
-
-    def test_node_does_not_have_identifier(self):
-        node = {
-            'leaf': 'ASSIGN',
-            'children': [
-                {'leaf': 'IDENTIFIER', 'value': 'foo'},
-                {'leaf': 'STRING', 'value': 'bar'}
-            ]
-        }
-        self.assertFalse(pipeline_config._node_has_ident(node, 'baz'))
-
-
 class TestParseParams(unittest.TestCase):
     def test_parse_params(self):
         config = '''

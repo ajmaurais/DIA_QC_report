@@ -279,7 +279,6 @@ def parse_input_file_json(file):
     files: list or dict
         List of files or a dict mapping batch names to lists of files.
     '''
-
     try:
         if isinstance(file, str):
             with open(file, 'r') as inF:
