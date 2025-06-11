@@ -537,7 +537,7 @@ class TestValidateMetadataReps(ValidateMetadata):
                 strict=True
             )
         for rep in remove_reps:
-            self.assertInLog(f":Replicate '{rep}' in quant_spectra_dir is not present in the metadata.", cm)
+            self.assertInLog(f"Replicate '{rep}' in quant_spectra_dir was not found in the metadata.", cm)
         self.assertFalse(success)
 
         # test with strict=False
@@ -547,7 +547,7 @@ class TestValidateMetadataReps(ValidateMetadata):
                 strict=False
             )
         for rep in remove_reps:
-            self.assertInLog(f":Replicate '{rep}' in quant_spectra_dir is not present in the metadata.", cm)
+            self.assertInLog(f"Replicate '{rep}' in quant_spectra_dir was not found in the metadata.", cm)
         self.assertTrue(success)
 
 
@@ -714,7 +714,6 @@ class TestWriteReorts(ValidateMetadata):
 
         with open(f'{self.work_dir}/metadata_validation_report.tsv', 'r') as inF:
             lines = inF.readlines()
-
         self.assertEqual(len(lines), 5, "Metadata report file does not have the expected number of lines.")
 
 
@@ -766,6 +765,48 @@ class TestWriteReorts(ValidateMetadata):
             )
 
         self.assertInLog("'ParameterBatch' is a reserved column header name. It will be changed to 'ParameterBatch_2' in the report.", cm)
+
+
+    def test_write_tsv_replicate_report_no_metadata(self):
+        replicates = {os.path.splitext(rep)[0]: vpp.Replicate(rep)
+                      for rep in self.project_replicates['Strap']}
+
+        report_path = f'{self.work_dir}/test_replicate_report_no_metadata.tsv'
+        vpp._write_replicate_report(replicates, output_path=report_path)
+        self.assertTrue(os.path.isfile(report_path), "Replicate report file was not created.")
+
+        report = pd.read_csv(report_path, sep='\t')
+        self.assertEqual(len(report.index), len(replicates),
+                         'Replicate report does not have the expected number of rows.')
+
+
+    def test_write_tsv_metadata_report_empty(self):
+        report_path = f'{self.work_dir}/empty_metadata_report.tsv'
+        with self.assertLogs(LOGGER, 'WARNING') as cm:
+            vpp._write_metadata_report(
+                [], self.metadata_types, {}, 40,
+                output_path=report_path
+            )
+        self.assertInLog('No metadata parameters to report.', cm)
+
+        with open(report_path, 'r') as inF:
+            lines = inF.readlines()
+        self.assertEqual(len(lines), 1, "Metadata report file does not have the expected number of lines.")
+
+
+    def test_write_json_metadata_report_empty(self):
+        report_path = f'{self.work_dir}/empty_metadata_report.json'
+        with self.assertLogs(LOGGER, 'WARNING') as cm:
+            vpp._write_metadata_report(
+                [], self.metadata_types, {}, 40,
+                output_path=report_path
+            )
+        self.assertInLog('No metadata parameters to report.', cm)
+
+        with open(report_path, 'r') as inF:
+            report = json.load(inF)
+        self.assertIsInstance(report, list, "Metadata report file is not a list.")
+        self.assertEqual(len(report), 0, "Metadata report file is not empty.")
 
 
 class TestValidateConfigFiles(unittest.TestCase, setup_functions.AbstractTestsBase):

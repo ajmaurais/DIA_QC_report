@@ -450,13 +450,15 @@ def _write_metadata_report(meta_params, metadata_types, rep_na_counts, n_reps,
             'found_in_n_replicates': n_reps - rep_na_counts[var]
         })
 
+    report_headers = ['variable', 'parameter', 'type',
+                      'missing_in_n_replicates', 'found_in_n_replicates']
     report_ext = os.path.splitext(output_path)[1].lower()
     if report_ext == '.json':
         with open(output_path, 'w') as outF:
             json.dump(report_data, outF, indent=4)
     elif report_ext == '.tsv':
         with open(output_path, 'w') as outF:
-            outF.write('\t'.join(report_data[0].keys()))
+            outF.write('\t'.join(report_headers))
             outF.write('\n')
             for row in report_data:
                 outF.write('\t'.join(str(value) for value in row.values()))
@@ -921,6 +923,7 @@ def _main(argv, prog=None):
     if hasattr(args, 'report_format'):
         write_reports = True
         report_format = args.report_format
+    report_prefix = '' if args.report_prefix is None else args.report_prefix
 
     metadata_output_path = None
     if hasattr(args, 'metadata_output_path'):
@@ -1027,7 +1030,7 @@ def _main(argv, prog=None):
                           for file_name in chromatogram_library_spectra_dir}
             _write_replicate_report(
                 chrom_reps,
-                output_path=f'{args.report_prefix}chromatogram_library_replicate_report.{report_format}'
+                output_path=f'{report_prefix}chromatogram_library_replicate_report.{report_format}'
             )
 
     # read metadata
@@ -1063,7 +1066,7 @@ def _main(argv, prog=None):
         color_vars=color_vars, batch1=batch1, batch2=batch2, covariate_vars=covariate_vars,
         control_key=control_key, control_values=control_values,
         write_replicate_report=write_reports, write_metadata_report=write_reports,
-        report_format=report_format, report_prefix=args.report_prefix
+        report_format=report_format, report_prefix=report_prefix
     )
     if not success:
         LOGGER.error('Metadata validation failed.')
