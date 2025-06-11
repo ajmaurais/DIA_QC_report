@@ -390,7 +390,14 @@ def validate_config_files(config_paths, schema_path, *, api_key=None, strict=Tru
     try:
         validate(param_dict, schema)
     except ValidationError as exc:
-        LOGGER.error(f'Pipeline config validation failed: {exc.message}')
+        dotted = '.'.join(str(p) for p in exc.path)
+        if dotted:
+            LOGGER.error(
+                "Pipeline config validation failed: "
+                "In variable '%s', %s", dotted, exc.message
+            )
+        else:
+            LOGGER.error('Pipeline config validation failed: %s', exc.message)
         return False, merged
 
     return True, merged
@@ -651,7 +658,7 @@ def validate_metadata(
     bad_reps = ms_file_reps - metadata_reps
     for bad_rep in bad_reps:
         _log_warn_error(
-            "Replicate '%s' in quant_spectra_dir is not present in the metadata.",
+            "Replicate '%s' in quant_spectra_dir was not found in the metadata.",
             bad_rep, warning=not strict
         )
 

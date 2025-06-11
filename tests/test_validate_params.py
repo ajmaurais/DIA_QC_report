@@ -77,12 +77,42 @@ def _is_null(value):
     return value is None or pd.isna(value) or value == ''
 
 
+def write_ms_file_json(projects, output_path,
+                        multi_batch=False, file_regex=None):
+    if isinstance(projects, str):
+        projects = [projects]
+
+    ms_file_dir = f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/mock_local_ms_files'
+    if multi_batch:
+        files = {}
+        for project in projects:
+            files[project] = [
+                f for f in os.listdir(f'{ms_file_dir}/{project}')
+                if re.search(file_regex, f)
+            ]
+    else:
+        files = []
+        for project in projects:
+            files.extend([
+                f for f in os.listdir(f'{ms_file_dir}/{project}')
+                if re.search(file_regex, f)
+            ])
+
+    with open(output_path, 'w') as f:
+        json.dump(files, f, indent=4)
+
+
 class TestValidateSetup(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.data_dir = f'{setup_functions.TEST_DIR}/data'
         cls.local_ms_files = f'{cls.data_dir}/validate_pipeline_params/mock_local_ms_files'
         cls.local_db = f'{cls.data_dir}/validate_pipeline_params/mock_local_db'
+        cls.local_db_files = {
+            'fasta': f'{cls.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+            'spectral_library': f'{cls.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
+            'replicate_metadata': f'{cls.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
+        }
 
         cls.projects = ('Strap', 'Sp3')
         cls.project_replicates = {}
@@ -95,8 +125,7 @@ class TestValidateSetup(unittest.TestCase):
         if not metadata_reader.read(metadata_file):
             raise FileNotFoundError(f"Metadata file '{metadata_file}' not found or could not be read.")
 
-        cls.combined_metadata = metadata_reader.df
-        cls.metadata_types = metadata_reader.types
+        cls.combined_metadata = metadata_reader
 
 
     def check_metadata_report(
@@ -105,9 +134,9 @@ class TestValidateSetup(unittest.TestCase):
         batch1=None, batch2=None, covariate_vars=None
     ):
         if metadata_types is None:
-            metadata_types = self.metadata_types
+            metadata_types = self.combined_metadata.types
         if metadata_df is None:
-            metadata_df = self.combined_metadata
+            metadata_df = self.combined_metadata.df
 
         metadata_counts = {}
         for row in metadata_df.itertuples():
@@ -158,7 +187,7 @@ class TestValidateSetup(unittest.TestCase):
             projects = [projects]
 
         if metadata_df is None:
-            metadata_df = self.combined_metadata
+            metadata_df = self.combined_metadata.df
         metadata_dict = {}
         for row in metadata_df.itertuples():
             if row.Replicate not in metadata_dict:
@@ -222,7 +251,6 @@ class TestConfig(TestValidateSetup):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-
         cls.config_dir = f'{cls.data_dir}/validate_pipeline_params/config_files'
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_pipeline_config'
         cls.prog = 'dia_qc validate'
@@ -231,11 +259,6 @@ class TestConfig(TestValidateSetup):
             '--schema', f'{cls.config_dir}/nextflow_schema.json'
         ]
         cls.common_test_args += ['--api-key', PANORAMA_PUBLIC_KEY] if MOCK_PANORAMA else []
-        cls.local_db_files = {
-            'fasta': f'{cls.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
-            'spectral_library': f'{cls.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
-            'replicate_metadata': f'{cls.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
-        }
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
@@ -635,12 +658,14 @@ class TestConfig(TestValidateSetup):
             )
 
 
-class TestConfigInvalid(unittest.TestCase):
+class TestConfigInvalid(TestValidateSetup):
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         cls.data_dir = f'{setup_functions.TEST_DIR}/data'
         cls.config_dir = f'{cls.data_dir}/validate_pipeline_params/config_files'
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_pipeline_config_invalid'
+        cls.prog = 'dia_qc validate'
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
 
 
@@ -669,11 +694,115 @@ class TestConfigInvalid(unittest.TestCase):
 
 
     def test_missing_meta_var(self):
-        pass
+        project = 'Strap'
+        test_config = f'{self.work_dir}/test_missing_meta_var.config'
+        args = [
+            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
+        ]
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'qc_report.color_vars': ['Experiment', 'cellLine']
+            } | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            "Metadata variable 'Experiment' from 'color_vars' parameter not found in metadata. Did you mean 'experiment'?",
+            result.stderr
+        )
+
+
+    def test_missing_control_value(self):
+        project = 'Strap'
+        test_config = f'{self.work_dir}/test_missing_meta_var.config'
+        args = [
+            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
+        ]
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'qc_report.color_vars': ['Experiment', 'cellLine']
+            } | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            "Metadata variable 'Experiment' from 'color_vars' parameter not found in metadata. Did you mean 'experiment'?",
+            result.stderr
+        )
 
 
     def test_invalid_config_var_type(self):
-        pass
+        project = 'Strap'
+        test_config = f'{self.work_dir}/test_invalid_config_var_type.config'
+        args = [
+            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
+        ]
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'batch_report.control_key': 'cellLine',
+                'batch_report.control_values': ['HeLa', 'H23', 'A549', 'MCF7']
+            } | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            "Control value 'MCF7' for key 'cellLine' not found in metadata.",
+            result.stderr
+        )
+
+
+    def test_missing_metadata_replicate(self):
+        reader = Metadata()
+        metadata_file = f'{self.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
+        if not reader.read(metadata_file):
+            raise FileNotFoundError(f"Metadata file '{metadata_file}' not found or could not be read.")
+
+        # randomly remove a replicate from the metadata
+        missing_replicate = reader.df['Replicate'].sample().values[0]
+        reader.df = reader.df[reader.df['Replicate'] != missing_replicate]
+
+        with open(f'{self.work_dir}/missing_replicate_metadata.tsv', 'w') as outF:
+            reader.to_tsv(outF)
+
+        projects = ['Strap', 'Sp3']
+        test_config = f'{self.work_dir}/test_missing_metadata_replicate.config'
+        args = [
+            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
+        ]
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': {project: f'{self.local_ms_files}/{project}' for project in projects},
+                'quant_spectra_glob': '*400to1000*.raw',
+                'replicate_metadata': f'{self.work_dir}/missing_replicate_metadata.tsv',
+                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
+                'qc_report.color_vars': ['experiment', 'cellLine']
+            }
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            f"Replicate '{missing_replicate}' in quant_spectra_dir was not found in the metadata.",
+            result.stderr
+        )
 
 
 class TestParams(TestValidateSetup):
@@ -685,30 +814,6 @@ class TestParams(TestValidateSetup):
             '--report-format=json'
         ]
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
-
-
-    def write_ms_file_json(self, projects, output_path,
-                           multi_batch=False, file_regex=None):
-        if isinstance(projects, str):
-            projects = [projects]
-
-        if multi_batch:
-            files = {}
-            for project in projects:
-                files[project] = [
-                    f for f in os.listdir(f'{self.local_ms_files}/{project}')
-                    if re.search(file_regex, f)
-                ]
-        else:
-            files = []
-            for project in projects:
-                files.extend([
-                    f for f in os.listdir(f'{self.local_ms_files}/{project}')
-                    if re.search(file_regex, f)
-                ])
-
-        with open(output_path, 'w') as f:
-            json.dump(files, f, indent=4)
 
 
     def test_flat(self):
@@ -747,8 +852,8 @@ class TestParams(TestValidateSetup):
         test_prefix = 'test_flat'
         quant_files_path = f'{self.work_dir}/{test_prefix}_quant_files.json'
         chrom_files_path = f'{self.work_dir}/{test_prefix}_lib_files.json'
-        self.write_ms_file_json(project, quant_files_path, file_regex=r'400to1000.+?.raw$')
-        self.write_ms_file_json(project, chrom_files_path, file_regex=r'-Lib\.raw$')
+        write_ms_file_json(project, quant_files_path, file_regex=r'400to1000.+?.raw$')
+        write_ms_file_json(project, chrom_files_path, file_regex=r'-Lib\.raw$')
         args = [
             'params', '--report-prefix', f'{test_prefix}_',
             '--quant-spectra-json', quant_files_path, '--chrom-lib-spectra-json', chrom_files_path,
@@ -779,10 +884,10 @@ class TestParams(TestValidateSetup):
         test_prefix = 'test_batched'
         quant_files_path = f'{self.work_dir}/{test_prefix}_quant_files.json'
         chrom_files_path = f'{self.work_dir}/{test_prefix}_lib_files.json'
-        self.write_ms_file_json(
+        write_ms_file_json(
             projects, quant_files_path, multi_batch=True, file_regex=r'400to1000.+?.raw$'
         )
-        self.write_ms_file_json(projects, chrom_files_path, file_regex=r'-Lib\.raw$')
+        write_ms_file_json(projects, chrom_files_path, file_regex=r'-Lib\.raw$')
         args = [
             'params', '--report-prefix', f'{test_prefix}_',
             '--quant-spectra-json', quant_files_path, '--chrom-lib-spectra-json', chrom_files_path,
@@ -805,3 +910,31 @@ class TestParams(TestValidateSetup):
                 f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
                 projects, multi_batch=True
             )
+
+
+class TestInvalidParams(TestValidateSetup):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_params_invalid'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
+
+    def test_missing_meta_var(self):
+        pass
+
+
+    def test_missing_control_value(self):
+        pass
+
+
+    def test_missing_metadata_replicate(self):
+        pass
+
+
+    def test_invalid_quant_file_json(self):
+        pass
+
+
+    def test_invalid_chrom_file_json(self):
+        pass
