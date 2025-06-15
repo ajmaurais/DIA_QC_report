@@ -500,7 +500,40 @@ class TestConfig(TestValidateSetup):
             )
 
 
-    def test_no_metadata_batched(self):
+    def test_no_metadata_params_flat(self):
+        project = 'Strap'
+        meta_params = {}
+        test_config = f'{self.work_dir}/test_all_local_flat.config'
+        test_prefix = 'test_all_local_flat'
+        args = self.common_test_args + ['--report-prefix', f'{test_prefix}_', test_config]
+
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'chromatogram_library_spectra_dir': f'{self.local_ms_files}/{project}',
+                'chromatogram_library_spectra_glob': '*-Lib.raw'
+            } | meta_params | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                **{METADATA_CONFIG_TO_ARG_PARAMS[k]: v for k, v in meta_params.items()}
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json', project
+            )
+
+
+    def test_no_metadata_params_batched(self):
         projects = ['Strap', 'Sp3']
         meta_params = {}
         test_prefix = 'test_all_remote_batched'
@@ -552,7 +585,56 @@ class TestConfig(TestValidateSetup):
             )
 
 
-    def test_no_metadata_flat(self):
+    def test_no_metadata_file_batched(self):
+        projects = ['Strap', 'Sp3']
+        meta_params = {}
+        test_prefix = 'test_all_remote_batched'
+        test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
+        args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
+
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': {'Strap': STRAP_URL, 'Sp3': SP3_URL},
+                'quant_spectra_glob': None,
+                'quant_spectra_regex': '400to1000.+?.mzML$',
+                'chromatogram_library_spectra_dir': [STRAP_URL, SP3_URL],
+                'chromatogram_library_spectra_regex': '-Lib.raw$',
+                'chromatogram_library_spectra_glob': None,
+                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib'
+            } | meta_params
+        )
+
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
+                            side_effect=mock_list_list_panorama_files) as mock_list_files:
+                result = setup_functions.run_main(
+                    vpp._main, args, self.work_dir, prog=self.prog
+                )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            mock_list_files.assert_has_calls([mock.call(STRAP_URL, api_key=PANORAMA_PUBLIC_KEY),
+                                              mock.call(SP3_URL, api_key=PANORAMA_PUBLIC_KEY)])
+
+        else:
+            if not have_internet():
+                self.skipTest('No internet connection available for remote files.')
+
+            result = setup_functions.run_main(
+                vpp._main, args, self.work_dir, prog=self.prog
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+        self.assertFalse(os.path.isfile(f'{self.work_dir}/{test_prefix}_metadata_validation_report.json'))
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                projects, multi_batch=True
+            )
+
+
+    def test_no_metadata_file_flat(self):
         project = 'Strap'
         meta_params = {}
         test_config = f'{self.work_dir}/test_all_local_flat.config'
@@ -565,19 +647,17 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_dir': f'{self.local_ms_files}/{project}',
                 'quant_spectra_glob': '*400to1000*.raw',
                 'chromatogram_library_spectra_dir': f'{self.local_ms_files}/{project}',
-                'chromatogram_library_spectra_glob': '*-Lib.raw'
-            } | meta_params | self.local_db_files
+                'chromatogram_library_spectra_glob': '*-Lib.raw',
+                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib'
+            } | meta_params
         )
         result = setup_functions.run_main(
             vpp._main, args, self.work_dir, prog=self.prog
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        with self.subTest('Check metadata report'):
-            self.check_metadata_report(
-                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
-                **{METADATA_CONFIG_TO_ARG_PARAMS[k]: v for k, v in meta_params.items()}
-            )
+        self.assertFalse(os.path.isfile(f'{self.work_dir}/{test_prefix}_metadata_validation_report.json'))
 
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
