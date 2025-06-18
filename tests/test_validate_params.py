@@ -504,7 +504,7 @@ class TestConfig(TestValidateSetup):
         project = 'Strap'
         meta_params = {}
         test_config = f'{self.work_dir}/test_all_local_flat.config'
-        test_prefix = 'test_all_local_flat'
+        test_prefix = 'test_no_metadata_params_flat'
         args = self.common_test_args + ['--report-prefix', f'{test_prefix}_', test_config]
 
         setup_test_config(
@@ -536,7 +536,7 @@ class TestConfig(TestValidateSetup):
     def test_no_metadata_params_batched(self):
         projects = ['Strap', 'Sp3']
         meta_params = {}
-        test_prefix = 'test_all_remote_batched'
+        test_prefix = 'test_no_metadata_params_batched'
         test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
         args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
 
@@ -588,7 +588,7 @@ class TestConfig(TestValidateSetup):
     def test_no_metadata_file_batched(self):
         projects = ['Strap', 'Sp3']
         meta_params = {}
-        test_prefix = 'test_all_remote_batched'
+        test_prefix = 'test_no_metadata_file_batched'
         test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
         args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
 
@@ -638,7 +638,7 @@ class TestConfig(TestValidateSetup):
         project = 'Strap'
         meta_params = {}
         test_config = f'{self.work_dir}/test_all_local_flat.config'
-        test_prefix = 'test_all_local_flat'
+        test_prefix = 'test_no_metadata_file_flat'
         args = self.common_test_args + ['--report-prefix', f'{test_prefix}_', test_config]
 
         setup_test_config(

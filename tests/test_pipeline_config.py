@@ -268,7 +268,7 @@ class TestParseParams(unittest.TestCase):
                 quant = SimpleNamespace(params=None),
                 save_output = False
             ),
-            replicate_metadata = '<path>',
+            replicate_metadata = None,
             qc_report = SimpleNamespace(
                 skip = False,
                 export_tables = False
