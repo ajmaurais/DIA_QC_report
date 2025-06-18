@@ -719,30 +719,6 @@ class TestConfigInvalid(TestValidateSetup):
 
     def test_missing_control_value(self):
         project = 'Strap'
-        test_config = f'{self.work_dir}/test_missing_meta_var.config'
-        args = [
-            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
-        ]
-        setup_test_config(
-            f'{self.config_dir}/template.config', output_path=test_config,
-            add_params={
-                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
-                'quant_spectra_glob': '*400to1000*.raw',
-                'qc_report.color_vars': ['Experiment', 'cellLine']
-            } | self.local_db_files
-        )
-        result = setup_functions.run_main(
-            vpp._main, args, self.work_dir, prog=self.prog
-        )
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertIn(
-            "Metadata variable 'Experiment' from 'color_vars' parameter not found in metadata. Did you mean 'experiment'?",
-            result.stderr
-        )
-
-
-    def test_invalid_config_var_type(self):
-        project = 'Strap'
         test_config = f'{self.work_dir}/test_invalid_config_var_type.config'
         args = [
             'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
@@ -762,6 +738,30 @@ class TestConfigInvalid(TestValidateSetup):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn(
             "Control value 'MCF7' for key 'cellLine' not found in metadata.",
+            result.stderr
+        )
+
+
+    def test_invalid_config_var_type(self):
+        project = 'Strap'
+        test_config = f'{self.work_dir}/test_invalid_config_var_type.config'
+        args = [
+            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
+        ]
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'batch_report.batch1': 1
+            } | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            "Pipeline config validation failed: In variable 'batch_report.batch1', 1 is not of type 'string'",
             result.stderr
         )
 

@@ -347,8 +347,8 @@ def validate_config_files(config_paths, schema_path, *, api_key=None, strict=Tru
     -------
     bool
         True pipeline config is valid, False otherwise.
-    dict
-        Merged config parameters from all config files.
+    PipelineConfig
+        PipelineConfig object with merged parameters from all config files.
     '''
     if isinstance(config_paths, str):
         config_paths = [config_paths]
@@ -895,17 +895,6 @@ def parse_args(argv, prog=None):
             ) if not hasattr(args, 'schema') else args.schema
 
     return args
-
-
-def _get_config_path(data, vars, default=None):
-    if len(vars) == 1:
-        return data.get(vars[0], default)
-
-    if vars[0] not in data:
-        return default
-
-    _node = data[vars[0]]
-    return _get_config_path(_node, vars[1:], default=default)
 
 
 def _main(argv, prog=None):
