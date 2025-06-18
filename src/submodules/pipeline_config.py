@@ -301,8 +301,7 @@ def _dict_to_ns(obj):
     '''
     if isinstance(obj, dict):
         # recurse into children first
-        converted = {k: _dict_to_ns(v) for k, v in obj.items()
-                     if k != _BLOCK_DICT}
+        converted = {k: _dict_to_ns(v) for k, v in obj.items() if k != _BLOCK_DICT}
         if obj.get(_BLOCK_DICT):
             return SimpleNamespace(**converted)
         return converted
@@ -435,16 +434,13 @@ class PipelineConfig:
     def __init__(self, file=None, text=None):
         '''
         Initialize the PipelineConfig object by parsing a Nextflow pipeline configuration file.
+
         Parameters
         ----------
         file : str, optional
             The path to the Nextflow configuration file. If not provided, *text* must be given.
         text : str, optional
             The content of the Nextflow configuration file as a string. If not provided, *file* must be given.
-        Raises
-        ------
-        ValueError: If neither *file* nor *text* is provided, or if the 'params' block cannot be found.
-        FileNotFoundError: If the specified configuration file does not exist.
 
         Usage
         -----

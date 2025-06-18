@@ -576,6 +576,23 @@ def validate_metadata(
         LOGGER.error("Both 'control_key' and 'control_values' must be specified or both omitted.")
         return False
 
+    ###### Metadata independent replicate validation ######
+
+    # make sure that there are not duplicated replicates
+    rep_counts = Counter(rep for batch_files in ms_files.values() for rep in batch_files)
+    if any(count > 1 for count in rep_counts.values()):
+        for rep, count in rep_counts.items():
+            if count > 1:
+                LOGGER.error("Replicate '%s' is duplicated %d time%s in quant_spectra_dir.",
+                             rep, count - 1, 's' if count > 2 else '')
+        return False
+
+    replicates = {}
+    for batch_name, files in ms_files.items():
+        for file_name in files:
+            rep_name = os.path.splitext(file_name)[0]
+            replicates[rep_name] = Replicate(file_name, batch=batch_name)
+
     ###### Validate metadata_df ######
 
     # Check that metadata parameters match in replicate metadata
@@ -629,102 +646,87 @@ def validate_metadata(
             return False
         LOGGER.info('All metadata parameters are present in replicate metadata.')
 
-    ###### Validate replicates ######
+        ###### Metadata dependent replicate validation ######
 
-    # make sure that there are not duplicated replicates
-    rep_counts = Counter(rep for batch_files in ms_files.values() for rep in batch_files)
-    if any(count > 1 for count in rep_counts.values()):
-        for rep, count in rep_counts.items():
-            if count > 1:
-                LOGGER.error("Replicate '%s' is duplicated %d time%s in quant_spectra_dir.",
-                             rep, count - 1, 's' if count > 2 else '')
-        return False
+        metadata_reps = set(metadata_df['Replicate'].to_list())
+        ms_file_reps = set(replicates.keys())
 
-    replicates = {}
-    for batch_name, files in ms_files.items():
-        for file_name in files:
-            rep_name = os.path.splitext(file_name)[0]
-            replicates[rep_name] = Replicate(file_name, batch=batch_name)
+        # Warn if there are extra replicates in the metadata
+        if len(metadata_reps - ms_file_reps) > 0:
+            LOGGER.warning('There are %d replicates in the metadata that are not in quant_spectra_dir',
+                        len(metadata_reps - ms_file_reps))
 
-    metadata_reps = set(metadata_df['Replicate'].to_list())
-    ms_file_reps = set(replicates.keys())
+        # Error if there are missing replicates in the metadata
+        bad_reps = ms_file_reps - metadata_reps
+        for bad_rep in bad_reps:
+            _log_warn_error(
+                "Replicate '%s' in quant_spectra_dir was not found in the metadata.",
+                bad_rep, warning=not strict
+            )
 
-    # Warn if there are extra replicates in the metadata
-    if len(metadata_reps - ms_file_reps) > 0:
-        LOGGER.warning('There are %d replicates in the metadata that are not in quant_spectra_dir',
-                       len(metadata_reps - ms_file_reps))
+        if len(bad_reps) > 0 and strict:
+            return False
 
-    # Error if there are missing replicates in the metadata
-    bad_reps = ms_file_reps - metadata_reps
-    for bad_rep in bad_reps:
-        _log_warn_error(
-            "Replicate '%s' in quant_spectra_dir was not found in the metadata.",
-            bad_rep, warning=not strict
-        )
-
-    if len(bad_reps) > 0 and strict:
-        return False
-
-    # Add metadata to replicates
-    meta_vars_unique = True
-    meta_params_set = {var for var, _ in meta_params}
-    for row in metadata_df.itertuples():
-        if row.annotationKey not in meta_params_set:
-            continue
-
-        if row.Replicate in replicates:
-            if row.annotationKey in replicates[row.Replicate].metadata:
-                _log_warn_error(
-                    "Replicate '%s' already has metadata key '%s'. "
-                    "Overwriting with value '%s'.",
-                    row.Replicate, row.annotationKey, row.annotationValue,
-                    warning=not strict
-                )
-                meta_vars_unique = False
-
-            replicates[row.Replicate].metadata[row.annotationKey] = row.annotationValue
-
-    if not meta_vars_unique and strict:
-        LOGGER.error('Duplicate metadata keys found in replicates.')
-        return False
-
-    # Check that all replicates have the required metadata
-    all_reps_good = True
-    rep_na_counts = {var: 0 for var, _ in meta_params}
-    for rep_name, rep in replicates.items():
-        for var, name in meta_params:
-            if var not in rep.metadata:
-                _log_warn_error(
-                    "Replicate '%s' is missing metadata key '%s' from '%s' parameter.",
-                    rep_name, var, name, warning=not strict
-                )
-                all_reps_good = False
+        # Add metadata to replicates
+        meta_vars_unique = True
+        meta_params_set = {var for var, _ in meta_params}
+        for row in metadata_df.itertuples():
+            if row.annotationKey not in meta_params_set:
                 continue
 
-            value_empty = pd_isna(rep.metadata[var]) or rep.metadata[var] is None or rep.metadata[var] == ''
-            if value_empty or metadata_types[var] is Dtype.NULL:
-                rep_na_counts[var] += 1
+            if row.Replicate in replicates:
+                if row.annotationKey in replicates[row.Replicate].metadata:
+                    _log_warn_error(
+                        "Replicate '%s' already has metadata key '%s'. "
+                        "Overwriting with value '%s'.",
+                        row.Replicate, row.annotationKey, row.annotationValue,
+                        warning=not strict
+                    )
+                    meta_vars_unique = False
 
-    if not all_reps_good and strict:
-        return False
+                replicates[row.Replicate].metadata[row.annotationKey] = row.annotationValue
 
-    # Log missing metadata values
-    for var, na_count in rep_na_counts.items():
-        if na_count > 0:
-            LOGGER.warning("%s variable '%s' is missing in %d of %d replicates.",
-                           metadata_types[var].name, var, na_count, len(replicates))
-        else:
-            LOGGER.info("%s variable '%s' is present in all %d replicates.",
-                        metadata_types[var].name, var, len(replicates))
+        if not meta_vars_unique and strict:
+            LOGGER.error('Duplicate metadata keys found in replicates.')
+            return False
 
-    # Write metadata report
-    if write_metadata_report:
-        output_path = f'{report_prefix}metadata_validation_report.{report_format}'
-        _write_metadata_report(
-            meta_params, metadata_types, rep_na_counts,
-            len(replicates), output_path=output_path
-        )
-        LOGGER.info(f'Metadata report written to {output_path}')
+        # Check that all replicates have the required metadata
+        all_reps_good = True
+        rep_na_counts = {var: 0 for var, _ in meta_params}
+        for rep_name, rep in replicates.items():
+            for var, name in meta_params:
+                if var not in rep.metadata:
+                    _log_warn_error(
+                        "Replicate '%s' is missing metadata key '%s' from '%s' parameter.",
+                        rep_name, var, name, warning=not strict
+                    )
+                    all_reps_good = False
+                    continue
+
+                value_empty = pd_isna(rep.metadata[var]) or rep.metadata[var] is None or rep.metadata[var] == ''
+                if value_empty or metadata_types[var] is Dtype.NULL:
+                    rep_na_counts[var] += 1
+
+        if not all_reps_good and strict:
+            return False
+
+        # Log missing metadata values
+        for var, na_count in rep_na_counts.items():
+            if na_count > 0:
+                LOGGER.warning("%s variable '%s' is missing in %d of %d replicates.",
+                            metadata_types[var].name, var, na_count, len(replicates))
+            else:
+                LOGGER.info("%s variable '%s' is present in all %d replicates.",
+                            metadata_types[var].name, var, len(replicates))
+
+        # Write metadata report
+        if write_metadata_report:
+            output_path = f'{report_prefix}metadata_validation_report.{report_format}'
+            _write_metadata_report(
+                meta_params, metadata_types, rep_na_counts,
+                len(replicates), output_path=output_path
+            )
+            LOGGER.info(f'Metadata report written to {output_path}')
 
     # Write replicate report
     if write_replicate_report:
@@ -779,6 +781,12 @@ def parse_args(argv, prog=None):
         help=config_description,
         description=config_description
     )
+    # config_command_args.add_argument(
+    #     '--insult-me', action='store_true', default=False,
+    #     help='If set, the program will insult you if the pipeline config is invalid. '
+    #          'By setting this option, you consent to being insulted and agree not to '
+    #          'hold the developer responsible if you are offended.'
+    # )
     config_command_args.add_argument(
         'pipeline_config', nargs='+',
         help='Path to pipeline config file(s). If multiple config files are provided, '
@@ -1024,10 +1032,9 @@ def _main(argv, prog=None):
         if write_reports:
             chrom_reps = {os.path.splitext(file_name)[0]: Replicate(file_name)
                           for file_name in chromatogram_library_spectra_dir}
-            _write_replicate_report(
-                chrom_reps,
-                output_path=f'{report_prefix}chromatogram_library_replicate_report.{report_format}'
-            )
+            output_path = f'{report_prefix}chromatogram_library_replicate_report.{report_format}'
+            _write_replicate_report(chrom_reps, output_path=output_path)
+            LOGGER.info(f'Chromatogram library replicate report written to {output_path}')
 
     # read metadata
     replicate_metadata = None
