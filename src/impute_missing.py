@@ -54,7 +54,7 @@ def get_manager(method, method_args, method_help=False,
     metadata = kwargs.copy()
     parser = MethodOptions()
 
-    if method == 'KNN':
+    if method.lower() == 'knn':
         parser.add_option('n_neighbors', default=5, min_value=1, min_inclusive=True, dtype=int,
                           help_str='Number of neighboring replicates to use for imputation.')
         parser.add_option('weights', choices=('uniform', 'weighted'), default='uniform', dtype=str,
@@ -144,7 +144,7 @@ def parse_args(argv, prog=None):
     impute_settings.add_argument('-i', '--imputeData', default='3', dest='impute_data',
                                  help='One digit bit mask. 1 for precursor imputation, 2 for protein '
                                       'imputation, 3 for both precursor and protein imputation.')
-    impute_settings.add_argument('-m', '--method', choices=IMPUTATION_METHODS, default='KNN',
+    impute_settings.add_argument('-m', '--method', default='KNN',
                                  help='Normalization method to use. Default is "KNN"')
     impute_settings.add_argument('-l', '--level', choices=(0, 1), default=0, type=int,
                                  help='Which values to use for imputation. '
@@ -175,7 +175,10 @@ def parse_args(argv, prog=None):
     args = parser.parse_args(argv)
     if args.db is None and not args.method_help:
         parser.print_usage()
-        parser.exit(1, f'{prog}: error: the following arguments are required: db\n')
+        parser.exit(2, f'{prog}: error: the following arguments are required: db\n')
+
+    if args.method.lower() not in IMPUTATION_METHODS:
+        parser.exit(2, f"error: argument -m/--method: invalid choice: '{args.method}' (choose from {', '.join(IMPUTATION_METHODS)})\n")
 
     return args
 

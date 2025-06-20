@@ -24,7 +24,7 @@ from .submodules.dtype import Dtype
 from .submodules.logger import LOGGER
 
 
-COMMAND_DESCRIPTION = 'Validate Nextflow pipeline params for the nf-skyline-dia-ms pipeline.'
+COMMAND_DESCRIPTION = 'Validate Nextflow pipeline parameters'
 
 DEFAULT_PIPELINE = 'mriffle/nf-skyline-dia-ms'
 DEFAULT_PIPELINE_REVISION = 'main'

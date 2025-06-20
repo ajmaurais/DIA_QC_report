@@ -9,7 +9,7 @@ from .logger import LOGGER
 from .transformation import cammel_case
 from .transformation import TransformationManagerBase
 
-IMPUTATION_METHODS = ('KNN',)
+IMPUTATION_METHODS = ('knn',)
 NULL_DB_ERROR = 'Database connection not set!'
 
 
