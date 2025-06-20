@@ -9,7 +9,9 @@ usage: dia_qc <command> [<args>]
 
 Available commands:
    parse                Generate QC and batch correction database from Skyline reports.
+   report_convert       Convert Skyline report(s) to parquet format.
    metadata_convert     Convert metadata annotations to specified file format.
+   validate             Validate Nextflow pipeline parameters.
    filter               Filter replicates in database.
    impute               Impute missing precursor and/or protein values.
    normalize            Perform DirectLFQ or median normalization on batch database.
@@ -112,6 +114,10 @@ Rscript -e 'rmarkdown::render("bc_report.rmd")'
 ```
 
 ## Other sub-commands
+
+### Validate nextflow pipeline parameters
+
+The `validate` sub-command can be used to validate parameters from a pipeline.config file or from command line arguments.
 
 ### Export database tables to tsv file(s).
 
