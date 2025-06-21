@@ -53,6 +53,10 @@ RUN cd /code/DIA_QC_report && \
     pip cache purge && \
     cd /code && rm -rf /code/DIA_QC_report
 
+# create world writeable matplotlib configuration directory
+RUN install -d -m 1777 /var/tmp/mplconfig
+ENV MPLCONFIGDIR=/var/tmp/mplconfig
+
 # clean things up
 RUN dnf remove -y git wget tar pip
 
