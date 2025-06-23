@@ -372,6 +372,7 @@ class TestParamsToDict(unittest.TestCase):
                     spectra_file         = '/path/to/spectra.mzML'
                     peptide_results_file = 'results.tsv'
                 }
+                skyline.skip = false
             } '''
         target = {
             'map': { 'key1': 'https://example.com/raw/', 'key2': '/local/dir' },
@@ -379,7 +380,8 @@ class TestParamsToDict(unittest.TestCase):
             'carafe': {
                 'spectra_file'         : '/path/to/spectra.mzML',
                 'peptide_results_file' : 'results.tsv'
-            }
+            },
+            'skyline': {'skip': False}
         }
         config_data = pipeline_config.PipelineConfig(text=config)
         config_dict = config_data.to_dict(config_data)

@@ -286,7 +286,7 @@ def parse_input_file_json(file):
         else:
             data = json.load(file)
     except FileNotFoundError as e:
-        LOGGER.error(f"Error reading MS file JSON: {e}")
+        LOGGER.error(f"Failed to read MS file JSON: {e}")
         return False, None
     except json.JSONDecodeError as e:
         LOGGER.error(f"Failed to parse MS file JSON: {e}")
@@ -384,7 +384,7 @@ def validate_config_files(config_paths, schema_path, *, api_key=None, strict=Tru
         for p in unknown:
             _log_warn_error("Unknown parameter in config: '%s'", p, warning=not strict)
         if strict:
-            return False, merged     # abort early
+            return False, merged
 
     # JSON schema validation
     try:

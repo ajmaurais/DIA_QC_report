@@ -6,6 +6,7 @@ from functools import partial
 from shutil import which
 import random
 import json
+from io import StringIO
 
 import pandas as pd
 
@@ -125,6 +126,65 @@ class TestGetApiKeyFromNextflow(unittest.TestCase, setup_functions.AbstractTests
         self.assertIsNone(api_key)
         self.assertInLog("Key 'PANORAMA_API_KEY' not found in Nextflow secrets.", cm)
 
+
+class TestParseInputFileJson(unittest.TestCase, setup_functions.AbstractTestsBase):
+    def test_valid_json_list(self):
+        data = ["file1.mzML", "file2.mzML", "file3.mzML"]
+        with mock.patch("builtins.open", mock.mock_open(read_data="")) as mock_open, \
+             mock.patch("json.load", return_value=data) as mock_json_load:
+            multi_batch_mode, files = vpp.parse_input_file_json("fake_path.json")
+
+        self.assertFalse(multi_batch_mode)
+        self.assertEqual(files, data)
+        mock_open.assert_called_once_with("fake_path.json", "r")
+        mock_json_load.assert_called_once()
+
+
+    def test_valid_json_dict(self):
+        data = {"batch1": ["file1.mzML", "file2.mzML"], "batch2": ["file3.mzML"]}
+        with mock.patch("builtins.open", mock.mock_open(read_data="")) as mock_open, \
+             mock.patch("json.load", return_value=data) as mock_json_load:
+            multi_batch_mode, files = vpp.parse_input_file_json("fake_path.json")
+
+        self.assertTrue(multi_batch_mode)
+        self.assertEqual(files, data)
+        mock_open.assert_called_once_with("fake_path.json", "r")
+        mock_json_load.assert_called_once()
+
+
+    def test_invalid_json_schema(self):
+        data = {"invalid_key": {'a': {'key': 'value'}}}
+        with mock.patch("builtins.open", mock.mock_open(read_data="")) as mock_open, \
+             mock.patch("json.load", return_value=data) as mock_json_load:
+            with self.assertLogs(LOGGER, 'ERROR') as cm:
+                multi_batch_mode, files = vpp.parse_input_file_json("fake_path.json")
+
+        self.assertFalse(multi_batch_mode)
+        self.assertIsNone(files)
+        self.assertInLog('MS file JSON does not match the expected schema:', cm)
+        mock_open.assert_called_once_with("fake_path.json", "r")
+        mock_json_load.assert_called_once()
+
+
+    def test_file_not_found(self):
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
+            multi_batch_mode, files = vpp.parse_input_file_json("fake_path.json")
+
+        self.assertFalse(multi_batch_mode)
+        self.assertIsNone(files)
+        self.assertInLog('Failed to read MS file JSON:', cm)
+
+
+    def test_invalid_json_format(self):
+        data = "{'invalid_json': true"
+        ss = StringIO(data)
+        ss.seek(0)
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
+            multi_batch_mode, files = vpp.parse_input_file_json(ss)
+
+        self.assertFalse(multi_batch_mode)
+        self.assertIsNone(files)
+        self.assertInLog('Failed to parse MS file JSON:', cm)
 
 
 class TestParseInputFiles(unittest.TestCase):
@@ -450,6 +510,17 @@ class TestValidateMetadataParams(ValidateMetadata):
 
         self.assertFalse(success)
         self.assertInLog("Metadata variable 'notABatch' from 'batch1' parameter not found in metadata.", cm)
+
+
+    def test_missing_covariate_var(self):
+        with self.assertLogs(LOGGER, 'ERROR') as cm:
+            success = vpp.validate_metadata(
+                self.project_replicates, self.combined_metadata, self.metadata_types,
+                covariate_vars='notABatch'
+            )
+
+        self.assertFalse(success)
+        self.assertInLog("Metadata variable 'notABatch' from 'covariate_vars' parameter not found in metadata.", cm)
 
 
     def test_only_control_key(self):
