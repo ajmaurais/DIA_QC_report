@@ -6,6 +6,7 @@ import os
 import re
 import json
 import random
+import shutil
 
 import pandas as pd
 
@@ -13,7 +14,7 @@ from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report import validate_pipeline_params as vpp
 from DIA_QC_report.submodules.pipeline_config import PipelineConfig
 from DIA_QC_report.submodules.panorama import have_internet
-from DIA_QC_report.submodules.panorama import PANORAMA_PUBLIC_KEY
+from DIA_QC_report.submodules.panorama import PANORAMA_PUBLIC_KEY, PANORAMA_URL
 
 import setup_functions
 
@@ -122,9 +123,9 @@ class TestValidateSetup(unittest.TestCase):
             cls.project_replicates[project] = df['Replicate'].tolist()
 
         metadata_reader = Metadata()
-        metadata_file = f'{cls.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
-        if not metadata_reader.read(metadata_file):
-            raise FileNotFoundError(f"Metadata file '{metadata_file}' not found or could not be read.")
+        cls.metadata_file = f'{cls.data_dir}/metadata/Sp3_Strap_combined_metadata.tsv'
+        if not metadata_reader.read(cls.metadata_file):
+            raise FileNotFoundError(f"Metadata file '{cls.metadata_file}' not found or could not be read.")
 
         cls.combined_metadata = metadata_reader
 
@@ -994,12 +995,69 @@ class TestParams(TestValidateSetup):
             )
 
 
+    def test_download_metadata(self):
+        project = 'Strap'
+        color_vars = ['experiment', 'cellLine']
+        test_prefix = 'test_download_metadata'
+        quant_file_args = [
+            f'-q={f}' for f in os.listdir(f'{self.local_ms_files}/{project}')
+            if re.search(r'400to1000.+?.raw$', f)
+        ]
+        metadata_url = f'{PANORAMA_URL}/_webdav/MacCoss/Aaron/nextflow_tests/diann_upload/%40files/Sp3_Strap_combined_metadata.tsv'
+        metadata_output_path = f'{self.work_dir}/{test_prefix}_metadata.json'
+
+        def write_metadata(path):
+            shutil.copy(self.metadata_file, path)
+
+        args = [
+            'params', '--report-prefix', f'{test_prefix}_',
+            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
+            '--metadata-output-path', metadata_output_path,
+            '--api-key', PANORAMA_PUBLIC_KEY
+        ] + [f'--addColorVar={var}' for var in color_vars] + quant_file_args
+
+        if MOCK_PANORAMA:
+            with mock.patch('DIA_QC_report.validate_pipeline_params.get_webdav_file',
+                            side_effect=write_metadata(metadata_output_path)) as mock_get_webdav_file:
+                result = setup_functions.run_main(
+                    vpp._main, args, self.work_dir, prog='dia_qc validate'
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                mock_get_webdav_file.assert_called_once_with(
+                    metadata_url, api_key=PANORAMA_PUBLIC_KEY, return_text=True,
+                    dest_path=f'{self.work_dir}/{test_prefix}_metadata.json'
+                )
+
+        else:
+            if not have_internet():
+                self.skipTest('No internet connection available for remote files.')
+
+            result = setup_functions.run_main(
+                vpp._main, args, self.work_dir, prog='dia_qc validate'
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+
+        with self.subTest('Check metadata report'):
+            self.check_metadata_report(
+                f'{self.work_dir}/{test_prefix}_metadata_validation_report.json',
+                color_vars=color_vars
+            )
+
+        with self.subTest('Check replicate report'):
+            self.check_replicate_report(
+                f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
+                project, multi_batch=True
+            )
+
+
 class TestInvalidParams(TestValidateSetup):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_params_invalid'
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
 
 
     def test_missing_meta_var(self):

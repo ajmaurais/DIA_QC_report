@@ -143,7 +143,7 @@ def get_file(file_path, log_name='file', api_key=None,
             LOGGER.error("Failed to download %s '%s': %s", log_name, file_path, e)
             return None
 
-        if not return_text: # return file path
+        if not return_text:
             return text
 
     elif file_path.startswith('http://') or file_path.startswith('https://'):
