@@ -403,7 +403,11 @@ class TestConfig(TestValidateSetup):
         }
         test_prefix = 'test_all_remote_batched'
         test_config = f'{self.work_dir}/test_all_local_multi_batch.config'
+        metadata_url = f'{PANORAMA_URL}/_webdav/MacCoss/Aaron/nextflow_tests/diann_upload/%40files/Sp3_Strap_combined_metadata.tsv'
         args = self.common_test_args + [test_config, '--report-prefix', f'{test_prefix}_']
+
+        with open(self.metadata_file, 'r') as inF:
+            metadata_text = inF.read()
 
         setup_test_config(
             f'{self.config_dir}/template.config', output_path=test_config,
@@ -413,18 +417,26 @@ class TestConfig(TestValidateSetup):
                 'quant_spectra_regex': '400to1000.+?.raw$',
                 'chromatogram_library_spectra_dir': [f'{self.local_ms_files}/Strap', SP3_URL],
                 'chromatogram_library_spectra_regex': '-Lib.mzML$',
-                'chromatogram_library_spectra_glob': None
-            } | meta_params | self.local_db_files
+                'chromatogram_library_spectra_glob': None,
+                'fasta': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.fasta',
+                'spectral_library': f'{self.local_db}/uniprot_human_jan2021_yeastENO1.dlib',
+                'replicate_metadata': metadata_url
+            } | meta_params
         )
 
         if MOCK_PANORAMA:
             with mock.patch('DIA_QC_report.validate_pipeline_params.list_panorama_files',
-                            side_effect=mock_list_list_panorama_files) as mock_list_files:
+                            side_effect=mock_list_list_panorama_files) as mock_list_files, \
+                 mock.patch('DIA_QC_report.validate_pipeline_params.get_webdav_file',
+                            return_value=metadata_text) as mock_get_webdav_file:
                 result = setup_functions.run_main(
                     vpp._main, args, self.work_dir, prog=self.prog
                 )
             self.assertEqual(result.returncode, 0, result.stderr)
             mock_list_files.assert_has_calls([mock.call(SP3_URL, api_key=PANORAMA_PUBLIC_KEY)])
+            mock_get_webdav_file.assert_called_once_with(
+                metadata_url, api_key=PANORAMA_PUBLIC_KEY, dest_path=None, return_text=True
+            )
 
         else:
             if not have_internet():
@@ -824,6 +836,30 @@ class TestConfigInvalid(TestValidateSetup):
         )
 
 
+    def test_unknown_parameter(self):
+        project = 'Strap'
+        test_config = f'{self.work_dir}/test_invalid_config_var_type.config'
+        args = [
+            'config', '--schema', f'{self.config_dir}/nextflow_schema.json', test_config
+        ]
+        setup_test_config(
+            f'{self.config_dir}/template.config', output_path=test_config,
+            add_params={
+                'quant_spectra_dir': f'{self.local_ms_files}/{project}',
+                'an_unknown_param': 'value',
+                'quant_spectra_glob': '*400to1000*.raw',
+                'qc_report.color_vars': 'cellLine'
+            } | self.local_db_files
+        )
+        result = setup_functions.run_main(
+            vpp._main, args, self.work_dir, prog=self.prog
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            "Unknown parameter in config: 'an_unknown_param'", result.stderr
+        )
+
+
     def test_invalid_config_obj_structure(self):
         project = 'Strap'
         test_config = f'{self.work_dir}/test_invalid_config_var_type.config'
@@ -1004,17 +1040,17 @@ class TestParams(TestValidateSetup):
             if re.search(r'400to1000.+?.raw$', f)
         ]
         metadata_url = f'{PANORAMA_URL}/_webdav/MacCoss/Aaron/nextflow_tests/diann_upload/%40files/Sp3_Strap_combined_metadata.tsv'
-        metadata_output_path = f'{self.work_dir}/{test_prefix}_metadata.json'
+        metadata_output_path = f'{self.work_dir}/{test_prefix}_metadata.tsv'
 
         def write_metadata(path):
             shutil.copy(self.metadata_file, path)
 
         args = [
             'params', '--report-prefix', f'{test_prefix}_',
-            '--metadata', f'{setup_functions.TEST_DIR}/data/metadata/Strap_metadata.json',
+            '--metadata', metadata_url,
             '--metadata-output-path', metadata_output_path,
             '--api-key', PANORAMA_PUBLIC_KEY
-        ] + [f'--addColorVar={var}' for var in color_vars] + quant_file_args
+        ] + self.common_test_args + [f'--addColorVar={var}' for var in color_vars] + quant_file_args
 
         if MOCK_PANORAMA:
             with mock.patch('DIA_QC_report.validate_pipeline_params.get_webdav_file',
@@ -1024,8 +1060,8 @@ class TestParams(TestValidateSetup):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 mock_get_webdav_file.assert_called_once_with(
-                    metadata_url, api_key=PANORAMA_PUBLIC_KEY, return_text=True,
-                    dest_path=f'{self.work_dir}/{test_prefix}_metadata.json'
+                    metadata_url, api_key=PANORAMA_PUBLIC_KEY,
+                    dest_path=metadata_output_path, return_text=False
                 )
 
         else:
@@ -1047,7 +1083,7 @@ class TestParams(TestValidateSetup):
         with self.subTest('Check replicate report'):
             self.check_replicate_report(
                 f'{self.work_dir}/{test_prefix}_replicate_validation_report.json',
-                project, multi_batch=True
+                project, multi_batch=False
             )
 
 
@@ -1057,7 +1093,6 @@ class TestInvalidParams(TestValidateSetup):
         super().setUpClass()
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_validate_params_invalid'
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
-
 
 
     def test_missing_meta_var(self):

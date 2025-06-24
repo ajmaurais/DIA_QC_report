@@ -143,9 +143,6 @@ def get_file(file_path, log_name='file', api_key=None,
             LOGGER.error("Failed to download %s '%s': %s", log_name, file_path, e)
             return None
 
-        if not return_text:
-            return text
-
     elif file_path.startswith('http://') or file_path.startswith('https://'):
         try:
             text = get_http_file(file_path, dest_path=dest_path, return_text=return_text)
@@ -1050,9 +1047,8 @@ def _main(argv, prog=None):
 
         metadata_reader = Metadata()
         if download_metadata:
-            with open(metadata_output_path, 'r') as inF:
-                if not metadata_reader.read(inF):
-                    sys.exit(1)
+            if not metadata_reader.read(metadata_output_path):
+                sys.exit(1)
         else:
             metadata_stream = StringIO(metadata)
             metadata_stream.seek(0)
