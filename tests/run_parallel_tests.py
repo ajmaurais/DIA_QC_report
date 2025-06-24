@@ -96,7 +96,7 @@ def run_test_file_stream(path, q, display_row, render=False):
             failed += 1
         q.put((path.name, display_row, passed, failed, None))
 
-    # final “done” message
+    # final "done" message
     code = p.wait()
     q.put((path.name, display_row, passed, failed, code))
 
@@ -104,7 +104,7 @@ def run_test_file_stream(path, q, display_row, render=False):
 def _print_test_file_summary(file_i, n_files, name, passed, failed, n_tests, verbose=False):
     if verbose:
         print('-' * 80)
-    icon = '✅' if failed == 0 else '❌'
+    icon = '✔ ' if failed == 0 else '❌'
     len_n_files = len(str(n_files))
     test_str = f'({passed}/{n_tests})'
     print(f'{icon} File {str(file_i).rjust(len_n_files)} of {n_files} {test_str.ljust(9)} {name}')
@@ -189,7 +189,7 @@ def get_row_text(test_name, rjust, n_tests, started=True, n_passed=0, n_failed=0
 
     if finished:
         if n_failed > 0:
-            ret += ' ❌' if color_support else 'X'
+            ret += ' ❌' if color_support else ' X'
         else:
             ret += GREEN if color_support else ''
             ret += ' ✔'

@@ -312,6 +312,7 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
         except Exception:
             traceback.print_exc(file=stderr_buf)
             rc = 1
+        finally:
             os.chdir(curwd)
 
     out_str = stdout_buf.getvalue()
