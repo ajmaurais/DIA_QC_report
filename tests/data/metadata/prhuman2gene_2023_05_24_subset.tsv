@@ -2,3 +2,166 @@ protein	accession	geneid	authid	description	chromosome	locus	organism	short_acce
 O60884	DNAJA2	10294	HGNC:14884	DnaJ heat shock protein family (Hsp40) member A2	16	16q11.2	Homo sapiens	NA
 O95197	RTN3	10313	HGNC:10469	reticulon 3	11	11q13.1	Homo sapiens	NA
 P06733	ENO1	2023	HGNC:3350	enolase 1	1	1p36.23	Homo sapiens	NA
+NP_001034581	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001305823	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001305824	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001305825	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001305826	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001305827	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001305828	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001361328	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_001441	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_963849	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_963851	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+NP_066409	H2AC7	3013	HGNC:4729	H2A clustered histone 7	6	6p22.2	Homo sapiens	NA
+NP_001137357	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+NP_001137358	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+NP_001231919	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+NP_001231921	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+NP_002471	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+NP_005040	PWP2	5822	HGNC:9711	PWP2 small subunit processome component	21	21q22.3	Homo sapiens	NA
+NP_001005781	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+NP_001005782	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+NP_001358321	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+NP_001358322	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+NP_001358323	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+NP_003343	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+NP_066544	H2AC14	8331	HGNC:4727	H2A clustered histone 14	6	6p22.1	Homo sapiens	NA
+NP_003505	H2AC17	8336	HGNC:4735	H2A clustered histone 17	6	6p22.1	Homo sapiens	NA
+NP_003508	H2AC20	8338	HGNC:4738	H2A clustered histone 20	1	1q21.2	Homo sapiens	NA
+NP_001155855	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+NP_001155856	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+NP_001337039	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+NP_001337040	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+NP_001337041	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+NP_004714	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+XP_024306305	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+XP_054170697	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+XP_054185172	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+NP_006436	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+NP_808760	H2AJ	55766	HGNC:14456	H2A.J histone	12	12p12.3	Homo sapiens	NA
+NP_542163	H2AC12	85235	HGNC:13671	H2A clustered histone 12	6	6p22.1	Homo sapiens	NA
+NP_001035807	H2AC19	723790	HGNC:29668	H2A clustered histone 19	1	1q21.2	Homo sapiens	NA
+NP_001355167	LOC102724159	102724159		periodic tryptophan protein 2 homolog	21	21p12	Homo sapiens	NA
+G2XKQ0	SUMO1P1	391257	HGNC:33148	SUMO1 pseudogene 1	20	20q13.2	Homo sapiens	NA
+O14974	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+P0C0S8	H2AC17	8336	HGNC:4735	H2A clustered histone 17	6	6p22.1	Homo sapiens	NA
+P20671	H2AC7	3013	HGNC:4729	H2A clustered histone 7	6	6p22.2	Homo sapiens	NA
+P63165	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+Q14192	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+Q15269	PWP2	5822	HGNC:9711	PWP2 small subunit processome component	21	21q22.3	Homo sapiens	NA
+Q16777	H2AC20	8338	HGNC:4738	H2A clustered histone 20	1	1q21.2	Homo sapiens	NA
+Q6FI13	H2AC19	723790	HGNC:29668	H2A clustered histone 19	1	1q21.2	Homo sapiens	NA
+Q6P2Q9	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+Q92974	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+Q96KK5	H2AC12	85235	HGNC:13671	H2A clustered histone 12	6	6p22.1	Homo sapiens	NA
+Q99878	H2AC14	8331	HGNC:4727	H2A clustered histone 14	6	6p22.1	Homo sapiens	NA
+Q9BTM1	H2AJ	55766	HGNC:14456	H2A.J histone	12	12p12.3	Homo sapiens	NA
+A0A5F9ZI21	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+V9GYM8	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+A0A8Q3SIN5	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+B8ZZJ0	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+B8ZZN6	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+B9A032	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+F8VZN8	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+H0YFX9	H2AJ	55766	HGNC:14456	H2A.J histone	12	12p12.3	Homo sapiens	NA
+H0YIM2	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+A0A0U1RQZ1	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+A0A1Y8EN19	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+A0A3B3ISH4	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+A0A8Q3SIV8	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+A0A994J3N2	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+A0A994J491	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+A0A994J6E8	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+A0A994J6S8	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+B8ZZ67	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+C9J3S8	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+C9J544	PWP2	5822	HGNC:9711	PWP2 small subunit processome component	21	21q22.3	Homo sapiens	NA
+F8VW28	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+F8WBI1	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+F8WDA8	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+H0YHI8	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+H0YHL8	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+H0YIL7	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+H0YIS3	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+H0YIS4	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+I3L0J9	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+I3L1T8	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+I3L3Z8	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+U3KQT4	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+V9GY94	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+V9GYF0	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+V9GYF5	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+V9GYG5	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+V9GZ14	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+V9GZ58	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000475814	H2AC19	723790	HGNC:29668	H2A clustered histone 19	1	1q21.2	Homo sapiens	NA
+ENSP00000332194	H2AC20	8338	HGNC:4738	H2A clustered histone 20	1	1q21.2	Homo sapiens	NA
+ENSP00000315325	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000354837	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000476916	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000500802	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000476689	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000512745	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000512746	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000314787	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000477448	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000477299	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000476724	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000476699	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000476532	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000476518	ARHGEF2	9181	HGNC:682	Rho/Rac guanine nucleotide exchange factor 2	1	1q22	Homo sapiens	NA
+ENSP00000386892	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000322909	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000433567	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000377021	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000344266	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000377020	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000350846	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000386665	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000386633	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000414872	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000476199	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000397083	FHL2	2274	HGNC:3703	four and a half LIM domains 2	2	2q12.2	Homo sapiens	NA
+ENSP00000376077	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000376076	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000387204	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000376075	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000386296	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000386753	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000386472	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000386267	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000386500	SUMO1	7341	HGNC:12502	small ubiquitin like modifier 1	2	2q33.1	Homo sapiens	NA
+ENSP00000341094	H2AC7	3013	HGNC:4729	H2A clustered histone 7	6	6p22.2	Homo sapiens	NA
+ENSP00000366679	H2AC12	85235	HGNC:13671	H2A clustered histone 12	6	6p22.1	Homo sapiens	NA
+ENSP00000328484	H2AC14	8331	HGNC:4727	H2A clustered histone 14	6	6p22.1	Homo sapiens	NA
+ENSP00000352627	H2AC17	8336	HGNC:4735	H2A clustered histone 17	6	6p22.1	Homo sapiens	NA
+ENSP00000438553	H2AJ	55766	HGNC:14456	H2A.J histone	12	12p12.3	Homo sapiens	NA
+ENSP00000373730	H2AJ	55766	HGNC:14456	H2A.J histone	12	12p12.3	Homo sapiens	NA
+ENSP00000440902	H2AJ	55766	HGNC:14456	H2A.J histone	12	12p12.3	Homo sapiens	NA
+ENSP00000261207	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000389168	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000416769	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000450059	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000489242	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000449647	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000449666	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000449514	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000446855	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000447144	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000446816	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000450061	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000497229	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000447338	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000449843	PPP1R12A	4659	HGNC:7618	protein phosphatase 1 regulatory subunit 12A	12	12q21.2-q21.31	Homo sapiens	NA
+ENSP00000459095	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000304350	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000460348	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000460849	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000515360	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000515361	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000515362	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000515363	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000458151	PRPF8	10594	HGNC:17340	pre-mRNA processing factor 8	17	17p13.3	Homo sapiens	NA
+ENSP00000411749	PWP2	5822	HGNC:9711	PWP2 small subunit processome component	21	21q22.3	Homo sapiens	NA
+ENSP00000291576	PWP2	5822	HGNC:9711	PWP2 small subunit processome component	21	21q22.3	Homo sapiens	NA
