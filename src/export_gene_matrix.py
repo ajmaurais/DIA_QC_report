@@ -13,7 +13,7 @@ from .submodules.dia_db_utils import check_schema_version
 from .submodules.logger import LOGGER
 
 COMMAND_DESCRIPTION = 'Export PDC gene tables from batch database.'
-TABLE_TYPES = ('combined', 'split', 'drop')
+TABLE_TYPES = ('split', 'drop')
 
 SPLIT_RE = re.compile(r'\s/\s')
 
@@ -117,15 +117,12 @@ def pivot_data_wider(dat, quant_col, index,
     ret.columns.name = None
 
     ret['accession'] = ret['accession'].apply(lambda x: tuple(SPLIT_RE.split(x)))
-
-    if group_method == 'split':
-        ret['gene_group'] = ret['accession']
-        ret = ret.explode('accession')
-        return ret
+    ret['gene_group'] = ret['accession']
 
     if group_method == 'drop':
-        ret = ret[ret['accession'].apply(lambda x: len(x) == 1)]
-        return ret
+        ret = ret[ret['gene_group'].apply(lambda x: len(x) == 1)]
+
+    ret = ret.explode('accession')
 
     return ret
 
@@ -162,7 +159,6 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
 
     if gene_uuid:
         gene_data_keys.append('gene_uuid')
-
 
     Gene = namedtuple('Gene', ' '.join(gene_data_keys))
     gene_data_dict = {}
@@ -213,21 +209,27 @@ def concat_gene_data(accession_set, gene_data, sep=' / ', gene_uuid=False):
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
 
-    gene_group_args = parser.add_argument_group('Gene grouping',
-                                                description="Choose how to display gene groups in output tables. "
-                                                            "'combined': Show all genes in group in the same row separated by --sep. "
-                                                            "'split': Show each gene in group on a separate row. "
-                                                            "'skip': Don't include gene groups with more than one gene in table.")
-    gene_group_args.add_argument('-g', '--groupMethod', default='split', type=str,
-                                 help=f''' How to display gene groups in tables.
-                                      Grouping method should unambiguously match one
-                                      of ['{"', '".join(TABLE_TYPES)}']''', dest='group_method')
-    gene_group_args.add_argument('-s', '--sep', default='; ', type=str, dest='gene_group_sep',
-                                 help="Gene group separator. Default is ' / '")
-
+    gene_group_args = parser.add_argument_group(
+        'Gene grouping',
+        description="Choose how to display gene groups in output tables. "
+                    # "'combined': Show all genes in group in the same row separated by --sep. "
+                    "'split': Show each gene in group on a separate row. "
+                    "'skip': Don't include gene groups with more than one gene in table."
+    )
+    gene_group_args.add_argument(
+        '-g', '--groupMethod', default='split', type=str, dest='group_method',
+        help=f''' How to display gene groups in tables. Grouping method should unambiguously match
+                  one of ['{"', '".join(TABLE_TYPES)}']'''
+    )
+    gene_group_args.add_argument(
+        '-s', '--sep', default='; ', type=str, dest='gene_group_sep',
+        help="Gene group separator. Default is '; '"
+    )
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
-    parser.add_argument('--useAliquotId', default=False, action='store_true',
-                        help='Use aliquot_run_metadata_id as column headers instead of replicate name.')
+    parser.add_argument(
+        '--useAliquotId', default=False, action='store_true',
+        help='Use aliquot_run_metadata_id as column headers instead of replicate name.'
+    )
     parser.add_argument('--addGeneUuid', default=False, action='store_true',
                         dest='add_gene_uuid', help='Add column for gene id hash.')
     parser.add_argument('gene_table', help='A tsv with gene data.')
@@ -281,7 +283,7 @@ def _main(argv, prog=None):
             sys.exit(1)
         rep_id_col = 'aliquot_run_metadata_id'
 
-    gene_id_table_cols = GENE_ID_TABLE_COLS
+    gene_id_table_cols = GENE_ID_TABLE_COLS.copy()
     if args.add_gene_uuid:
         gene_id_table_cols['gene_uuid'] = 'gene_uuid'
 
@@ -303,15 +305,18 @@ def _main(argv, prog=None):
     # pivot proteins wider
     accessions = set()
     for method in proteins:
-        proteins[method] = pivot_data_wider(dat_protein, proteins[method], 'accession',
-                                            group_method=gene_group_method, rep_id_col=rep_id_col)
+        proteins[method] = pivot_data_wider(
+            dat_protein, proteins[method], 'accession',
+            group_method=gene_group_method, rep_id_col=rep_id_col
+        )
         accessions = accessions | set(proteins[method]['accession'].drop_duplicates().to_list())
 
     # pivot precursors wider
     for method in precursors:
-        precursors[method] = pivot_data_wider(dat_precursor, precursors[method],
-                                              ['accession', 'modifiedSequence', 'precursorCharge'],
-                                              group_method=gene_group_method, rep_id_col=rep_id_col)
+        precursors[method] = pivot_data_wider(
+            dat_precursor, precursors[method], ['accession', 'modifiedSequence', 'precursorCharge'],
+            group_method=gene_group_method, rep_id_col=rep_id_col
+        )
         accessions = accessions | set(precursors[method]['accession'].drop_duplicates().to_list())
 
     data = proteins | precursors
@@ -319,9 +324,9 @@ def _main(argv, prog=None):
     # make accession gene data lookup
     gene_ids = gene_ids.drop_duplicates(subset='accession')
     LOGGER.info('Looking up gene data for protein accessions.')
-    gene_data_lookup, missing_accessions = concat_gene_data(accessions, gene_ids,
-                                                            sep=args.gene_group_sep,
-                                                            gene_uuid=args.add_gene_uuid)
+    gene_data_lookup, missing_accessions = concat_gene_data(
+        accessions, gene_ids, sep=args.gene_group_sep, gene_uuid=args.add_gene_uuid
+    )
     LOGGER.info(f'Found gene data for {len(gene_data_lookup)} protein accessions.')
     if len(missing_accessions) > 0:
         LOGGER.warning(f'Missing gene data for {len(missing_accessions)} protein accessions!')
@@ -338,8 +343,10 @@ def _main(argv, prog=None):
 
     # join gene data to tables
     for method in data:
-        data[method] = data[method].set_index('accession').join(gene_data_lookup.set_index('accession'),
-                                                                how='inner', on='accession')
+        data[method] = data[method].set_index('accession').join(
+            gene_data_lookup.set_index('accession'),
+            how='inner', on='accession'
+        )
         data[method] = data[method].reset_index(drop=True)
 
         data[method]['GeneGroup'] = data[method]['gene_group'].apply(lambda x: gene_groups[x])
