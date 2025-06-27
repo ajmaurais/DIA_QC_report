@@ -762,9 +762,14 @@ def parse_args(argv, prog=None):
         help='File prefix for metadata and MS file validation reports. '
     )
     common_subcommand_args.add_argument(
-        '--verbose', action='store_true', default=False,
-        help='Print verbose log messages.'
+        '--permissive', action='store_false', dest='strict', default=True,
+        help='Validation problems which will not cause the pipeline to fail, but are likely '
+             'to result in unintended behavior, will be handled as warnings instead of errors.'
     )
+    # common_subcommand_args.add_argument(
+    #     '--verbose', action='store_true', default=False,
+    #     help='Print verbose log messages.'
+    # )
 
     ####### Top level parser #######
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
@@ -949,7 +954,9 @@ def _main(argv, prog=None):
     if args.subcommand == 'config':
         # Read and validate pipeline config file(s)
         LOGGER.info('Reading pipeline config and validating against schema...')
-        success, config_data = validate_config_files(args.pipeline_config, args.schema)
+        success, config_data = validate_config_files(
+            args.pipeline_config, args.schema, strict=args.strict
+        )
         if not success:
             LOGGER.error('Pipeline config validation failed.')
             sys.exit(1)
@@ -1065,7 +1072,7 @@ def _main(argv, prog=None):
         color_vars=color_vars, batch1=batch1, batch2=batch2, covariate_vars=covariate_vars,
         control_key=control_key, control_values=control_values,
         write_replicate_report=write_reports, write_metadata_report=write_reports,
-        report_format=report_format, report_prefix=report_prefix
+        report_format=report_format, report_prefix=report_prefix, strict=args.strict
     )
     if not success:
         LOGGER.error('Metadata validation failed.')
