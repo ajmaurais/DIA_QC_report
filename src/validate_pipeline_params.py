@@ -883,8 +883,9 @@ def parse_args(argv, prog=None):
     ###### Argument validation ######
     args = parser.parse_args(argv)
     if args.subcommand == 'config':
-        if (hasattr(args, 'pipeline') and hasattr(args, 'schema')):
-            sys.stderr.write('--pipeline and --schema options conflict.\n')
+        if ( (hasattr(args, 'pipeline') or hasattr(args, 'revision')) and hasattr(args, 'schema') ):
+            message_option = 'pipeline' if hasattr(args, 'pipeline') else 'revision'
+            sys.stderr.write(f'--{message_option} and --schema options conflict.\n')
             sys.exit(2)
 
         if not hasattr(args, 'pipeline'):
