@@ -685,7 +685,7 @@ class TestConfig(TestValidateSetup):
         test_prefix = 'test_all_local_flat'
         args = [
             'config', test_config, '--report-prefix', f'{test_prefix}_',
-            '--pipeline', 'ajmaurais/nf-skyline-dia-ms', '--revision', 'nf-schema'
+            '--pipeline', 'mriffle/nf-skyline-dia-ms', '--revision', 'diann2-multiplate'
         ]
 
         setup_test_config(
