@@ -30,6 +30,7 @@ SELECT
     prot.accession,
 	r.replicate,
     a.aliquot_run_metadata_id,
+    s.aliquot_submitter_id,
 	q.abundance,
 	q.normalizedAbundance
 FROM proteinQuants q
@@ -41,12 +42,19 @@ LEFT JOIN (
     FROM sampleMetadata
     WHERE annotationKey == 'aliquot_run_metadata_id'
 ) a ON a.replicateId == q.replicateId
+LEFT JOIN (
+    SELECT
+        replicateId, annotationValue as aliquot_submitter_id
+    FROM sampleMetadata
+    WHERE annotationKey == 'aliquot_submitter_id'
+) s ON s.replicateId == q.replicateId
 WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;'''
 
 PRECURSOR_QUERY = '''
 SELECT
 	r.replicate,
     a.aliquot_run_metadata_id,
+    s.aliquot_submitter_id,
 	prot.accession as accession,
 	p.modifiedSequence,
 	p.precursorCharge,
@@ -62,25 +70,42 @@ LEFT JOIN (
     FROM sampleMetadata
     WHERE annotationKey == 'aliquot_run_metadata_id'
 ) a ON a.replicateId == p.replicateId
+LEFT JOIN (
+    SELECT
+        replicateId, annotationValue as aliquot_submitter_id
+    FROM sampleMetadata
+    WHERE annotationKey == 'aliquot_submitter_id'
+) s ON s.replicateId == p.replicateId
 WHERE prot.accession IS NOT NULL AND r.includeRep == TRUE;
 '''
 
 
 def check_aliquot_id(df, df_name):
     # check that aliquot_run_metadata_id column exists in df
-    if 'aliquot_run_metadata_id' not in df.columns:
-        LOGGER.error(f'In {df_name} df: aliquot_run_metadata_id column does not exist!')
-        return False
+    arm_id = 'aliquot_run_metadata_id'
+    as_id = 'aliquot_submitter_id'
+    for col in (arm_id, as_id):
+        if col not in df.columns:
+            LOGGER.error('In %s df: %s column does not exist!', df_name, col)
+            return False
 
     # make sure that no aliquot_ids are NA
-    rep_ids = df[['replicate', 'aliquot_run_metadata_id']].drop_duplicates()
-    na_counts = Counter(pd.isna(rep_ids['aliquot_run_metadata_id']))
-    if True in na_counts:
-        LOGGER.error(f'Missing aliquot_run_metadata_id for {na_counts[True]} replicates!')
+    rep_ids = df[['replicate', arm_id, as_id]].drop_duplicates()
+    all_good = True
+    for col in (arm_id, as_id):
+        na_counts = Counter(pd.isna(rep_ids[col]))
+        if True in na_counts:
+            LOGGER.error(
+                'Missing %s for %d replicate%s!',
+                col, na_counts[True], 's' if na_counts[True] > 1 else ''
+            )
+            all_good = False
+    if not all_good:
         return False
 
     # Make sure that all aliquot_ids are unique
-    id_diff = len(set(rep_ids['replicate'].to_list())) - len(set(rep_ids['aliquot_run_metadata_id'].to_list()))
+    ids = {f'{row[as_id]}:{row[arm_id]}' for _, row in rep_ids.iterrows()}
+    id_diff = len(set(rep_ids['replicate'].to_list())) - len(ids)
     if id_diff != 0:
         LOGGER.error('Not all aliquot_ids are unique!')
         return False
@@ -107,13 +132,21 @@ def check_df_columns(df, required_cols, df_name=None):
 
 
 def pivot_data_wider(dat, quant_col, index,
-                     group_method='split', rep_id_col='replicate'):
+                     group_method='split', use_arm_id_headers=False):
 
     if group_method not in TABLE_TYPES:
         LOGGER.warning(f"group_method '{group_method}' unknown!")
 
-    ret = dat.pivot(columns=rep_id_col, index=index,
-                    values=quant_col).reset_index()
+    rep_id_col = 'replicate'
+    if use_arm_id_headers:
+        rep_id_col = 'as_id:arm_id'
+        dat['as_id:arm_id'] = dat.apply(
+            lambda row: f"{row['aliquot_submitter_id']}:{row['aliquot_run_metadata_id']}", axis=1
+        )
+
+    ret = dat.pivot(
+        columns=rep_id_col, index=index, values=quant_col
+    ).reset_index()
     ret.columns.name = None
 
     ret['accession'] = ret['accession'].apply(lambda x: tuple(SPLIT_RE.split(x)))
@@ -227,7 +260,7 @@ def parse_args(argv, prog=None):
     )
     parser.add_argument('--prefix', default=None, help='Prefix to add to output file names.')
     parser.add_argument(
-        '--useAliquotId', default=False, action='store_true',
+        '--useAliquotId', default=False, action='store_true', dest='use_aliquot_id',
         help='Use aliquot_run_metadata_id as column headers instead of replicate name.'
     )
     parser.add_argument('--addGeneUuid', default=False, action='store_true',
@@ -278,10 +311,9 @@ def _main(argv, prog=None):
 
     # check aliquot_run_metadata_id column if necissary
     rep_id_col = 'replicate'
-    if args.useAliquotId:
+    if args.use_aliquot_id:
         if not check_aliquot_id(dat_protein, 'protein') or not check_aliquot_id(dat_precursor, 'precursor'):
             sys.exit(1)
-        rep_id_col = 'aliquot_run_metadata_id'
 
     gene_id_table_cols = GENE_ID_TABLE_COLS.copy()
     if args.add_gene_uuid:
@@ -307,7 +339,7 @@ def _main(argv, prog=None):
     for method in proteins:
         proteins[method] = pivot_data_wider(
             dat_protein, proteins[method], 'accession',
-            group_method=gene_group_method, rep_id_col=rep_id_col
+            group_method=gene_group_method, use_arm_id_headers=args.use_aliquot_id
         )
         accessions = accessions | set(proteins[method]['accession'].drop_duplicates().to_list())
 
@@ -315,7 +347,7 @@ def _main(argv, prog=None):
     for method in precursors:
         precursors[method] = pivot_data_wider(
             dat_precursor, precursors[method], ['accession', 'modifiedSequence', 'precursorCharge'],
-            group_method=gene_group_method, rep_id_col=rep_id_col
+            group_method=gene_group_method, use_arm_id_headers=args.use_aliquot_id
         )
         accessions = accessions | set(precursors[method]['accession'].drop_duplicates().to_list())
 
