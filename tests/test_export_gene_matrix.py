@@ -12,8 +12,6 @@ from DIA_QC_report import normalize_db
 from DIA_QC_report import export_gene_matrix
 
 class TestExportGeneMatrix(unittest.TestCase):
-    TEST_PROJECT = 'Strap'
-
     @classmethod
     def setUpClass(cls):
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_export_gene_matrix/'
@@ -22,11 +20,25 @@ class TestExportGeneMatrix(unittest.TestCase):
         cls.gene_id_path = f'{cls.data_dir}/metadata/prhuman2gene_2023_05_24_subset.csv'
         cls.prog = 'dia_qc export_gene_matrix'
 
-        parse_result = setup_functions.setup_single_db(
-            cls.data_dir, cls.work_dir, cls.TEST_PROJECT, clear_dir=True, group_by_gene=True
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+        argv = [
+            '--groupBy=gene',
+            f'-m={cls.data_dir}/metadata/PDC_NF_PNET_Validation_Study_annotations.csv',
+            f'{cls.data_dir}/skyline_reports/PDC_NF_PNET_Validation_Study_replicate_quality.tsv',
+            f'{cls.data_dir}/skyline_reports/PDC_NF_PNET_Validation_Study_precursor_quality.tsv'
+        ]
+        parse_result = setup_functions.run_main(
+            parse_data._main, argv, cls.work_dir, prog='dia_qc parse', prefix='parse'
         )
         if parse_result.returncode != 0:
             raise RuntimeError('Setup of test db failed!')
+
+        normalize_result = setup_functions.run_main(
+            normalize_db._main, [cls.db_path], cls.work_dir,
+            prog='dia_qc normalize', prefix='normalize'
+        )
+        if normalize_result.returncode != 0:
+            raise RuntimeError('Normalization of test db failed!')
 
 
     def assertIsFile(self, path):
@@ -35,7 +47,7 @@ class TestExportGeneMatrix(unittest.TestCase):
 
 
     def test_is_successful(self):
-        prefix='test_is_sucessful'
+        prefix='test_is_successful'
         command = [f'--prefix={prefix}', self.gene_id_path, self.db_path]
         result = setup_functions.run_main(
             export_gene_matrix._main, command, self.work_dir, prog=self.prog
@@ -43,8 +55,9 @@ class TestExportGeneMatrix(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         # make sure expected reports are generated
-        for file in ('precursors', 'proteins'):
-            self.assertIsFile(f'{self.work_dir}/{prefix}_{file}_unnormalized.tsv')
+        for level in ('unnormalized', 'normalized'):
+            for file in ('precursors', 'proteins'):
+                self.assertIsFile(f'{self.work_dir}/{prefix}_{file}_{level}.tsv')
 
 
     def test_gene_table_tsv(self):
@@ -58,8 +71,9 @@ class TestExportGeneMatrix(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         # make sure expected reports are generated
-        for file in ('precursors', 'proteins'):
-            self.assertIsFile(f'{self.work_dir}/{prefix}_{file}_unnormalized.tsv')
+        for level in ('unnormalized', 'normalized'):
+            for file in ('precursors', 'proteins'):
+                self.assertIsFile(f'{self.work_dir}/{prefix}_{file}_{level}.tsv')
 
 
     def test_use_gene_hash_option(self):
@@ -81,18 +95,17 @@ class TestExportGeneMatrix(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         # make sure expected reports are generated
-        for file in ('precursors', 'proteins'):
-            report_path = f'{self.work_dir}/{prefix}_{file}_unnormalized.tsv'
-            self.assertIsFile(report_path)
+        for level in ('unnormalized', 'normalized'):
+            for file in ('precursors', 'proteins'):
+                report_path = f'{self.work_dir}/{prefix}_{file}_{level}.tsv'
+                self.assertIsFile(report_path)
 
-            # make sure gene_uuid column is in reports
-            df = pd.read_csv(report_path, sep='\t')
-            self.assertTrue('gene_uuid' in df.columns)
+                # make sure gene_uuid column is in reports
+                df = pd.read_csv(report_path, sep='\t')
+                self.assertTrue('gene_uuid' in df.columns)
 
 
 class TestGroupMethod(unittest.TestCase):
-    TEST_PROJECT = 'Strap'
-
     @classmethod
     def setUpClass(cls):
         cls.work_dir = f'{setup_functions.TEST_DIR}/work/test_export_gene_matrix_group_by'
@@ -104,6 +117,7 @@ class TestGroupMethod(unittest.TestCase):
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
         argv = [
             '--groupBy=gene',
+            f'-m={cls.data_dir}/metadata/PDC_NF_PNET_Validation_Study_annotations.csv',
             f'{cls.data_dir}/skyline_reports/PDC_NF_PNET_Validation_Study_replicate_quality.tsv',
             f'{cls.data_dir}/skyline_reports/PDC_NF_PNET_Validation_Study_precursor_quality.tsv'
         ]

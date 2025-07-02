@@ -351,7 +351,9 @@ def setup_single_db(data_dir, output_dir, project,
         command = ['dia_qc', 'parse'] + command
         return run_command(command, output_dir, prefix=output_prefix)
 
-    return run_main(parse_data._main, command, output_dir, prog='dia_qc parse', prefix=output_prefix)
+    return run_main(
+        parse_data._main, command, output_dir, prog='dia_qc parse', prefix=output_prefix
+    )
 
 
 def setup_multi_db(data_dir, output_dir,
