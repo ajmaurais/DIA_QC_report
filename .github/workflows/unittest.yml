@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir -p logs
           cd tests
-          python run_parallel_tests.py --verbose 2>&1 | tee ../logs/test-${{ matrix.python-version }}.log
+          run: cd tests && python run_parallel_tests.py --verbose
 
   test_full:
     if: github.ref == 'refs/heads/master'
@@ -61,4 +61,4 @@ jobs:
         run: |
           mkdir -p logs
           cd tests
-          python run_parallel_tests.py --verbose 2>&1 | tee ../logs/test-${{ matrix.python-version }}.log
+          run: cd tests && python run_parallel_tests.py --verbose

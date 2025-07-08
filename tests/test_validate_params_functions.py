@@ -11,7 +11,7 @@ from io import StringIO
 import pandas as pd
 
 from DIA_QC_report import validate_pipeline_params as vpp
-from DIA_QC_report.submodules.panorama import url_exists, have_internet
+from DIA_QC_report.submodules.panorama import url_exists, have_internet, webdav_file_exists
 from DIA_QC_report.submodules.panorama import PANORAMA_PUBLIC_KEY
 from DIA_QC_report.submodules.read_metadata import Metadata
 from DIA_QC_report.submodules.logger import LOGGER
@@ -86,6 +86,9 @@ class TestGetInputFileText(unittest.TestCase):
     def test_get_input_file_text(self):
         if not have_internet():
             self.skipTest("No internet connection available for testing.")
+
+        if not webdav_file_exists(PUBLIC_FILE, api_key=PANORAMA_PUBLIC_KEY):
+            self.skipTest(f"File {PUBLIC_FILE} does not exist on Panorama.")
 
         text = vpp.get_file(PUBLIC_FILE, api_key=PANORAMA_PUBLIC_KEY, return_text=True)
         with open(f'{setup_functions.TEST_DIR}/data/validate_pipeline_params/panorama/Clean-SMTG-B1-1410-Oct2022-3qtrans-Meta.csv', 'r') as f:
