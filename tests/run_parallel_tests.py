@@ -117,7 +117,7 @@ def _run_non_interactive(test_files, file_test_counts, n_cores, verbose=False, *
     n_files = len(test_files)
     n_tests = sum(file_test_counts.values())
 
-    print(f'Running {get_plural(n_files, 'test file', 'test files')} on {get_plural(n_cores, 'core', 'cores')}...')
+    print(f"Running {get_plural(n_files, 'test file', 'test files')} on {get_plural(n_cores, 'core', 'cores')}...")
 
     n_files_passed = n_files_failed = 0
     n_tests_passed = n_tests_failed = 0
@@ -213,7 +213,7 @@ def _run_interactive(test_files, file_test_counts, n_cores, **kwargs):
     header_row = cur_row - (lines_to_reserve - 1)
     longest_name_len = max(20, max(len(f.name) for f in test_files))
     sys.stdout.write(f'\033[{header_row};0H')   # move to header row
-    print(f'Running {get_plural(n_test_files, 'file', 'files')} on {get_plural(n_cores, 'core', 'cores')}...')
+    print(f"Running {get_plural(n_test_files, 'file', 'files')} on {get_plural(n_cores, 'core', 'cores')}...")
 
     # 4) print initial per-file lines and remember their absolute rows
     rows = {}
