@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - name: Check out the code
@@ -27,4 +27,7 @@ jobs:
           pip install .
 
       - name: Run unittests
-        run: cd tests && python run_parallel_tests.py --verbose
+        run: |
+          mkdir -p logs
+          cd tests
+          python run_parallel_tests.py --verbose 2>&1 | tee ../logs/test-${{ matrix.python-version }}.log

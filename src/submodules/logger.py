@@ -52,7 +52,7 @@ class Logger(logging.Logger):
         name: str = "project",
         *,
         dateformat: str = "%Y-%m-%d %H:%M:%S",
-        min_level: int | str = logging.INFO,
+        min_level: int = logging.INFO,
         debug: bool = False,
         quiet: bool = False,
         show_level: bool = True,
@@ -82,7 +82,7 @@ class Logger(logging.Logger):
     def set_quiet(self, flag: bool = True) -> None:
         self.quiet = flag
 
-    def set_min_level(self, level: int | str) -> None:
+    def set_min_level(self, level: int) -> None:
         self.setLevel(level)
 
     info = logging.Logger.info
