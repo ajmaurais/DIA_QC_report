@@ -29,10 +29,7 @@ jobs:
           pip install .
 
       - name: Run unittests
-        run: |
-          mkdir -p logs
-          cd tests
-          run: cd tests && python run_parallel_tests.py --verbose
+        run: cd tests && python run_parallel_tests.py --verbose
 
   test_full:
     if: github.ref == 'refs/heads/master'
@@ -58,7 +55,4 @@ jobs:
           pip install .
 
       - name: Run unittests
-        run: |
-          mkdir -p logs
-          cd tests
-          run: cd tests && python run_parallel_tests.py --verbose
+        run: cd tests && python run_parallel_tests.py --verbose
