@@ -66,9 +66,40 @@ class Metadata():
 
     def __init__(self):
         self.df = None
-        self.types = None
+        self.types = {}
         self.input_format = None
         self.input_file = None
+
+
+    def __add__(self, rhs):
+        if not isinstance(rhs, Metadata):
+            raise TypeError(f'Cannot combine {type(rhs)} with Metadata!')
+
+        if self.df is None and rhs.df is None:
+            return Metadata()
+
+        combined = Metadata()
+        combined.df = pd.concat([self.df, rhs.df], ignore_index=True)
+        combined.input_format = self.input_format
+        combined.types = self.types.copy()
+
+        for key, dtype in rhs.types.items():
+            if key in combined.types:
+                combined.types[key] = max(combined.types[key], dtype)
+            else:
+                combined.types[key] = dtype
+
+        return combined
+
+
+    def __iadd__(self, rhs):
+        if not isinstance(rhs, Metadata):
+            raise TypeError(f'Cannot combine {type(rhs)} with Metadata!')
+
+        combined = self + rhs
+        self.df = combined.df
+        self.types = combined.types
+        return self
 
 
     def validate(self):
