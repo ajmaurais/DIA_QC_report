@@ -531,7 +531,7 @@ class TestJsonMissingKeys(unittest.TestCase, setup_functions.AbstractTestsBase):
             self.assertTrue(reader.read(StringIO(self.data), metadata_format='json'))
 
         self.assertInLog(
-            f"Not all replicates have the key! '{self.missing_key}' is missing for replicate '{self.bad_replicate}'!", cm
+            f"annotationKey '{self.missing_key}' is missing for replicate '{self.bad_replicate}'!", cm
         )
 
 
@@ -547,3 +547,88 @@ class TestJsonMissingKeys(unittest.TestCase, setup_functions.AbstractTestsBase):
                 self.assertIn(key, row)
 
         self.assertIsNone(out_data[self.bad_replicate][self.missing_key])
+
+
+class TestAdd(unittest.TestCase):
+    def test_add(self):
+        data_1 = {
+           "Rep1": { "string_var": "value1", "int_var": 1, "float_var": 1.0, "bool_var": True },
+           "Rep2": { "string_var": "value2", "int_var": 2, "float_var": 2.0, "bool_var": False }
+        }
+        data_2 = {
+           "Rep3": { "string_var": "value3", "int_var": '3', "float_var": 3.0, "bool_var": True },
+           "Rep4": { "string_var": "value4", "int_var": '4', "float_var": 4.0, "bool_var": False }
+        }
+        target_types = {
+            "string_var": Dtype.STRING,
+            "int_var": Dtype.STRING,
+            "float_var": Dtype.FLOAT,
+            "bool_var": Dtype.BOOL
+        }
+
+        reader_1 = Metadata()
+        reader_1.read(StringIO(json.dumps(data_1)), metadata_format='json')
+        reader_2 = Metadata()
+        reader_2.read(StringIO(json.dumps(data_2)), metadata_format='json')
+
+        combined = reader_1 + reader_2
+        self.assertEqual(len(combined.df['Replicate'].drop_duplicates()), 4)
+        self.assertDictEqual(combined.types, target_types)
+
+
+    def test_iadd(self):
+        data_1 = {
+           "Rep1": { "string_var": "value1", "int_var": 1, "bool_var": True },
+           "Rep2": { "string_var": "value2", "int_var": 2, "bool_var": False }
+        }
+        data_2 = {
+           "Rep3": { "string_var": "value3", "int_var": 3, "bool_var": True },
+           "Rep4": { "string_var": "value4", "int_var": 4, "bool_var": False }
+        }
+        target_types = {
+            "string_var": Dtype.STRING,
+            "int_var": Dtype.INT,
+            "bool_var": Dtype.BOOL
+        }
+
+        reader_1 = Metadata()
+        reader_1.read(StringIO(json.dumps(data_1)), metadata_format='json')
+        reader_2 = Metadata()
+        reader_2.read(StringIO(json.dumps(data_2)), metadata_format='json')
+
+        reader_1 += reader_2
+        self.assertEqual(len(reader_1.df['Replicate'].drop_duplicates()), 4)
+        self.assertDictEqual(reader_1.types, target_types)
+
+
+    def test_add_empty(self):
+        data_1 = {'Rep1': {'string_var': 'value1'}}
+        reader_1 = Metadata()
+        reader_1.read(StringIO(json.dumps(data_1)), metadata_format='json')
+        reader_2 = Metadata()
+
+        combined = reader_1 + reader_2
+        self.assertEqual(len(combined.df['Replicate'].drop_duplicates()), 1)
+        self.assertDictEqual(combined.types, reader_1.types)
+
+
+    def test_both_empty(self):
+        reader_1 = Metadata()
+        reader_2 = Metadata()
+
+        combined = reader_1 + reader_2
+        self.assertIsInstance(combined, Metadata)
+        self.assertTrue(combined.df.empty)
+        self.assertDictEqual(combined.types, {})
+
+
+    def test_add_duplicate_reps(self):
+        data_1 = {'Rep1': {'string_var': 'value1'}}
+        data_2 = {'Rep1': {'string_var': 'value2'}}
+        reader_1 = Metadata()
+        reader_1.read(StringIO(json.dumps(data_1)), metadata_format='json')
+        reader_2 = Metadata()
+        reader_2.read(StringIO(json.dumps(data_2)), metadata_format='json')
+
+        with self.assertRaises(ValueError):
+            combined = reader_1 + reader_2
