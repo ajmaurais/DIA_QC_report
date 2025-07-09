@@ -86,7 +86,7 @@ def _main(argv, prog=None):
     # combine metadata files
     combined_metadata = Metadata()
     for reader in metadata_files.values():
-        combined_metadata += reader
+        combined_metadata.add(reader)
 
     _warnings_per_file(combined_metadata, metadata_files)
     for var, dtype in combined_metadata.types.items():

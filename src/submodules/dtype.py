@@ -18,6 +18,7 @@ class Dtype(Enum):
     def __str__(self):
         return self.name
 
+
     def __lt__(self, rhs):
         if isinstance(rhs, Dtype):
             return self.value < rhs.value
