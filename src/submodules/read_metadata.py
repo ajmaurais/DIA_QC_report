@@ -135,11 +135,15 @@ class Metadata():
         if not self.validate():
             return None
 
-        ret = dict()
+        ret = {rep: {} for rep in self.df['Replicate'].drop_duplicates().to_list()}
         for row in self.df.itertuples():
-            if row.Replicate not in ret:
-                ret[row.Replicate] = dict()
             ret[row.Replicate][row.annotationKey] = self.types[row.annotationKey].convert(row.annotationValue)
+
+        # ensure all replicates have all keys
+        for rep in ret:
+            for key in self.types:
+                if key not in ret[rep]:
+                    ret[rep][key] = None
 
         return ret
 
@@ -287,6 +291,12 @@ class Metadata():
             # Coerce INT Dtype to string if there are any missing values
             if self.types[var] is Dtype.INT:
                 for rep in data:
+                    if var not in data[rep]:
+                        LOGGER.warning(
+                            "Not all replicates have the key! '%s' is missing for replicate '%s'!", var, rep
+                        )
+                        data[rep][var] = ''
+
                     if data[rep][var] is None:
                         data[rep][var] = ''
                     else:
@@ -341,6 +351,8 @@ class Metadata():
                 else:
                     self.input_format = splitext(input_file)[1][1:]
             else:
+                if not hasattr(input_file, 'read'):
+                    raise TypeError(f'input_file must be a string or file-like object, got {type(input_file)}!')
                 inF = input_file
 
                 # check input_format

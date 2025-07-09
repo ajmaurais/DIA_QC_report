@@ -6,6 +6,8 @@ from itertools import product
 import json
 import re
 import csv
+import random
+
 from jsonschema import validate
 import pandas as pd
 
@@ -469,14 +471,14 @@ class TestToSkylineDefinitions(unittest.TestCase):
         writer = Metadata()
         self.assertTrue(writer.read(f'{self.metadata_dir}/{prefix}_{suffix}'))
 
-        with StringIO() as sstream:
-            writer.to_skyline_definitions(sstream)
-            sstream.seek(0)
+        sstream = StringIO()
+        writer.to_skyline_definitions(sstream)
+        sstream.seek(0)
 
-            for line in sstream:
-                self.assertTrue((match := command_re.search(line)) is not None)
-                self.assertTrue(match[1] in writer.types)
-                self.assertEqual(Dtype.to_sky_type(writer.types[match[1]]), match[2])
+        for line in sstream:
+            self.assertTrue((match := command_re.search(line)) is not None)
+            self.assertTrue(match[1] in writer.types)
+            self.assertEqual(Dtype.to_sky_type(writer.types[match[1]]), match[2])
 
 
     def test_tsv(self):
@@ -491,7 +493,7 @@ class TestToSkylineDefinitions(unittest.TestCase):
         self.do_test('json')
 
 
-    def test_json(self):
+    def test_json_skyline(self):
         self.do_test('skyline')
 
 
@@ -501,3 +503,47 @@ class TestToSkylineDefinitions(unittest.TestCase):
 
     def test_json_missing(self):
         self.do_test('json', prefix='Strap_missing_multi_var')
+
+
+class TestJsonMissingKeys(unittest.TestCase, setup_functions.AbstractTestsBase):
+    def setUp(self):
+        self.reader = Metadata()
+        with open(f'{setup_functions.TEST_DIR}/data/metadata/HeLa_metadata.json') as inF:
+            if not self.reader.read(inF, metadata_format='json'):
+                raise RuntimeError('Failed to read HeLa metadata!')
+
+        random.seed(12)
+        self.bad_replicate = random.choice(self.reader.df['Replicate'].drop_duplicates().to_list())
+        self.missing_key = random.choice(list(self.reader.types.keys()))
+        self.reader.df = self.reader.df[~((self.reader.df['Replicate'] == self.bad_replicate) &
+                                           (self.reader.df['annotationKey'] == self.missing_key))].reset_index(drop=True)
+
+        row_data = {rep: {} for rep in self.reader.df['Replicate'].drop_duplicates().to_list()}
+        for row in self.reader.df.itertuples():
+            row_data[row.Replicate][row.annotationKey] = self.reader.types[row.annotationKey].convert(row.annotationValue)
+
+        self.data = json.dumps(row_data)
+
+
+    def test_read(self):
+        reader = Metadata()
+        with self.assertLogs(read_metadata.LOGGER, level='WARNING') as cm:
+            self.assertTrue(reader.read(StringIO(self.data), metadata_format='json'))
+
+        self.assertInLog(
+            f"Not all replicates have the key! '{self.missing_key}' is missing for replicate '{self.bad_replicate}'!", cm
+        )
+
+
+    def test_write(self):
+        sstream = StringIO()
+        self.reader.to_json(sstream)
+        sstream.seek(0)
+
+        out_data = json.load(sstream)
+
+        for row in out_data.values():
+            for key in self.reader.types:
+                self.assertIn(key, row)
+
+        self.assertIsNone(out_data[self.bad_replicate][self.missing_key])
