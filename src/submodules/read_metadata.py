@@ -65,18 +65,37 @@ class Metadata():
     '''
 
     def __init__(self):
-        self.df = None
+        self.df = pd.DataFrame({ 'Replicate': [], 'annotationKey': [], 'annotationValue': [] })
         self.types = {}
         self.input_format = None
         self.input_file = None
+
+
+    def copy(self):
+        ret = Metadata()
+        ret.df = self.df.copy() if self.df is not None else None
+        ret.types = self.types.copy()
+        ret.input_format = self.input_format
+        ret.input_file = self.input_file
+        return ret
 
 
     def __add__(self, rhs):
         if not isinstance(rhs, Metadata):
             raise TypeError(f'Cannot combine {type(rhs)} with Metadata!')
 
-        if self.df is None and rhs.df is None:
+        if self.df.empty and rhs.df.empty:
             return Metadata()
+
+        if self.df.empty:
+            return rhs.copy()
+
+        if rhs.df.empty:
+            return self.copy()
+
+        duplicate_reps = set(self.df['Replicate']) & set(rhs.df['Replicate'])
+        if len(duplicate_reps) > 0:
+            raise ValueError(f"Cannot combine Metadata with duplicate replicates: {', '.join(duplicate_reps)}")
 
         combined = Metadata()
         combined.df = pd.concat([self.df, rhs.df], ignore_index=True)
@@ -89,6 +108,7 @@ class Metadata():
             else:
                 combined.types[key] = dtype
 
+        combined._coerce_null_numerics()
         return combined
 
 
@@ -96,10 +116,34 @@ class Metadata():
         if not isinstance(rhs, Metadata):
             raise TypeError(f'Cannot combine {type(rhs)} with Metadata!')
 
-        combined = self + rhs
-        self.df = combined.df
-        self.types = combined.types
+        if rhs.df.empty:
+            return self
+
+        duplicate_reps = set(self.df['Replicate']) & set(rhs.df['Replicate'])
+        if len(duplicate_reps) > 0:
+            raise ValueError(f"Cannot combine Metadata with duplicate replicates: {', '.join(duplicate_reps)}")
+
+        self.df = pd.concat([self.df, rhs.df], ignore_index=True)
+        for key, dtype in rhs.types.items():
+            if key in self.types:
+                self.types[key] = max(self.types[key], dtype)
+            else:
+                self.types[key] = dtype
+
+        self._coerce_null_numerics()
         return self
+
+
+    def _coerce_null_numerics(self):
+        for var in self.types:
+            # Coerce INT and FLOAT Dtype to string if there are any missing values
+            if self.types[var] is Dtype.INT or self.types[var] is Dtype.FLOAT:
+                for row in self.df.itertuples():
+                    if row.annotationKey == var:
+                        if pd.isna(row.annotationValue) or row.annotationValue is None:
+                            self.df.at[row.Index, 'annotationValue'] = ''
+
+        # self.types = self._infer_types(self.df)
 
 
     def validate(self):
@@ -210,8 +254,9 @@ class Metadata():
         types = dict()
         for row in df.itertuples():
             if row.annotationKey in types:
-                types[row.annotationKey] = max(types[row.annotationKey],
-                                               Dtype.infer_type(row.annotationValue))
+                types[row.annotationKey] = max(
+                    types[row.annotationKey], Dtype.infer_type(row.annotationValue)
+                )
             else:
                 types[row.annotationKey] = Dtype.infer_type(row.annotationValue)
         return types
@@ -289,24 +334,16 @@ class Metadata():
 
         for var in self.types:
             # Coerce INT Dtype to string if there are any missing values
-            if self.types[var] is Dtype.INT:
+            if self.types[var] is Dtype.INT or self.types[var] is Dtype.FLOAT:
                 for rep in data:
                     if var not in data[rep]:
-                        LOGGER.warning(
-                            "Not all replicates have the key! '%s' is missing for replicate '%s'!", var, rep
-                        )
+                        LOGGER.warning("annotationKey '%s' is missing for replicate '%s'!", var, rep)
                         data[rep][var] = ''
 
                     if data[rep][var] is None:
                         data[rep][var] = ''
                     else:
                         data[rep][var] = str(data[rep][var])
-
-            # Coerce Null FLOAT Dtype to string if there are any missing values
-            if self.types[var] is Dtype.FLOAT:
-                for rep in data:
-                    if data[rep][var] is None:
-                        data[rep][var] = ''
 
         # reshape data to so it can be converted into a DataFrame
         data = [{'Replicate':k} | v for k, v in data.items()]
@@ -429,7 +466,11 @@ class Metadata():
                 if any(df_wide[var] == ''):
                     df_wide.loc[df_wide[var] == '', var] = None
 
-            df_wide = df_wide.astype({var: col_type})
+            try:
+                df_wide = df_wide.astype({var: col_type})
+            except ValueError as e:
+                LOGGER.error(f'Error converting column {var} to type {col_type}: {e}')
+                raise
 
         return df_wide
 
@@ -455,6 +496,8 @@ class Metadata():
         ).reset_index()
 
         def write_csv_row(elems):
+            if any(not isinstance(x, str) for x in elems):
+                print(f'Invalid elements in row: {elems}')
             out.write('"{}"\n'.format('","'.join(elems)))
 
         # convert NULL columns to empty string

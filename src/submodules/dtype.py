@@ -100,7 +100,7 @@ class Dtype(Enum):
         -------
         Dtype object
         '''
-        if s == '' or NA_RE.search(s) is not None:
+        if s is None or s == '' or NA_RE.search(s) is not None:
             return Dtype.NULL
         if BOOL_RE.search(s):
             return Dtype.BOOL

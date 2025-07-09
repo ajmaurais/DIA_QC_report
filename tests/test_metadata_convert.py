@@ -4,6 +4,8 @@ from unittest import mock
 import os
 import re
 
+import pandas as pd
+
 import setup_functions
 from setup_functions import TEST_DIR
 
@@ -203,3 +205,132 @@ class TestProblamaticHeaders(unittest.TestCase, TestToSkylineBase):
         cls.result = setup_functions.run_main(
             metadata_convert._main, commands, cls.work_dir, prefix=__name__, prog=PROG
         )
+
+
+class TestMultipleFiles(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.work_dir = f'{TEST_DIR}/work/test_metadata_convert_multiple_files'
+        setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
+
+
+    def do_data_test(self, metadata_files, result_file):
+        data = {}
+        types = {}
+        for file in metadata_files:
+            reader = Metadata()
+            if not reader.read(file):
+                raise ValueError(f'Failed to read metadata file: {file}')
+            data[file] = reader
+
+            for var, dtype in reader.types.items():
+                if var in types:
+                    types[var] = max(types[var], dtype)
+                else:
+                    types[var] = dtype
+
+        result_metadata = Metadata()
+        if not result_metadata.read(result_file):
+            raise ValueError(f'Failed to read result metadata file: {result_file}')
+
+        n_reps = sum(len(reader.df['Replicate'].drop_duplicates()) for reader in data.values())
+        self.assertEqual(len(result_metadata.df['Replicate'].drop_duplicates()), n_reps)
+        self.assertDictEqual(result_metadata.types, types)
+
+
+    def test_multiple_files(self):
+        metadata_files = [
+            f'{TEST_DIR}/data/metadata/Strap_metadata.tsv',
+            f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
+        ]
+
+        commands = ['--out=json', '--prefix=test_multiple_files_combined'] + metadata_files
+        result = setup_functions.run_main(
+            metadata_convert._main, commands, self.work_dir, prefix=__name__, prog=PROG
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.do_data_test(metadata_files, f'{self.work_dir}/test_multiple_files_combined.json')
+
+
+    def test_disperate_types(self):
+        template_files = [
+            f'{TEST_DIR}/data/metadata/Strap_metadata.tsv',
+            f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
+        ]
+        template_files = {
+            source: f'{self.work_dir}/test_disperate_types_{os.path.splitext(os.path.basename(source))[0]}.json'
+            for source in template_files
+        }
+
+        for i, (source, dest) in enumerate(template_files.items()):
+            reader = Metadata()
+            if not reader.read(source):
+                raise ValueError(f'Failed to read metadata file: {source}')
+
+            new_data = pd.DataFrame(reader.df['Replicate'].drop_duplicates())
+            new_data['annotationKey'] = 'new_var'
+            if i % 2 == 0:
+                new_data['annotationValue'] = list(range(len(new_data.index)))
+                reader.types['new_var'] = Dtype.INT
+            else:
+                new_data['annotationValue'] = ['value_' + str(i) for i in range(len(new_data.index))]
+                reader.types['new_var'] = Dtype.STRING
+            reader.df = pd.concat([reader.df, new_data], ignore_index=True)
+
+            with open(dest, 'w') as outF:
+                reader.to_json(outF)
+
+        for format, ext in {'json': 'json', 'tsv': 'tsv', 'skyline': 'annotations.csv'}.items():
+            with self.subTest(output_format=format):
+                commands = [f'--out={format}', '--prefix=test_disperate_types_combined'] + list(template_files.values())
+                result = setup_functions.run_main(
+                    metadata_convert._main, commands, self.work_dir, prefix=__name__, prog=PROG
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.do_data_test(template_files.values(), f'{self.work_dir}/test_disperate_types_combined.{ext}')
+
+            self.assertRegex(
+                result.stdout,
+                r"Variable 'new_var' in file '[\w\/\.]+' has type 'INT', after merging it has type 'STRING'",
+            )
+
+
+    def test_missing_var(self):
+        template_files = [
+            f'{TEST_DIR}/data/metadata/Strap_metadata.tsv',
+            f'{TEST_DIR}/data/metadata/Sp3_metadata.json'
+        ]
+        template_files = {
+            source: f'{self.work_dir}/test_missing_var_{os.path.splitext(os.path.basename(source))[0]}.json'
+            for source in template_files
+        }
+
+        for i, (source, dest) in enumerate(template_files.items()):
+            reader = Metadata()
+            if not reader.read(source):
+                raise ValueError(f'Failed to read metadata file: {source}')
+
+            if i % 2 == 0:
+                new_data = pd.DataFrame(reader.df['Replicate'].drop_duplicates())
+                new_data['annotationKey'] = 'new_var'
+                new_data['annotationValue'] = list(range(len(new_data.index)))
+                reader.types['new_var'] = Dtype.INT
+                reader.df = pd.concat([reader.df, new_data], ignore_index=True)
+
+            with open(dest, 'w') as outF:
+                reader.to_json(outF)
+
+        for format, ext in {'json': 'json', 'tsv': 'tsv', 'skyline': 'annotations.csv'}.items():
+            with self.subTest(output_format=format):
+                commands = [f'--out={format}', '--prefix=test_missing_var_combined'] + list(template_files.values())
+                result = setup_functions.run_main(
+                    metadata_convert._main, commands, self.work_dir, prefix=__name__, prog=PROG
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.do_data_test(template_files.values(), f'{self.work_dir}/test_missing_var_combined.{ext}')
+
+                self.assertIn(
+                    "Variable 'new_var' found in combined metadata but not in file",
+                    result.stdout
+                )
