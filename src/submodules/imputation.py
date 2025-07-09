@@ -1,9 +1,16 @@
 
 from abc import abstractmethod
+import warnings
 
 import numpy as np
 import pandas as pd
 from sklearn.impute import KNNImputer as skl_KNNImputer
+
+# suppress RuntimeWarnings emitted from sklearn.utils.extmath
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning,
+    module=r"sklearn\.utils\.extmath"
+)
 
 from .logger import LOGGER
 from .transformation import cammel_case
