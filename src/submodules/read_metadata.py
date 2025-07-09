@@ -9,7 +9,7 @@ from jsonschema import validate, ValidationError
 import pandas as pd
 
 from .dtype import Dtype, NA_RE
-from .logger import LOGGER
+from .logger import quiet_log_info, quiet_log_error, quiet_log_warning
 
 
 # sample metadata json schema
@@ -64,11 +64,90 @@ class Metadata():
         The path of the input file
     '''
 
-    def __init__(self):
-        self.df = None
-        self.types = None
+    def __init__(self, quiet=False):
+        self.df = pd.DataFrame({ 'Replicate': [], 'annotationKey': [], 'annotationValue': [] })
+        self.types = {}
         self.input_format = None
         self.input_file = None
+        self.quiet = quiet
+
+
+    def copy(self):
+        ret = Metadata()
+        ret.df = self.df.copy() if self.df is not None else None
+        ret.types = self.types.copy()
+        ret.input_format = self.input_format
+        ret.input_file = self.input_file
+        return ret
+
+
+    @staticmethod
+    def combine_types(lhs, rhs):
+        combined = lhs.copy()
+        for key, dtype in rhs.items():
+            if key in combined:
+                combined[key] = max(dtype, combined[key])
+            else:
+                combined[key] = dtype
+        return combined
+
+
+    def add(self, rhs):
+        if not isinstance(rhs, Metadata):
+            raise TypeError(f'Cannot combine {type(rhs)} with Metadata!')
+
+        if rhs.df.empty:
+            return self
+
+        duplicate_reps = set(self.df['Replicate']) & set(rhs.df['Replicate'])
+        if len(duplicate_reps) > 0:
+            raise ValueError(f"Cannot combine Metadata with duplicate replicates: {', '.join(duplicate_reps)}")
+
+        self.df = pd.concat([self.df, rhs.df], ignore_index=True)
+        self.types = self.combine_types(self.types, rhs.types)
+
+        self._complete_missing_keys()
+        self._coerce_null_numerics()
+        return self
+
+
+    def _coerce_null_numerics(self):
+        new_string_types = set()
+        for var in self.types:
+            # Coerce INT, FLOAT, or BOOL Dtype to string if there are any missing values
+            if self.types[var] in (Dtype.INT, Dtype.FLOAT, Dtype.BOOL):
+                for row in self.df.itertuples():
+                    if row.annotationKey == var:
+                        if pd.isna(row.annotationValue) or row.annotationValue is None:
+                            self.df.at[row.Index, 'annotationValue'] = ''
+                            new_string_types.add(var)
+
+
+    def _complete_missing_keys(self):
+        '''
+        Ensure that all replicates have all keys in self.types.
+        If a key is missing, it will be added with a value of None.
+        '''
+        for rep in self.df['Replicate'].drop_duplicates():
+            for key in self.types:
+                if not ((self.df['Replicate'] == rep) & (self.df['annotationKey'] == key)).any():
+                    self.df = pd.concat([self.df, pd.DataFrame({
+                        'Replicate': [rep],
+                        'annotationKey': [key],
+                        'annotationValue': [None]
+                    })], ignore_index=True)
+
+
+    def log_info(self, message, *args):
+        quiet_log_info(self.quiet, message, *args)
+
+
+    def log_error(self, message, *args):
+        quiet_log_error(self.quiet, message, *args)
+
+
+    def log_warning(self, message, *args):
+        quiet_log_warning(self.quiet, message, *args)
 
 
     def validate(self):
@@ -77,10 +156,10 @@ class Metadata():
             if row.Replicate not in data:
                 data[row.Replicate] = dict()
             if row.annotationKey in data[row.Replicate]:
-                LOGGER.error("Duplicate key: '%s' in '%s'!", row.annotationKey, row.Replicate)
+                self.log_error("Duplicate key: '%s' in '%s'!", row.annotationKey, row.Replicate)
                 return False
             if row.annotationKey not in self.types:
-                LOGGER.error("Missing key: '%s' in Metadata.types!", row.annotationKey)
+                self.log_error("Missing key: '%s' in Metadata.types!", row.annotationKey)
                 return False
             data[row.Replicate][row.annotationKey] = self.types[row.annotationKey]
 
@@ -104,11 +183,15 @@ class Metadata():
         if not self.validate():
             return None
 
-        ret = dict()
+        ret = {rep: {} for rep in self.df['Replicate'].drop_duplicates().to_list()}
         for row in self.df.itertuples():
-            if row.Replicate not in ret:
-                ret[row.Replicate] = dict()
             ret[row.Replicate][row.annotationKey] = self.types[row.annotationKey].convert(row.annotationValue)
+
+        # ensure all replicates have all keys
+        for rep in ret:
+            for key in self.types:
+                if key not in ret[rep]:
+                    ret[rep][key] = None
 
         return ret
 
@@ -175,8 +258,9 @@ class Metadata():
         types = dict()
         for row in df.itertuples():
             if row.annotationKey in types:
-                types[row.annotationKey] = max(types[row.annotationKey],
-                                               Dtype.infer_type(row.annotationValue))
+                types[row.annotationKey] = max(
+                    types[row.annotationKey], Dtype.infer_type(row.annotationValue)
+                )
             else:
                 types[row.annotationKey] = Dtype.infer_type(row.annotationValue)
         return types
@@ -194,7 +278,7 @@ class Metadata():
         for row in rows:
             annotation_match = re.search(f'^([A-Z][A-Za-z]+):/', row[0])
             if annotation_match is None:
-                LOGGER.warning(f'Found unknown annotation object: {row[0]}')
+                self.log_warning("Found unknown annotation object: %s", row[0])
                 continue
             annotation_object = annotation_match.group(1)
             annotation_objects.add(annotation_object)
@@ -204,12 +288,12 @@ class Metadata():
                 new_rows.append(row)
 
         if 'Replicate' not in annotation_objects:
-            LOGGER.warning('No Replicate annotations in csv!')
+            self.log_warning('No Replicate annotations in csv!')
             return False
 
         for obj in annotation_objects:
             if obj != 'Replicate':
-                LOGGER.warning(f'Found annotations for: {obj} in csv!')
+                self.log_warning("Found annotations for: %s in csv!", obj)
 
         data = [dict(zip(headers, row)) for row in new_rows]
         self.df = self._metadata_data_to_df(data)
@@ -240,7 +324,7 @@ class Metadata():
         try:
             validate(data, JSON_SCHEMA)
         except ValidationError as e:
-            LOGGER.error(f'Invalid metadata format:\n{e.message}')
+            self.log_error("Invalid metadata format:\n%s", e.message)
             return False
 
         # determine metadata types
@@ -254,18 +338,16 @@ class Metadata():
 
         for var in self.types:
             # Coerce INT Dtype to string if there are any missing values
-            if self.types[var] is Dtype.INT:
+            if self.types[var] is Dtype.INT or self.types[var] is Dtype.FLOAT:
                 for rep in data:
+                    if var not in data[rep]:
+                        self.log_warning("annotationKey '%s' is missing for replicate '%s'!", var, rep)
+                        data[rep][var] = ''
+
                     if data[rep][var] is None:
                         data[rep][var] = ''
                     else:
                         data[rep][var] = str(data[rep][var])
-
-            # Coerce Null FLOAT Dtype to string if there are any missing values
-            if self.types[var] is Dtype.FLOAT:
-                for rep in data:
-                    if data[rep][var] is None:
-                        data[rep][var] = ''
 
         # reshape data to so it can be converted into a DataFrame
         data = [{'Replicate':k} | v for k, v in data.items()]
@@ -310,6 +392,8 @@ class Metadata():
                 else:
                     self.input_format = splitext(input_file)[1][1:]
             else:
+                if not hasattr(input_file, 'read'):
+                    raise TypeError(f'input_file must be a string or file-like object, got {type(input_file)}!')
                 inF = input_file
 
                 # check input_format
@@ -324,7 +408,7 @@ class Metadata():
 
                 # check if file is skyline annotations csv
                 if rows[0][0] == 'ElementLocator':
-                    LOGGER.info('Found Skyline annotations csv.')
+                    quiet_log_info(self.quiet, 'Found Skyline annotations csv.')
                     self.input_format = 'skyline'
                     return self._read_metadata_skyline_csv(rows, exclude_null=exclude_null_from_skyline)
 
@@ -334,13 +418,13 @@ class Metadata():
                     rows = rows[1:]
                     data = [dict(zip(headers, row)) for row in rows]
                 else:
-                    LOGGER.error('Invalid metadata format!')
+                    self.log_error('Invalid metadata format!')
                     return False
 
             elif self.input_format == 'json':
                 return self._read_metadata_json(inF)
             else:
-                LOGGER.error(f'Unknown metadata file format: {self.input_format}')
+                self.log_error("Unknown metadata file format: %s", self.input_format)
                 return False
 
             self.df = self._metadata_data_to_df(data)
@@ -386,7 +470,10 @@ class Metadata():
                 if any(df_wide[var] == ''):
                     df_wide.loc[df_wide[var] == '', var] = None
 
-            df_wide = df_wide.astype({var: col_type})
+            try:
+                df_wide = df_wide.astype({var: col_type})
+            except ValueError as e:
+                raise ValueError(f'Error converting column {var} to type {col_type}: {e}')
 
         return df_wide
 
@@ -412,6 +499,8 @@ class Metadata():
         ).reset_index()
 
         def write_csv_row(elems):
+            if any(not isinstance(x, str) for x in elems):
+                print(f'Invalid elements in row: {elems}')
             out.write('"{}"\n'.format('","'.join(elems)))
 
         # convert NULL columns to empty string

@@ -1,17 +1,18 @@
 
 import unittest
-from unittest import mock
 from io import StringIO
 from itertools import product
 import json
 import re
 import csv
+import random
+
 from jsonschema import validate
 import pandas as pd
 
 import setup_functions
 
-from DIA_QC_report.submodules import read_metadata
+from DIA_QC_report.submodules import logger
 from DIA_QC_report.submodules.read_metadata import JSON_SCHEMA, Metadata
 from DIA_QC_report.submodules.dtype import Dtype
 
@@ -48,7 +49,7 @@ class TestMetadataClassMethods(TestMetadataBase):
         meta_reader.df = pd.concat([meta_reader.df,
                                     meta_reader.df.loc[0:2]]).reset_index(drop=True)
 
-        with self.assertLogs(read_metadata.LOGGER, level='ERROR') as cm:
+        with self.assertLogs(logger.LOGGER, level='ERROR') as cm:
             self.assertFalse(meta_reader.validate())
         self.assertTrue("Duplicate key: '", cm.output[-1])
 
@@ -60,7 +61,7 @@ class TestMetadataClassMethods(TestMetadataBase):
 
         key, _ = meta_reader.types.popitem()
 
-        with self.assertLogs(read_metadata.LOGGER, level='ERROR') as cm:
+        with self.assertLogs(logger.LOGGER, level='ERROR') as cm:
             self.assertFalse(meta_reader.validate())
         self.assertTrue(f"Missing key: '{key}' in Metadata.types!", cm.output[-1])
 
@@ -70,14 +71,13 @@ class TestMetadataEqMethod(TestMetadataBase):
 
     FILES = ['tsv', 'csv', 'json', 'skyline']
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def read_ext(self, ext):
         ''' Read metadata file with specified `ext` '''
         suffix = 'metadata'
         if ext == 'skyline':
             ext = 'csv'
             suffix = 'annotations'
-        ret = Metadata()
+        ret = Metadata(quiet=True)
         self.assertTrue(ret.read(f'{self.metadata_dir}/HeLa_{suffix}.{ext}',
                                  exclude_null_from_skyline=False))
 
@@ -274,7 +274,7 @@ class TestReadMetadata(TestMetadataBase):
 
 
     def test_skyline_csv(self):
-        with self.assertLogs(read_metadata.LOGGER) as cm:
+        with self.assertLogs(logger.LOGGER) as cm:
             self.do_test_extension('csv', skyline=True)
         self.assertTrue('Found Skyline annotations csv.' in cm.output[0])
 
@@ -313,9 +313,8 @@ class TestParseSkylineAnnotations(TestMetadataBase):
         return {rep: {k: v for k, v in row.items() if k not in na_types} for rep, row in d.items()}
 
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_skyline_csv(self):
-        meta_reader = Metadata()
+        meta_reader = Metadata(quiet=True)
         self.assertTrue(meta_reader.read(f'{self.metadata_dir}/HeLa_annotations.csv'))
         self.assertEqual('skyline', meta_reader.input_format)
 
@@ -326,9 +325,8 @@ class TestParseSkylineAnnotations(TestMetadataBase):
         self.assertDictEqual(gt_types, meta_reader.types)
 
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_full_skyline_csv(self):
-        meta_reader = Metadata()
+        meta_reader = Metadata(quiet=True)
         self.assertTrue(meta_reader.read(f'{self.metadata_dir}/HeLa_all_annotations.csv'))
         self.assertEqual('skyline', meta_reader.input_format)
 
@@ -339,9 +337,8 @@ class TestParseSkylineAnnotations(TestMetadataBase):
         self.assertDictEqual(gt_types, meta_reader.types)
 
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def test_full_skyline_csv_include_null(self):
-        meta_reader = Metadata()
+        meta_reader = Metadata(quiet=True)
         self.assertTrue(meta_reader.read(f'{self.metadata_dir}/HeLa_all_annotations.csv',
                                          exclude_null_from_skyline=False))
 
@@ -350,9 +347,8 @@ class TestParseSkylineAnnotations(TestMetadataBase):
         self.assertDictEqual(self.ALL_META_TYPES, meta_reader.types)
 
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
-    def test_skyline_csv_includ_null(self):
-        meta_reader = Metadata()
+    def test_skyline_csv_include_null(self):
+        meta_reader = Metadata(quiet=True)
         self.assertTrue(meta_reader.read(f'{self.metadata_dir}/HeLa_annotations.csv',
                                          exclude_null_from_skyline=False))
 
@@ -369,7 +365,6 @@ class TestMetadataWriteMethods(unittest.TestCase):
         cls.metadata_dir = f'{setup_functions.TEST_DIR}/data/metadata'
 
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def do_test(self, write_ext,
                 prefix='HeLa', files=FILES):
 
@@ -378,14 +373,14 @@ class TestMetadataWriteMethods(unittest.TestCase):
         for ext in files:
             suffix = f'metadata.{ext}' if ext != 'skyline' else 'annotations.csv'
 
-            writer = Metadata()
+            writer = Metadata(quiet=True)
             self.assertTrue(writer.read(f'{self.metadata_dir}/{prefix}_{suffix}'))
 
             exclude_null_from_skyline = True
             if write_ext == 'skyline':
                 exclude_null_from_skyline = ext == 'skyline'
 
-            reader = Metadata()
+            reader = Metadata(quiet=True)
             with StringIO() as sstream:
                 getattr(writer, write_method)(sstream)
                 sstream.seek(0)
@@ -460,23 +455,22 @@ class TestToSkylineDefinitions(unittest.TestCase):
         cls.metadata_dir = f'{setup_functions.TEST_DIR}/data/metadata'
 
 
-    @mock.patch('DIA_QC_report.submodules.read_metadata.LOGGER', mock.Mock())
     def do_test(self, ext, prefix='HeLa'):
         command_re = re.compile(r'^--annotation-name="([\w\.\-]+)" --annotation-targets=replicate --annotation-type=([a-z_]+)$')
 
         suffix = f'metadata.{ext}' if ext != 'skyline' else 'annotations.csv'
 
-        writer = Metadata()
+        writer = Metadata(quiet=True)
         self.assertTrue(writer.read(f'{self.metadata_dir}/{prefix}_{suffix}'))
 
-        with StringIO() as sstream:
-            writer.to_skyline_definitions(sstream)
-            sstream.seek(0)
+        sstream = StringIO()
+        writer.to_skyline_definitions(sstream)
+        sstream.seek(0)
 
-            for line in sstream:
-                self.assertTrue((match := command_re.search(line)) is not None)
-                self.assertTrue(match[1] in writer.types)
-                self.assertEqual(Dtype.to_sky_type(writer.types[match[1]]), match[2])
+        for line in sstream:
+            self.assertTrue((match := command_re.search(line)) is not None)
+            self.assertTrue(match[1] in writer.types)
+            self.assertEqual(Dtype.to_sky_type(writer.types[match[1]]), match[2])
 
 
     def test_tsv(self):
@@ -491,7 +485,7 @@ class TestToSkylineDefinitions(unittest.TestCase):
         self.do_test('json')
 
 
-    def test_json(self):
+    def test_json_skyline(self):
         self.do_test('skyline')
 
 
@@ -501,3 +495,207 @@ class TestToSkylineDefinitions(unittest.TestCase):
 
     def test_json_missing(self):
         self.do_test('json', prefix='Strap_missing_multi_var')
+
+
+class TestJsonMissingKeys(unittest.TestCase, setup_functions.AbstractTestsBase):
+    def setUp(self):
+        self.reader = Metadata()
+        with open(f'{setup_functions.TEST_DIR}/data/metadata/HeLa_metadata.json') as inF:
+            if not self.reader.read(inF, metadata_format='json'):
+                raise RuntimeError('Failed to read HeLa metadata!')
+
+        random.seed(12)
+        self.bad_replicate = random.choice(self.reader.df['Replicate'].drop_duplicates().to_list())
+        self.missing_key = random.choice(list(self.reader.types.keys()))
+        self.reader.df = self.reader.df[~((self.reader.df['Replicate'] == self.bad_replicate) &
+                                           (self.reader.df['annotationKey'] == self.missing_key))].reset_index(drop=True)
+
+        row_data = {rep: {} for rep in self.reader.df['Replicate'].drop_duplicates().to_list()}
+        for row in self.reader.df.itertuples():
+            row_data[row.Replicate][row.annotationKey] = self.reader.types[row.annotationKey].convert(row.annotationValue)
+
+        self.data = json.dumps(row_data)
+
+
+    def test_read(self):
+        reader = Metadata()
+        with self.assertLogs(logger.LOGGER, level='WARNING') as cm:
+            self.assertTrue(reader.read(StringIO(self.data), metadata_format='json'))
+
+        self.assertInLog(
+            f"annotationKey '{self.missing_key}' is missing for replicate '{self.bad_replicate}'!", cm
+        )
+
+
+    def test_write(self):
+        sstream = StringIO()
+        self.reader.to_json(sstream)
+        sstream.seek(0)
+
+        out_data = json.load(sstream)
+
+        for row in out_data.values():
+            for key in self.reader.types:
+                self.assertIn(key, row)
+
+        self.assertIsNone(out_data[self.bad_replicate][self.missing_key])
+
+
+class TestAdd(unittest.TestCase):
+    def do_add_test(self, datas, target_types):
+        readers = []
+        for data in datas:
+            readers.append(Metadata())
+            readers[-1].read(StringIO(json.dumps(data)), metadata_format='json')
+
+        combined = Metadata()
+        for reader in readers:
+            combined.add(reader)
+
+        with self.subTest('df_structure'):
+            self.assertEqual(len(combined.df['Replicate'].drop_duplicates()), sum(len(data) for data in datas))
+            self.assertIsInstance(combined, Metadata)
+            self.assertDictEqual(combined.types, target_types)
+
+        with self.subTest('df_to_dict'):
+            d = combined.df_to_dict()
+            self.assertIsInstance(d, dict)
+            self.assertEqual(len(d), len(combined.df['Replicate'].drop_duplicates()))
+            for row in d.values():
+                self.assertIsInstance(row, dict)
+                self.assertEqual(set(row.keys()), set(target_types.keys()))
+
+        with self.subTest('get_wide_data'):
+            wide_data = combined.get_wide_data()
+            self.assertIsInstance(wide_data, pd.DataFrame)
+            self.assertEqual(len(wide_data), len(combined.df['Replicate'].drop_duplicates()))
+            self.assertTrue(set(target_types.keys()).issubset(set(wide_data.columns)))
+
+
+    def test_add(self):
+        data_1 = {
+           "Rep1": { "string_var": "value1", "int_var": 1, "float_var": 1.0, "bool_var": True },
+           "Rep2": { "string_var": "value2", "int_var": 2, "float_var": 2.0, "bool_var": False }
+        }
+        data_2 = {
+           "Rep3": { "string_var": "value3", "int_var": 3, "float_var": 3.0, "bool_var": True },
+           "Rep4": { "string_var": "value4", "int_var": 4, "float_var": 4.0, "bool_var": False }
+        }
+        target_types = {
+            "string_var": Dtype.STRING,
+            "int_var": Dtype.INT,
+            "float_var": Dtype.FLOAT,
+            "bool_var": Dtype.BOOL
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_disperate_types(self):
+        data_1 = {'Rep1': {'string_var': 'value1', 'int_var': 1, 'float_var': 1.0, 'bool_var': True}}
+        data_2 = {'Rep2': {'string_var': 'value2', 'int_var': 1.0, 'float_var': '1', 'bool_var': 'True'}}
+        target_types = {
+            'string_var': Dtype.STRING,
+            'int_var': Dtype.FLOAT,     # coerced to FLOAT
+            'float_var': Dtype.STRING,  # coerced to STRING
+            'bool_var': Dtype.STRING    # coerced to STRING
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_missing_string(self):
+        data_1 = {'Rep1': {'string_var': 'value1', 'int_var': 1, 'float_var': 1.0, 'bool_var': True}}
+        data_2 = {'Rep2': {'int_var': 2, 'float_var': 2.0, 'bool_var': False}}
+        target_types = {
+            'string_var': Dtype.STRING,  # remains STRING
+            'int_var': Dtype.INT,
+            'float_var': Dtype.FLOAT,
+            'bool_var': Dtype.BOOL
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_missing_int(self):
+        data_1 = {'Rep1': {'string_var': 'value1', 'int_var': 1, 'float_var': 1.0, 'bool_var': True}}
+        data_2 = {'Rep2': {'string_var': 'value2', 'float_var': 2.0, 'bool_var': False}}
+        target_types = {
+            'string_var': Dtype.STRING,
+            'int_var': Dtype.INT,
+            'float_var': Dtype.FLOAT,
+            'bool_var': Dtype.BOOL
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_missing_float(self):
+        data_1 = {'Rep1': {'string_var': 'value1', 'int_var': 1, 'float_var': 1.0, 'bool_var': True}}
+        data_2 = {'Rep2': {'string_var': 'value2', 'int_var': 2, 'bool_var': False}}
+        target_types = {
+            'string_var': Dtype.STRING,
+            'int_var': Dtype.INT,
+            'float_var': Dtype.FLOAT,
+            'bool_var': Dtype.BOOL
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_missing_bool(self):
+        data_1 = {'Rep1': {'string_var': 'value1', 'int_var': 1, 'float_var': 1.0, 'bool_var': True}}
+        data_2 = {'Rep2': {'string_var': 'value2', 'int_var': 2, 'float_var': 2.0}}
+        target_types = {
+            'string_var': Dtype.STRING,
+            'int_var': Dtype.INT,
+            'float_var': Dtype.FLOAT,
+            'bool_var': Dtype.BOOL
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_missing_na(self):
+        data_1 = {'Rep1': {'string_var': 'value1', 'int_var': 1, 'float_var': 1.0, 'bool_var': True}}
+        data_2 = {'Rep2': {'string_var': 'value2', 'int_var': 2, 'float_var': 2.0, 'bool_var': False, 'na_var': None}}
+        target_types = {
+            'string_var': Dtype.STRING,
+            'int_var': Dtype.INT,
+            'float_var': Dtype.FLOAT,
+            'bool_var': Dtype.BOOL,
+            'na_var': Dtype.NULL
+        }
+        self.do_add_test([data_1, data_2], target_types)
+
+
+    def test_add_empty(self):
+        data_1 = {'Rep1': {'string_var': 'value1'}}
+        reader_1 = Metadata()
+        reader_1.read(StringIO(json.dumps(data_1)), metadata_format='json')
+        reader_2 = Metadata()
+
+        combined = Metadata()
+        combined.add(reader_1)
+        combined.add(reader_2)
+        self.assertEqual(len(combined.df['Replicate'].drop_duplicates()), 1)
+        self.assertDictEqual(combined.types, reader_1.types)
+
+
+    def test_both_empty(self):
+        reader_1 = Metadata()
+        reader_2 = Metadata()
+        combined = Metadata()
+
+        combined.add(reader_1)
+        combined.add(reader_2)
+        self.assertIsInstance(combined, Metadata)
+        self.assertTrue(combined.df.empty)
+        self.assertDictEqual(combined.types, {})
+
+
+    def test_add_duplicate_reps(self):
+        ''' Adding 2 metadata files with the same replicate should raise an error '''
+        data_1 = {'Rep1': {'string_var': 'value1'}}
+        data_2 = {'Rep1': {'string_var': 'value2'}}
+        reader_1 = Metadata()
+        reader_1.read(StringIO(json.dumps(data_1)), metadata_format='json')
+        reader_2 = Metadata()
+        reader_2.read(StringIO(json.dumps(data_2)), metadata_format='json')
+
+        with self.assertRaises(ValueError):
+            reader_1.add(reader_2)

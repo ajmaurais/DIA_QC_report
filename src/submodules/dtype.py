@@ -18,6 +18,7 @@ class Dtype(Enum):
     def __str__(self):
         return self.name
 
+
     def __lt__(self, rhs):
         if isinstance(rhs, Dtype):
             return self.value < rhs.value
@@ -100,7 +101,7 @@ class Dtype(Enum):
         -------
         Dtype object
         '''
-        if s == '' or NA_RE.search(s) is not None:
+        if s is None or s == '' or NA_RE.search(s) is not None:
             return Dtype.NULL
         if BOOL_RE.search(s):
             return Dtype.BOOL

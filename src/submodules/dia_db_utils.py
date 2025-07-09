@@ -302,8 +302,8 @@ def update_metadata_dtypes(conn, new_types):
     for key, value in new_types.items():
         if key not in existing_types:
             existing_types[key] = value
-            continue
-        existing_types[key] = max(existing_types[key], value)
+        else:
+            existing_types[key] = max(existing_types[key], value)
 
     # Update database
     insert_query = '''

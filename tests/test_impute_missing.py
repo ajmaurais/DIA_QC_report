@@ -273,9 +273,11 @@ class TestSingleImputation(unittest.TestCase, CommonTests):
         cls.data_dir = f'{setup_functions.TEST_DIR}/data/'
         cls.conn = None
 
-        parse_command = ['-n=Sp3',
-                         f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
-                         f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv']
+        parse_command = [
+            '-n=Sp3',
+            f'{cls.data_dir}/skyline_reports/Sp3_replicate_quality.tsv',
+            f'{cls.data_dir}/skyline_reports/Sp3_DiaNN_precursor_quality.tsv'
+        ]
         setup_functions.make_work_dir(cls.work_dir, clear_dir=True)
         parse_result = setup_functions.run_main(
             parse_data._main, parse_command, cls.work_dir,
