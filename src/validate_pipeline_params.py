@@ -129,7 +129,7 @@ def get_file(file_path, log_name='file', api_key=None,
         If the file is downloaded, save it to this path.
         If None, the base name of the file in the URL will be used.
     return_text : bool, optional
-        If True, return the text content of the file. If False, return the file path (default: True).
+        Return the text content of the file. If False, return the file path (default: True).
 
     Returns
     -------
@@ -138,7 +138,9 @@ def get_file(file_path, log_name='file', api_key=None,
     '''
     if file_path.startswith(PANORAMA_URL):
         try:
-            text = get_webdav_file(file_path, api_key=api_key, dest_path=dest_path, return_text=return_text)
+            text = get_webdav_file(
+                file_path, api_key=api_key, dest_path=dest_path, return_text=return_text
+            )
         except HTTPError as e:
             LOGGER.error("Failed to download %s '%s': %s", log_name, file_path, e)
             return None
@@ -172,7 +174,7 @@ def _process_directorty(directory, file_regex, api_key=None):
 
     files = [file for file in files if re.search(file_regex, file)]
     if len(files) == 0:
-        raise RuntimeError(f'No files found in {directory} matching {file_regex}')
+        raise RuntimeError(f"No files found in '{directory}' matching '{file_regex}'")
     return files
 
 
@@ -741,7 +743,7 @@ def parse_args(argv, prog=None):
     panorama_args = common_subcommand_args.add_mutually_exclusive_group()
     panorama_args.add_argument(
         '-k', '--api-key', dest='api_key', default=None,
-        help='API key to use for authentication.'
+        help='Panorama API key to use for authentication.'
     )
     panorama_args.add_argument(
         '-n', '--nextflow-key', dest='nextflow_key', action='store_true', default=False,
@@ -810,7 +812,8 @@ def parse_args(argv, prog=None):
              f"Default is '{DEFAULT_PIPELINE_REVISION}'"
     )
     schema_args.add_argument(
-        '-s', '--schema', default=argparse.SUPPRESS, help='Path to local pipeline config schema file.'
+        '-s', '--schema', default=argparse.SUPPRESS,
+        help='Path to local pipeline config schema file.'
     )
 
     ###### Params subcommand #######
@@ -899,7 +902,7 @@ def parse_args(argv, prog=None):
             args.schema = args.schema if hasattr(args, 'schema') \
                                       else f'{os.path.dirname(args.pipeline)}/nextflow_schema.json'
 
-        else: # If pipeline is not a local file, assume it is a GitHub repository
+        else: # If pipeline is not a local file, assume it's a GitHub repository
             revision = DEFAULT_PIPELINE_REVISION if not hasattr(args, 'revision') else args.revision
             args.schema = generate_git_url(
                 args.pipeline, revision, filename='nextflow_schema.json'
@@ -982,6 +985,7 @@ def _main(argv, prog=None):
         multi_batch, quant_spectra_dir = parse_input_files(
             quant_spectra_param, api_key=api_key,
             file_glob=quant_spectra_glob, file_regex=quant_spectra_regex,
+            strict=args.strict
         )
 
         if chromatogram_library_spectra_param is not None:
@@ -989,6 +993,7 @@ def _main(argv, prog=None):
                 chromatogram_library_spectra_param, api_key=api_key,
                 file_glob=chromatogram_library_spectra_glob,
                 file_regex=chromatogram_library_spectra_regex,
+                strict=args.strict
             )
 
     elif args.subcommand == 'params':

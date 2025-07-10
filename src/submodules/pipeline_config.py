@@ -138,8 +138,8 @@ def _g_to_py(src: str):
     """
     Convert a Groovy literal string to its Python equivalent.
 
-    * Square-bracket text is a MAP iff it has a *top-level* colon,
-      otherwise it is treated as a LIST.
+    * Square-bracket text is a Map if it has a *top-level* colon,
+      otherwise it is treated as a List.
     * Groovy booleans / null are mapped to Python.
     * Everything else falls back to ast.literal_eval or raw string.
     """
