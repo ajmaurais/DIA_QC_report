@@ -764,6 +764,10 @@ def parse_args(argv, prog=None):
         help='File prefix for metadata and MS file validation reports. '
     )
     common_subcommand_args.add_argument(
+        '--metadata-output-path', dest='metadata_output_path', default=None,
+        help='Path to write replicate metadata file if it is downloaded.'
+    )
+    common_subcommand_args.add_argument(
         '--permissive', action='store_false', dest='strict', default=True,
         help='Validation problems which will not cause the pipeline to fail, but are likely '
              'to result in unintended behavior, will be handled as warnings instead of errors.'
@@ -859,10 +863,6 @@ def parse_args(argv, prog=None):
     input_args = params_command_args.add_argument_group('Input files options')
     input_args.add_argument(
         '-m', '--metadata', help='Replicate metadata file. Can be a local file or Panorama URL.'
-    )
-    input_args.add_argument(
-        '--metadata-output-path', dest='metadata_output_path', default=None,
-        help='Path to write replicate metadata file if it is downloaded.'
     )
     quant_dir_args = input_args.add_mutually_exclusive_group(required=True)
     quant_dir_args.add_argument(
