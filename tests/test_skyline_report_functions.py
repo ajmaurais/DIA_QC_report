@@ -257,7 +257,7 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
 
         self.assertIsNotNone(df)
         self.assertIn('Found invariant precursor report...', cm.output[0])
-        self.assertIn('Removing 1 row(s) with missing UserSetTotal', cm.output[1])
+        self.assertIn('Removing 1 row(s) with missing UserSetTotal value', cm.output[1])
         self.assertIn('Done reading precursors table...', cm.output[2])
 
 

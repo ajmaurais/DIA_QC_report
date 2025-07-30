@@ -349,21 +349,50 @@ class PrecursorReport(SkylineReport):
 
         else:
             with open(fname, 'r') as inF:
-                # detect report delim
+                # detect delimiter & language
                 delim = detect_delim(inF)
+                headers = self.read_headers(inF, delim=delim)
+                report_language = self.detect_language(headers)
+                self._info('Found %s %s report...', report_language, self.report_name)
 
-                # detect report language
-                report_language = self.detect_language(self.read_headers(inF, delim=delim))
-                self._info(f'Found {report_language} {self.report_name} report...')
-
-                # create dtypes dict for detected language
-                col_types = dict()
+                # build pandas-nullable dtypes map
+                col_types = {}
                 for col in self.columns():
-                    col_types[col.get_alias(report_language)] = float64 if col.is_numeric else str
-                col_types[self._columns['precursorCharge'].get_alias(report_language)] = int8
-                col_types[self._columns['userSetTotal'].get_alias(report_language)] = bool
+                    alias = col.get_alias(report_language)
+                    if col.is_numeric:
+                        col_types[alias] = "float64"
+                    else:
+                        col_types[alias] = "string"
 
-                df = pd.read_csv(inF, sep=detect_delim(inF), dtype=col_types, low_memory=False)
+                # override for int and bool columns
+                pc_alias = self._columns['precursorCharge'].get_alias(report_language)
+                ust_alias = self._columns['userSetTotal'].get_alias(report_language)
+                col_types[pc_alias]  = int8
+                col_types[ust_alias] = 'boolean'   # nullable Bool
+
+                df = pd.read_csv(
+                    inF, sep=delim,
+                    dtype=col_types,
+                    na_values={ust_alias: ['']},
+                    keep_default_na=True,
+                    low_memory=False
+                )
+
+            # drop any rows still missing UserSetTotal
+            num_missing = df[ust_alias].isna().sum()
+            if num_missing > 0:
+                self._warning("Removing %d row(s) with missing %s value", num_missing, ust_alias)
+            df = df.dropna(subset=[ust_alias])
+            try:
+                df[ust_alias] = df[ust_alias].astype(bool)
+            except ValueError:
+                self._error('Invalid UserSetTotal values in report!')
+                return None
+
+            # re-coerce numeric columns to float
+            for col in self.numeric_columns():
+                alias = col.get_alias(report_language)
+                df[alias] = pd.to_numeric(df[alias], errors="coerce")
 
         # Translate report into invariant format
         if report_language != 'invariant':

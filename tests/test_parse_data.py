@@ -801,6 +801,7 @@ class TestEmptyPrecursorReportRow(unittest.TestCase):
 
         result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
         self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('Removing 1 row(s) with missing UserSetTotal value', result.stdout)
 
         # check that all expected precursors are in the database
         self.assertTrue(os.path.isfile(self.DB_PATH))
