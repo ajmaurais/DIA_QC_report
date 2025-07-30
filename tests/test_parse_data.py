@@ -720,13 +720,14 @@ class TestDiaNN(unittest.TestCase, setup_functions.AbstractTestsBase):
         df_pre = pd.read_sql('''
             SELECT
                 p.replicateId, p.peptideId, p.precursorCharge, p.normalizedArea
-            FROM precursors p;''', self.conn)
-
+            FROM precursors p;''', self.conn
+        )
         self.assertTrue(all(df_pre['normalizedArea'].isna()))
 
-        df_prot = pd.read_sql('SELECT replicateId, proteinId, normalizedAbundance FROM proteinQuants',
-                              self.conn)
-
+        df_prot = pd.read_sql(
+            'SELECT replicateId, proteinId, normalizedAbundance FROM proteinQuants',
+            self.conn
+        )
         self.assertTrue(all(df_prot['normalizedAbundance'].isna()))
 
 
@@ -740,8 +741,8 @@ class TestDiaNN(unittest.TestCase, setup_functions.AbstractTestsBase):
             SELECT
                 p.replicateId, ptp.proteinId, p.peptideId, p.precursorCharge, p.totalAreaFragment as area
             FROM precursors p
-            LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', self.conn)
-
+            LEFT JOIN peptideToProtein ptp ON ptp.peptideId = p.peptideId;''', self.conn
+        )
         protein_keys = ['replicateId', 'proteinId']
         na_precursors = df_pre.groupby(protein_keys)['area'].apply(lambda x: all(pd.isna(x)))
         na_precursors.name = 'all_na'
@@ -749,9 +750,71 @@ class TestDiaNN(unittest.TestCase, setup_functions.AbstractTestsBase):
         df_prot = pd.read_sql('''
             SELECT
                 q.replicateId, q.proteinId, q.abundance
-            FROM proteinQuants q; ''', self.conn)
-
+            FROM proteinQuants q; ''', self.conn
+        )
         df_prot = df_prot.set_index(protein_keys).join(na_precursors)
         self.assertFalse(any(df_prot['all_na'].isna()))
-        self.assertSeriesEqual(df_prot['all_na'], df_prot['abundance'].isna(),
-                               check_names=False)
+        self.assertSeriesEqual(
+            df_prot['all_na'], df_prot['abundance'].isna(),
+            check_names=False
+        )
+
+
+class TestEmptyPrecursorReportRow(unittest.TestCase):
+    TEST_PROJECT = 'Strap'
+    WORK_DIR = f'{setup_functions.TEST_DIR}/work/test_parse_report_empty_row'
+    DB_PATH = f'{WORK_DIR}/data.db3'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.prog = 'dia_qc parse'
+        cls.precursor_report = f'{TEST_DIR}/data/invalid_reports/{cls.TEST_PROJECT}_by_protein_precursor_quality_empty_row.tsv'
+
+        # read list of expected precursors
+        df = pd.read_csv(cls.precursor_report, sep='\t')
+        cls.expected_precursors = {
+            (str(row.ModifiedSequence), int(row.PrecursorCharge))
+            for row in df.itertuples()
+            if not pd.isna(row.UserSetTotal)
+        }
+        cls.bad_precursors = {
+            (str(row.ModifiedSequence), int(row.PrecursorCharge))
+            for row in df.itertuples()
+            if pd.isna(row.UserSetTotal)
+        }
+        cls.bad_proteins = {
+            str(row.ProteinName) for row in df.itertuples()
+            if pd.isna(row.UserSetTotal)
+        }
+
+        setup_functions.make_work_dir(cls.WORK_DIR, clear_dir=True)
+
+
+    def test_empty_row(self):
+        command = [
+            f'--projectName={self.TEST_PROJECT}', '--overwriteMode=overwrite',
+            '-m', f'{TEST_DIR}/data/metadata/{self.TEST_PROJECT}_metadata.tsv',
+            '-o', self.DB_PATH,
+            f'{TEST_DIR}/data/skyline_reports/{self.TEST_PROJECT}_replicate_quality.tsv',
+            self.precursor_report
+        ]
+
+        result = setup_functions.run_main(parse_data._main, command, self.WORK_DIR, prog=self.prog)
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        # check that all expected precursors are in the database
+        self.assertTrue(os.path.isfile(self.DB_PATH))
+        conn = sqlite3.connect(self.DB_PATH)
+        cur = conn.cursor()
+        cur.execute('SELECT modifiedSequence, precursorCharge FROM precursors;')
+        db_precursors = {(row[0], row[1]) for row in cur.fetchall()}
+        self.assertEqual(self.expected_precursors, db_precursors)
+        for seq, charge in self.bad_precursors:
+            self.assertNotIn((seq, charge), db_precursors)
+
+        cur.execute('SELECT name FROM proteins;')
+        db_proteins = {row[0] for row in cur.fetchall()}
+        for name in self.bad_proteins:
+            self.assertNotIn(name, db_proteins)
+
+        conn.close()

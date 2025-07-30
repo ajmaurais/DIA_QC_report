@@ -102,17 +102,22 @@ class TestReadReportsBase(AbstractTestsBase):
         return ret
 
 
-    def do_test(self, language, ext, places=6, col_deltas=None):
+    def do_test(self, language, ext, places=6, col_deltas=None, test_report=None):
         suffix = ''
         if language == 'English':
             suffix = '_english'
 
-        with self.assertLogs(skyline_reports.LOGGER) as cm:
-            df = self.report_class.read_report(f'{self.report_basename}_quality{suffix}.{ext}')
+        if test_report is None:
+            _test_report = f'{self.report_basename}_quality{suffix}.{ext}'
+        else:
+            _test_report = test_report
+
+        with self.assertLogs(skyline_reports.LOGGER, level='INFO') as cm:
+            df = self.report_class.read_report(_test_report)
 
         self.assertIsNotNone(df)
-        self.assertTrue(f'Found {language} {self.report_type} report...' in cm.output[0])
-        self.assertTrue(f'Done reading {self.report_type}s table...' in cm.output[1])
+        self.assertIn(f'Found {language} {self.report_type} report...', cm.output[0])
+        self.assertIn(f'Done reading {self.report_type}s table...', cm.output[1])
 
         test_dict = self.df_to_dict(df, self.df_keys, self.df_values)
         self.assertDataDictEqual(test_dict, self.data, places=places, col_deltas=col_deltas)
@@ -243,6 +248,17 @@ class TestReadPrecursorReport(unittest.TestCase, TestReadReportsBase):
 
     def test_read_english_parquet(self):
         self.do_test('English', 'parquet', col_deltas=self.COL_DIFFS)
+
+
+    def test_read_missing_report_rows(self):
+        test_tsv = f'{TEST_DIR}/data/invalid_reports/Strap_by_protein_precursor_quality_empty_row.tsv'
+        with self.assertLogs(skyline_reports.LOGGER, level='INFO') as cm:
+            df = self.report_class.read_report(test_tsv)
+
+        self.assertIsNotNone(df)
+        self.assertIn('Found invariant precursor report...', cm.output[0])
+        self.assertIn('Removing 1 row(s) with missing UserSetTotal', cm.output[1])
+        self.assertIn('Done reading precursors table...', cm.output[2])
 
 
     def test_read_quiet(self):
