@@ -320,7 +320,7 @@ def run_main(main_fxn, argv, wd, prog=None, prefix=None):
 
     # write files
     command = [f'{main_fxn.__module__}.{main_fxn.__name__}'] if prog is None else re.split(r'\s+', prog)
-    with open(f"{prefix_path}.command.txt", "w") as outF:
+    with open(f"{prefix_path}.command.sh", "w") as outF:
         outF.write(f"{join_shell(command + argv)}\n")
     with open(f"{prefix_path}.stdout.txt", "w") as outF:
         outF.write(out_str)
