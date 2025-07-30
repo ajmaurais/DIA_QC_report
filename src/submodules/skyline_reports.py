@@ -148,21 +148,29 @@ class SkylineReport(ABC):
             if col_name not in df_cols:
                 if quiet:
                     return False
-                self._error(f'Missing required column: "{col_name}"' + f' in {self.report_name}' if self.report_name else '')
+                self._error(
+                    "Missing required column: '%s'%s", col_name,
+                    f' in {self.report_name}' if self.report_name else ''
+                )
                 all_good = False
         return all_good
 
 
-    def _error(self, message):
+    def _error(self, message, *args):
         if self.quiet:
             self.RuntimeError(message)
         else:
-            LOGGER.error(message, stacklevel=2)
+            LOGGER.error(message, *args, stacklevel=2)
 
 
-    def _info(self, message):
+    def _warning(self, message, *args):
         if not self.quiet:
-            LOGGER.info(message, stacklevel=2)
+            LOGGER.warning(message, *args, stacklevel=2)
+
+
+    def _info(self, message, *args):
+        if not self.quiet:
+            LOGGER.info(message, *args, stacklevel=2)
 
 
     @staticmethod
@@ -238,7 +246,7 @@ class ReplicateReport(SkylineReport):
         self.set_columns(columns)
 
 
-    def read_report(self, fname, return_invariant=False, remove_unknown_cols=False, quiet=False):
+    def read_report(self, fname, return_invariant=False, remove_unknown_cols=False):
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
             report_language = self.detect_language(df.columns)
@@ -249,7 +257,7 @@ class ReplicateReport(SkylineReport):
                 report_language = self.detect_language(self.read_headers(inF, delim=delim))
                 df = pd.read_csv(inF, sep=delim)
 
-        self._info(f'Found {report_language} {self.report_name} report...')
+        self._info('Found %s %s report...', report_language, self.report_name)
 
         # Translate report into invariant format
         if report_language != 'invariant':
@@ -327,13 +335,12 @@ class PrecursorReport(SkylineReport):
 
 
     def read_report(self, fname, by_gene=False,
-                    remove_unknown_cols=False, return_invariant=False,
-                    quiet=False):
+                    remove_unknown_cols=False, return_invariant=False):
         # read report df
         if fname.endswith('.parquet'):
             df = pd.read_parquet(fname)
             report_language = self.detect_language(df.columns)
-            self._info(f'Found {report_language} {self.report_name} report...')
+            self._info('Found %s %s report...', report_language, self.report_name)
 
             taf_col = self._columns['totalAreaFragment'].get_alias(report_language)
             df[taf_col] = df[taf_col].astype(float64)

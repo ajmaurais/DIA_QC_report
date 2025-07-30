@@ -174,7 +174,7 @@ class TestExportGeneMatrix(unittest.TestCase):
         )
         reps = set(rep_df['Replicate'].drop_duplicates().to_list())
 
-        reader = Metadata()
+        reader = Metadata(quiet=True)
         reader.read(
             f'{self.data_dir}/metadata/PDC_NF_PNET_Validation_Study_annotations.csv'
         )
