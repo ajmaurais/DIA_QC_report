@@ -75,7 +75,7 @@ def _add_index_column(col, index, df_name=None, index_name=None):
     if not all_good:
         return None
 
-    return ret.apply(lambda x: index[x])
+    return ret.apply(lambda x: index[x]).copy()
 
 
 def write_db(fname, replicates, precursors, protein_quants=None,
@@ -320,7 +320,7 @@ def write_db(fname, replicates, precursors, protein_quants=None,
         sample_metadata = sample_metadata[['replicateId', 'annotationKey', 'annotationValue']]
         sample_metadata.to_sql('sampleMetadata', conn, index=False, if_exists='append')
 
-    # update metadata tablr
+    # update metadata table
     for key, value in log_metadata.items():
         update_meta_value(conn, key, value)
     update_acquired_ranks(conn)
