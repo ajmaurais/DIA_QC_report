@@ -19,7 +19,17 @@ PROTEIN_METHOD_NAMES = dict(zip(METHOD_NAMES, ['abundance', 'normalizedAbundance
 TABLE_TYPES = ('wide', 'long')
 
 
-def write_precusor_tables(conn, dest, tables):
+def _write_df(df, path_base, output_format, *, index=False, sep='\t'):
+    '''
+    Write a DataFrame to path_base with the selected format.
+    '''
+    if output_format == 'parquet':
+        df.to_parquet(f'{path_base}.parquet', index=index)
+    else:
+        df.to_csv(f'{path_base}.tsv', sep=sep, index=index)
+
+
+def write_precusor_tables(conn, dest, tables, output_format='tsv'):
     '''
     Write precursor table(s)
 
@@ -32,6 +42,8 @@ def write_precusor_tables(conn, dest, tables):
     tables: dict
         A nested dictionary where the top level dictionary is the table directions, 'wide' or 'long'
         and the child dictionaries are the method names, 'unnormalized' or 'normalized'
+    output_format: str
+        The output file format. Either 'tsv' or 'parquet'.
     '''
 
     df = pd.read_sql('''
@@ -52,7 +64,7 @@ def write_precusor_tables(conn, dest, tables):
         long_headers = ['replicate', 'protein', 'modifiedSequence', 'precursorCharge']
         long_headers += [PRECURSOR_METHOD_NAMES[k] for k, v in tables['long'].items() if v]
 
-        df[long_headers].to_csv(f'{dest}/precursors_long.tsv', sep='\t', index=False)
+        _write_df(df[long_headers], f'{dest}/precursors_long', output_format, index=False)
 
     # wide tables, if any
     for method, write in tables['wide'].items():
@@ -60,12 +72,12 @@ def write_precusor_tables(conn, dest, tables):
             df_w = df.pivot(index=['protein', 'modifiedSequence', 'precursorCharge'],
                             columns='replicate',
                             values=PRECURSOR_METHOD_NAMES[method])
-            df_w.to_csv(f'{dest}/precursors_wide_{method}.tsv', sep='\t', index=True)
+            _write_df(df_w, f'{dest}/precursors_wide_{method}', output_format, index=True)
 
 
-def write_protein_tables(conn, dest, tables):
+def write_protein_tables(conn, dest, tables, output_format='tsv'):
     '''
-    Write precursor table(s)
+    Write protein table(s)
 
     Parameters
     ----------
@@ -76,6 +88,8 @@ def write_protein_tables(conn, dest, tables):
     tables: dict
         A nested dictionary where the top level dictionary is the table directions, 'wide' or 'long'
         and the child dictionaries are the method names, 'unnormalized' or 'normalized'
+    output_format: str
+        The output file format. Either 'tsv' or 'parquet'.
     '''
 
     df = pd.read_sql('''
@@ -93,17 +107,34 @@ def write_protein_tables(conn, dest, tables):
         long_headers = ['replicate', 'protein']
         long_headers += [PROTEIN_METHOD_NAMES[k] for k, v in tables['long'].items() if v]
 
-        df[long_headers].to_csv(f'{dest}/proteins_long.tsv', sep='\t', index=False)
+        _write_df(df[long_headers], f'{dest}/proteins_long', output_format, index=False)
 
     # wide tables, if any
     for method, write in tables['wide'].items():
         if write:
-            df_w = df.pivot(index='protein', columns='replicate',
-                            values=PROTEIN_METHOD_NAMES[method])
-            df_w.to_csv(f'{dest}/proteins_wide_{method}.tsv', sep='\t', index=True)
+            df_w = df.pivot(
+                index='protein', columns='replicate', values=PROTEIN_METHOD_NAMES[method]
+            )
+            _write_df(df_w, f'{dest}/proteins_wide_{method}', output_format, index=True)
 
 
-def write_metadata_tables(conn, dest, tables):
+def write_metadata_tables(conn, dest, tables, output_format='tsv'):
+    '''
+    Write metadata table(s)
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection
+        An initialized connection to the precursor database.
+    dest: str
+        The Parent directory
+    tables: dict
+        A nested dictionary where the top level dictionary is the table directions, 'wide' or 'long'
+        and the child key is 'write' with a boolean value.
+    output_format: str
+        The output file format. Either 'tsv' or 'parquet'.
+    '''
+
     df = pd.read_sql('''
     SELECT
         r.replicate,
@@ -113,11 +144,11 @@ def write_metadata_tables(conn, dest, tables):
     LEFT JOIN replicates r ON r.id == m.replicateId;''', conn)
 
     if tables['long']['write']:
-        df.to_csv(f'{dest}/metadata_long.tsv', sep='\t', index=False)
+        _write_df(df, f'{dest}/metadata_long', output_format, index=False)
 
     if tables['wide']['write']:
         df_w = df.pivot(index='replicate', columns='key', values='value')
-        df_w.to_csv(f'{dest}/metadata_wide.tsv', sep='\t', index=False)
+        _write_df(df_w, f'{dest}/metadata_wide', output_format, index=False)
 
 
 def _any_tables(table_opts):
@@ -192,17 +223,18 @@ def _main(argv, prog=None):
     # create output directory if applicable
     if args.output_dir:
         if not os.path.isdir(args.output_dir):
-            output_dir = args.output_dir
             try:
                 os.mkdir(args.output_dir)
             except (FileExistsError, FileNotFoundError) as e:
                 LOGGER.error(f'Could not create output directory: {e}')
                 sys.exit(1)
+            output_dir = args.output_dir
             LOGGER.info(f'Created tables output directory: {output_dir}')
-        LOGGER.info(f'Output directory already exists.')
+        else:
+            output_dir = args.output_dir
+            LOGGER.info(f'Output directory already exists.')
     else:
         output_dir = os.getcwd()
-        print(output_dir)
 
     # parse table_args
     protein_tables = parse_bitmask_options(args.proteinTables, TABLE_TYPES, METHOD_NAMES)
@@ -217,17 +249,17 @@ def _main(argv, prog=None):
 
     if _any_tables(precursor_tables):
         LOGGER.info('Writing precursor tables..')
-        write_precusor_tables(conn, output_dir, precursor_tables)
+        write_precusor_tables(conn, output_dir, precursor_tables, args.output_format)
         LOGGER.info('Done writing precursor tables.')
 
     if _any_tables(protein_tables):
         LOGGER.info('Writing protein tables..')
-        write_protein_tables(conn, output_dir, protein_tables)
+        write_protein_tables(conn, output_dir, protein_tables, args.output_format)
         LOGGER.info('Done writing protein tables.')
 
     if _any_tables(metadata_tables):
         LOGGER.info('Writing metadata tables..')
-        write_metadata_tables(conn, output_dir, metadata_tables)
+        write_metadata_tables(conn, output_dir, metadata_tables, args.output_format)
         LOGGER.info('Done writing metadata tables.')
 
     conn.close()
