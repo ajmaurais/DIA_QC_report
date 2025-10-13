@@ -127,8 +127,12 @@ def _any_tables(table_opts):
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
     parser.add_argument(
-        '-o', '--outputDir', default=None, dest='output_dir',
+        '--outputDir', default=None, dest='output_dir',
         help=f'Output directory. Default is the current working directory.'
+    )
+    parser.add_argument(
+        '-o', '--outputFormat', default='tsv', choices=['tsv', 'parquet'], dest='output_format',
+        help="Output file format. 'tsv' is the default."
     )
 
     table_args = parser.add_argument_group(
