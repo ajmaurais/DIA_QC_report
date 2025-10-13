@@ -126,23 +126,32 @@ def _any_tables(table_opts):
 
 def parse_args(argv, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=COMMAND_DESCRIPTION)
-    parser.add_argument('-o', '--outputDir', default=None, dest='output_dir',
-                        help=f'Output directory. Default is the current working directory.')
+    parser.add_argument(
+        '-o', '--outputDir', default=None, dest='output_dir',
+        help=f'Output directory. Default is the current working directory.'
+    )
 
-    table_args = parser.add_argument_group('Output tables',
-                     'The tsv files to write are specified by a 2 digit bit mask. '
-                     'The first digit is for the wide formatted report, and the second digit is for '
-                     'the long formatted report. An integer between 0 and 2 is assigned for each stage in '
-                     'the normalization process. 0 for no report, 1 is for unnormalized, '
-                     'and 2 is for normalized.')
-
-    table_args.add_argument('-p', '--precursorTables', default='20',
-                        help='Tables to write for precursors. 20 is the default')
-    table_args.add_argument('-r', '--proteinTables', default='20',
-                            help='Tables to write for proteins. 20 is the default')
-    table_args.add_argument('-m', '--metadataTables', default='00',
-                            help='Tables to write for metadata. Only 0 or 1 are supported. '
-                                 '0 for false, 1 for true. 00 is the default')
+    table_args = parser.add_argument_group(
+        'Output tables',
+        'The tsv files to write are specified by a 2 digit bit mask. '
+        'The first digit is for the wide formatted report, and the second digit is for '
+        'the long formatted report. An integer between 0 and 2 is assigned for each stage in '
+        'the normalization process. 0 for no report, 1 is for unnormalized, '
+        'and 2 is for normalized.'
+    )
+    table_args.add_argument(
+        '-p', '--precursorTables', default='20',
+        help='Tables to write for precursors. 20 is the default'
+    )
+    table_args.add_argument(
+        '-r', '--proteinTables', default='20',
+        help='Tables to write for proteins. 20 is the default'
+    )
+    table_args.add_argument(
+        '-m', '--metadataTables', default='00',
+        help='Tables to write for metadata. Only 0 or 1 are supported. '
+             '0 for false, 1 for true. 00 is the default'
+    )
 
     parser.add_argument('db', help='Path to sqlite batch/qc database.')
     return parser.parse_args(argv)
