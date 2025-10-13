@@ -263,8 +263,10 @@ def parse_args(argv, prog=None):
         '--useAliquotId', default=False, action='store_true', dest='use_aliquot_id',
         help='Use aliquot_run_metadata_id as column headers instead of replicate name.'
     )
-    parser.add_argument('--addGeneUuid', default=False, action='store_true',
-                        dest='add_gene_uuid', help='Add column for gene id hash.')
+    parser.add_argument(
+        '--addGeneUuid', default=False, action='store_true',
+        dest='add_gene_uuid', help='Add column for gene id hash.'
+    )
     parser.add_argument('gene_table', help='A tsv with gene data.')
     parser.add_argument('database', help='Path to sqlite batch/qc database.')
 
@@ -320,8 +322,10 @@ def _main(argv, prog=None):
         gene_id_table_cols['gene_uuid'] = 'gene_uuid'
 
     # read gene ID lookup table
-    gene_ids = pd.read_csv(args.gene_table,
-                           sep=('\t' if os.path.splitext(args.gene_table)[1] == '.tsv' else ','))
+    gene_ids = pd.read_csv(
+        args.gene_table,
+        sep=('\t' if os.path.splitext(args.gene_table)[1] == '.tsv' else ',')
+    )
     if not check_df_columns(gene_ids, gene_id_table_cols):
         sys.exit(1)
     gene_ids = gene_ids[list(gene_id_table_cols.keys())].rename(columns=gene_id_table_cols)
@@ -379,7 +383,7 @@ def _main(argv, prog=None):
             gene_data_lookup.set_index('accession'),
             how='inner', on='accession'
         )
-        data[method] = data[method].reset_index(drop=True)
+        data[method] = data[method].reset_index(drop=False)
 
         data[method]['GeneGroup'] = data[method]['gene_group'].apply(lambda x: gene_groups[x])
 
