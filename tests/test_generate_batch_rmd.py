@@ -20,8 +20,9 @@ class TestMainFxns(unittest.TestCase):
         tests += [(('long',), f'0{option}') for option in range(4, 8)]
 
         for test_directions, option in tests:
-            tables = db_utils.parse_bitmask_options(option, directions,
-                                                    generate_batch_rmd.PYTHON_METHOD_NAMES)
+            tables = db_utils.parse_bitmask_options(
+                option, directions, generate_batch_rmd.PYTHON_METHOD_NAMES
+            )
 
             for direction in test_directions:
                 self.assertTrue(tables[direction]['batch_corrected'])
@@ -42,8 +43,9 @@ class TestMainFxns(unittest.TestCase):
         tests += [(('long',), f'0{option}') for option in range(4)]
 
         for test_directions, option in tests:
-            tables = db_utils.parse_bitmask_options(option, directions,
-                                                    generate_batch_rmd.PYTHON_METHOD_NAMES)
+            tables = db_utils.parse_bitmask_options(
+                option, directions, generate_batch_rmd.PYTHON_METHOD_NAMES
+            )
 
             for direction in test_directions:
                 self.assertFalse(tables[direction]['batch_corrected'])
