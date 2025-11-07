@@ -1,6 +1,6 @@
 # DIA_QC_report
 
-The `dia_qc` script contains several sub-commands to generate QC and batch reports from DIA proteomics data. Reports from 1 or more Skyline documents are combined into a single sqlite database which is modified or read by subsequent commands.
+The `dia_qc` script contains several sub-commands to generate QC and batch reports from DIA proteomics data. Reports from one or more Skyline documents are combined into a single sqlite database which is modified or read by subsequent commands.
 
 To see all the available sub-commands run: `dia_qc -h`
 
