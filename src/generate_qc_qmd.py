@@ -639,7 +639,7 @@ def _main(argv, prog=None):
         outF.write(add_header('Library dot product distribution', level=2))
         outF.write(pivot_box_plot('libraryDotProduct', project=args.project, do_query=False, dpi=args.dpi))
 
-        outF.write(add_header('MS1 isotopic window dot product distribution', level=2))
+        outF.write(add_header('MS1 isotopic envelope dot product distribution', level=2))
         outF.write(pivot_box_plot('isotopeDotProduct', project=args.project, do_query=False, dpi=args.dpi))
 
         outF.write(add_header('MS1 to MS2 ratio', level=2))
