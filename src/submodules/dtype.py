@@ -1,4 +1,5 @@
 
+from math import isnan
 import re
 from enum import Enum
 
@@ -37,6 +38,9 @@ class Dtype(Enum):
         ''' Convert val to the same type as self. '''
         if self is Dtype.NULL:
             return None
+        if not isinstance(val, str):
+            if val is None or (isinstance(val, float) and isnan(val)):
+                return None
         if self is Dtype.BOOL:
             if val.lower() in ('true', '1', 't'):
                 return True
